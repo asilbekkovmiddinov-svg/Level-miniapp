@@ -66,6 +66,9 @@ async function openPage(page) {
         case "wheel":
             await loadWheelPage();
             break;
+        case "arena":
+            await loadArenaPage();
+            break;
         case "orders":
             await loadOrdersPage();
             break;
