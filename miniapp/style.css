@@ -1223,4 +1223,14 @@ body {
         width: 48px;
         height: 48px;
     }
+
+    .arena-wait-box {
+    width: 100%;
+    border-radius: 17px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #fca5a5;
+    text-align: center;
+    font-weight: 900;
+    font-size: 14px;
     }
