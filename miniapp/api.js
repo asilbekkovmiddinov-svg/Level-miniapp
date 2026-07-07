@@ -24,33 +24,41 @@ async function getWallet() {
 async function createDeposit(amount) {
     return await api("/deposit/create", "POST", {
         telegram_id: TELEGRAM_ID,
-        amount: amount,
+        amount,
     });
 }
 
 async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
     return await api("/withdraw/create", "POST", {
         telegram_id: TELEGRAM_ID,
-        amount: amount,
+        amount,
         card_number: cardNumber,
         card_holder: cardHolder,
         bank_name: bankName,
     });
 }
 
-async function getProducts() {
-    return await api("/products/active");
+async function getProducts(category = "") {
+    const query = category
+        ? `?category=${encodeURIComponent(category)}`
+        : "";
+
+    return await api(`/products/active${query}`);
 }
 
-async function createOrder(productId) {
+async function createOrder(productId, region = null) {
     return await api("/orders/create", "POST", {
         telegram_id: TELEGRAM_ID,
         product_id: productId,
+        region,
     });
 }
 
 async function getOpenP2POrders(orderType = "") {
-    const query = orderType ? `?order_type=${orderType}` : "";
+    const query = orderType
+        ? `?order_type=${orderType}`
+        : "";
+
     return await api(`/p2p/open${query}`);
 }
 
@@ -63,7 +71,10 @@ async function getMyP2PTrades() {
 }
 
 async function getP2PHistory(status = "") {
-    const query = status ? `?status=${status}` : "";
+    const query = status
+        ? `?status=${status}`
+        : "";
+
     return await api(`/p2p/history/${TELEGRAM_ID}${query}`);
 }
 
