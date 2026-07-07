@@ -31,6 +31,10 @@ const Navbar = {
                 await loadP2PPage();
                 break;
 
+            case "arena":
+                await loadArenaPage();
+                break;
+
             case "wheel":
                 await loadWheelPage();
                 break;
