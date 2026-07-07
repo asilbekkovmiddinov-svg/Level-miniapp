@@ -467,3 +467,163 @@ body {
     }
 
 }
+
+.bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 72px;
+    background: rgba(8, 11, 16, 0.96);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    z-index: 20;
+    backdrop-filter: blur(14px);
+}
+
+.nav-btn {
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 20px;
+}
+
+.nav-btn span {
+    display: block;
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.nav-btn.active {
+    color: #ef4444;
+}
+
+.list-card {
+    background: #111827;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.red-btn {
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: white;
+    padding: 13px;
+    font-weight: 900;
+    margin-top: 10px;
+}
+
+.green {
+    color: #22c55e;
+}
+
+.red {
+    color: #ef4444;
+}
+
+.gray {
+    color: #9ca3af;
+}
+
+.tab-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.tab-btn {
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    background: #151a23;
+    color: white;
+    font-weight: bold;
+}
+
+.tab-btn.active {
+    background: #dc2626;
+}
+
+.input {
+    width: 100%;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: #111827;
+    color: white;
+    border-radius: 12px;
+    padding: 13px;
+    margin-bottom: 10px;
+}
+
+.wheel-circle {
+    width: 240px;
+    height: 240px;
+    margin: 20px auto;
+    border-radius: 50%;
+    background: conic-gradient(
+        #7f1d1d,
+        #111827,
+        #dc2626,
+        #111827,
+        #991b1b,
+        #111827,
+        #ef4444,
+        #111827
+    );
+    border: 8px solid #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 35px rgba(239,68,68,0.55);
+}
+
+.spin-btn {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 4px solid #fca5a5;
+    background: #dc2626;
+    color: white;
+    font-size: 22px;
+    font-weight: 900;
+}
+
+.profile-box {
+    background: linear-gradient(135deg, #151a23, #300b0b);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 18px;
+    padding: 18px;
+    text-align: center;
+}
+
+.profile-box .avatar {
+    margin: 0 auto 12px;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.stat-box {
+    background: #111827;
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+}
+
+.stat-box small {
+    color: #9ca3af;
+}
+
+.stat-box strong {
+    display: block;
+    margin-top: 6px;
+}
