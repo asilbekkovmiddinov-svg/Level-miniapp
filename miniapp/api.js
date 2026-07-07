@@ -95,7 +95,7 @@ async function getMyMatches() {
 }
 
 async function createMatch(efcAmount, scheduledAt) {
-    return await api("/matches", "POST", {
+    return await api("/matches/", "POST", {
         creator_telegram_id: TELEGRAM_ID,
         efc_amount: efcAmount,
         scheduled_at: scheduledAt,
