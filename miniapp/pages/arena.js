@@ -196,12 +196,27 @@ function getStatusLabel(status) {
 
 
 function formatArenaMatchCard(match, mode = "open") {
-    const opponent = match.opponent_telegram_id || "Raqib yo‘q";
+function getPlayerName(match, type) {
+    if (type === "creator") {
+        if (match.creator_username) return `@${match.creator_username}`;
+        if (match.creator_first_name) return match.creator_first_name;
+        return String(match.creator_telegram_id).slice(-5);
+    }
+
+    if (!match.opponent_telegram_id) return "Raqib yo‘q";
+
+    if (match.opponent_username) return `@${match.opponent_username}`;
+    if (match.opponent_first_name) return match.opponent_first_name;
+    return String(match.opponent_telegram_id).slice(-5);
+}
+
+
+function formatArenaMatchCard(match, mode = "open") {
     const roomCode = match.room_code || "Hali yo‘q";
-    const creatorShort = String(match.creator_telegram_id).slice(-5);
-    const opponentShort = match.opponent_telegram_id
-        ? String(match.opponent_telegram_id).slice(-5)
-        : "-----";
+    const creatorName = getPlayerName(match, "creator");
+    const opponentName = getPlayerName(match, "opponent");
+
+    const isCreator = Number(match.creator_telegram_id) === Number(TELEGRAM_ID);
 
     let actions = "";
 
@@ -222,11 +237,19 @@ function formatArenaMatchCard(match, mode = "open") {
     }
 
     if (mode === "my" && match.status === "WAITING_ROOM_CODE") {
-        actions += `
-            <button class="arena-main-action arena-room-btn" data-id="${match.id}">
-                🔐 Room Code yozish
-            </button>
-        `;
+        if (isCreator) {
+            actions += `
+                <button class="arena-main-action arena-room-btn" data-id="${match.id}">
+                    🔐 Room Code yozish
+                </button>
+            `;
+        } else {
+            actions += `
+                <div class="arena-wait-box">
+                    ⏳ Yaratuvchi Room Code yozishini kuting
+                </div>
+            `;
+        }
     }
 
     return `
@@ -244,7 +267,7 @@ function formatArenaMatchCard(match, mode = "open") {
             <div class="arena-vs-body">
                 <div class="arena-player">
                     <div class="arena-player-avatar">P1</div>
-                    <strong>${creatorShort}</strong>
+                    <strong>${creatorName}</strong>
                     <small>Yaratuvchi</small>
                 </div>
 
@@ -255,8 +278,8 @@ function formatArenaMatchCard(match, mode = "open") {
 
                 <div class="arena-player">
                     <div class="arena-player-avatar opponent">P2</div>
-                    <strong>${opponentShort}</strong>
-                    <small>${opponent}</small>
+                    <strong>${opponentName}</strong>
+                    <small>${match.opponent_telegram_id ? "Raqib" : "Kutilmoqda"}</small>
                 </div>
             </div>
 
