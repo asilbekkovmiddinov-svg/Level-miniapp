@@ -124,36 +124,31 @@ function getArenaContent() {
 
 async function loadArenaDashboard() {
     try {
-        const openData = await getOpenMatches();
-        const myData = await getMyMatches();
+        const overview = await getMatchOverview();
 
-        const openMatches = openData.matches || [];
-        const myMatches = myData.matches || [];
+        setArenaStat(
+            "arenaOnlineCount",
+            overview.online_users ?? 0
+        );
 
-        const activeMatches = myMatches.filter((match) => {
-            return [
-                "SCHEDULED",
-                "READY_CHECK",
-                "WAITING_ROOM_CODE",
-                "MATCH_STARTED",
-                "WAITING_ADMIN",
-                "TECHNICAL_WIN",
-            ].includes(match.status);
-        });
+        setArenaStat(
+            "arenaActiveCount",
+            overview.active_matches ?? 0
+        );
 
-        const todayEfc = myMatches.reduce((total, match) => {
-            if (match.status === "COMPLETED") {
-                return total + Number(match.efc_amount || 0);
-            }
-            return total;
-        }, 0);
+        setArenaStat(
+            "arenaOpenCount",
+            overview.open_matches ?? 0
+        );
 
-        setArenaStat("arenaOnlineCount", "Live");
-        setArenaStat("arenaActiveCount", activeMatches.length);
-        setArenaStat("arenaOpenCount", openMatches.length);
-        setArenaStat("arenaTodayEfc", todayEfc);
+        setArenaStat(
+            "arenaTodayEfc",
+            Number(overview.today_efc_pool ?? 0).toLocaleString()
+        );
+
     } catch (error) {
         console.error(error);
+
         setArenaStat("arenaOnlineCount", "--");
         setArenaStat("arenaActiveCount", "--");
         setArenaStat("arenaOpenCount", "--");
