@@ -41,7 +41,7 @@ async function loadArenaPage() {
                     </div>
 
                     <div class="arena-stat-card">
-                        <span>Ochiq e'lon</span>
+                        <span>Ochiq e’lon</span>
                         <strong id="arenaOpenCount">--</strong>
                         <small>qabul qilish mumkin</small>
                     </div>
@@ -78,7 +78,7 @@ async function loadArenaPage() {
             </div>
 
             <div id="arenaContent" class="arena-premium-content">
-                <div class="mini-loader">Arena yuklanmoqda...</div>
+                <div class="arena-loading-box">Arena yuklanmoqda...</div>
             </div>
         </div>
     `;
@@ -126,26 +126,13 @@ async function loadArenaDashboard() {
     try {
         const overview = await getMatchOverview();
 
-        setArenaStat(
-            "arenaOnlineCount",
-            overview.online_users ?? 0
-        );
-
-        setArenaStat(
-            "arenaActiveCount",
-            overview.active_matches ?? 0
-        );
-
-        setArenaStat(
-            "arenaOpenCount",
-            overview.open_matches ?? 0
-        );
-
+        setArenaStat("arenaOnlineCount", overview.online_users ?? 0);
+        setArenaStat("arenaActiveCount", overview.active_matches ?? 0);
+        setArenaStat("arenaOpenCount", overview.open_matches ?? 0);
         setArenaStat(
             "arenaTodayEfc",
             Number(overview.today_efc_pool ?? 0).toLocaleString()
         );
-
     } catch (error) {
         console.error(error);
 
@@ -159,6 +146,7 @@ async function loadArenaDashboard() {
 
 function setArenaStat(id, value) {
     const element = document.getElementById(id);
+
     if (element) {
         element.textContent = value;
     }
@@ -170,7 +158,16 @@ function formatArenaDate(value) {
 
     try {
         const date = new Date(value);
-        return date.toLocaleString("uz-UZ");
+
+        return date.toLocaleString("uz-UZ", {
+            timeZone: "Asia/Tashkent",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+        });
     } catch (error) {
         return value;
     }
@@ -195,7 +192,6 @@ function getStatusLabel(status) {
 }
 
 
-function formatArenaMatchCard(match, mode = "open") {
 function getPlayerName(match, type) {
     if (type === "creator") {
         if (match.creator_username) return `@${match.creator_username}`;
@@ -215,7 +211,6 @@ function formatArenaMatchCard(match, mode = "open") {
     const roomCode = match.room_code || "Hali yo‘q";
     const creatorName = getPlayerName(match, "creator");
     const opponentName = getPlayerName(match, "opponent");
-
     const isCreator = Number(match.creator_telegram_id) === Number(TELEGRAM_ID);
 
     let actions = "";
@@ -259,9 +254,7 @@ function formatArenaMatchCard(match, mode = "open") {
                     <span>Match #${match.id}</span>
                     <b>${getStatusLabel(match.status)}</b>
                 </div>
-                <div class="arena-prize">
-                    ${match.winner_reward} EFC
-                </div>
+                <div class="arena-prize">${match.winner_reward} EFC</div>
             </div>
 
             <div class="arena-vs-body">
@@ -299,6 +292,7 @@ function formatArenaMatchCard(match, mode = "open") {
     `;
 }
 
+
 async function loadArenaOpenMatches() {
     const content = getArenaContent();
 
@@ -332,9 +326,7 @@ async function loadArenaOpenMatches() {
                 <span>${matches.length} ta e’lon</span>
             </div>
 
-            ${matches
-                .map((match) => formatArenaMatchCard(match, "open"))
-                .join("")}
+            ${matches.map((match) => formatArenaMatchCard(match, "open")).join("")}
         `;
 
         bindArenaAcceptButtons();
@@ -406,9 +398,7 @@ async function loadArenaMyMatches() {
                 <span>${matches.length} ta match</span>
             </div>
 
-            ${matches
-                .map((match) => formatArenaMatchCard(match, "my"))
-                .join("")}
+            ${matches.map((match) => formatArenaMatchCard(match, "my")).join("")}
         `;
 
         bindArenaReadyButtons();
@@ -577,6 +567,7 @@ function updateArenaPrizePreview() {
     document.getElementById("arenaRewardPreview").textContent = `${reward} EFC`;
 }
 
+
 async function createArenaMatchFromForm() {
     const amountInput = document.getElementById("arenaAmountInput");
     const timeInput = document.getElementById("arenaTimeInput");
@@ -594,7 +585,7 @@ async function createArenaMatchFromForm() {
         return;
     }
 
-    const scheduledAt = new Date(timeValue).toISOString();
+    const scheduledAt = `${timeValue}:00+05:00`;
 
     Loader.show();
 
@@ -622,7 +613,9 @@ async function loadArenaRating() {
         const data = await getMatchLeaderboard("all");
         const users = data.users || [];
         const visibleUsers = users.slice(0, arenaRatingLimit);
-        const myUser = users.find((user) => Number(user.telegram_id) === Number(TELEGRAM_ID));
+        const myUser = users.find(
+            (user) => Number(user.telegram_id) === Number(TELEGRAM_ID)
+        );
 
         if (!users.length) {
             content.innerHTML = `
@@ -711,7 +704,9 @@ function formatPodiumPlayer(user, place, medal) {
 
 
 function formatMyArenaRating(myUser, users) {
-    const myIndex = users.findIndex((user) => Number(user.telegram_id) === Number(TELEGRAM_ID));
+    const myIndex = users.findIndex(
+        (user) => Number(user.telegram_id) === Number(TELEGRAM_ID)
+    );
     const place = myIndex >= 0 ? myIndex + 1 : "-";
 
     return `
@@ -772,4 +767,4 @@ async function loadArenaGuide() {
             </div>
         `;
     }
-}
+    }
