@@ -18,11 +18,9 @@ const Navbar = {
     },
 
     async open(page) {
-        this.setActive(page);
-
         switch (page) {
             case "home":
-                await refreshWallet();
+                await loadHome();
                 break;
 
             case "shop":
