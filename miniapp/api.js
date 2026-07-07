@@ -81,3 +81,61 @@ async function getP2PHistory(status = "") {
 async function getWheelStatus() {
     return await api(`/wheel/status/${TELEGRAM_ID}`);
 }
+
+// =========================
+// 1vs1 ARENA
+// =========================
+
+async function getOpenMatches() {
+    return await api("/matches/open");
+}
+
+async function getMyMatches() {
+    return await api(`/matches/user/${TELEGRAM_ID}`);
+}
+
+async function createMatch(efcAmount, scheduledAt) {
+    return await api("/matches", "POST", {
+        creator_telegram_id: TELEGRAM_ID,
+        efc_amount: efcAmount,
+        scheduled_at: scheduledAt,
+    });
+}
+
+async function acceptMatch(matchId) {
+    return await api(`/matches/${matchId}/accept`, "POST", {
+        opponent_telegram_id: TELEGRAM_ID,
+    });
+}
+
+async function setReady(matchId) {
+    return await api(`/matches/${matchId}/ready`, "POST", {
+        telegram_id: TELEGRAM_ID,
+    });
+}
+
+async function createRoomCode(matchId, roomCode) {
+    return await api(`/matches/${matchId}/room-code`, "POST", {
+        telegram_id: TELEGRAM_ID,
+        room_code: roomCode,
+    });
+}
+
+async function uploadMatchScreenshot(matchId, fileId) {
+    return await api(`/matches/${matchId}/screenshot`, "POST", {
+        telegram_id: TELEGRAM_ID,
+        screenshot_file_id: fileId,
+    });
+}
+
+async function getMatchStats() {
+    return await api(`/matches/stats/${TELEGRAM_ID}`);
+}
+
+async function getMatchLeaderboard(period = "all") {
+    return await api(`/matches/leaderboard?period=${period}`);
+}
+
+async function getMatchGuide() {
+    return await api("/matches/guide");
+}
