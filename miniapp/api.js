@@ -139,3 +139,7 @@ async function getMatchLeaderboard(period = "all") {
 async function getMatchGuide() {
     return await api("/matches/guide");
 }
+
+async function getMatchOverview() {
+    return await api("/matches/overview");
+}
