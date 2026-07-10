@@ -2,40 +2,119 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    >
+
+    <meta name="theme-color" content="#050609">
+
     <title>LEVEL_GROUP</title>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<div id="loader" class="loader">
-    <div class="loader-logo">LG</div>
-    <p>LEVEL_GROUP yuklanmoqda...</p>
+<div id="loader" class="loader splash-screen">
+
+    <div class="splash-background">
+        <div class="splash-grid"></div>
+        <div class="splash-glow splash-glow-one"></div>
+        <div class="splash-glow splash-glow-two"></div>
+        <div class="splash-particles"></div>
+    </div>
+
+    <div class="splash-content">
+
+        <div class="splash-logo-wrapper">
+
+            <div class="splash-orbit orbit-one"></div>
+            <div class="splash-orbit orbit-two"></div>
+
+            <div class="splash-logo-mark">
+                <span class="logo-letter logo-letter-l">L</span>
+                <span class="logo-letter logo-letter-g">G</span>
+                <div class="logo-shine"></div>
+            </div>
+
+        </div>
+
+        <div class="splash-brand-block">
+            <h1
+                id="splashBrandText"
+                class="splash-brand-text"
+                aria-label="LEVEL_GROUP"
+            ></h1>
+
+            <p class="splash-tagline">
+                PLAY <span>•</span> TRADE <span>•</span> WIN
+            </p>
+        </div>
+
+        <div class="splash-progress">
+            <div class="splash-progress-track">
+                <div class="splash-progress-bar"></div>
+            </div>
+
+            <p id="splashStatus" class="splash-status">
+                Premium platforma tayyorlanmoqda
+            </p>
+        </div>
+
+    </div>
+
 </div>
+
 
 <div id="app" class="app hidden">
 
     <header class="app-header">
-        <button class="back-btn" id="backBtn">←</button>
+
+        <button
+            class="back-btn"
+            id="backBtn"
+            type="button"
+            aria-label="Orqaga"
+        >
+            ←
+        </button>
+
         <h1 id="pageTitle">LEVEL_GROUP</h1>
-        <button class="icon-btn" id="refreshBtn">↻</button>
+
+        <button
+            class="icon-btn"
+            id="refreshBtn"
+            type="button"
+            aria-label="Yangilash"
+        >
+            ↻
+        </button>
+
     </header>
+
 
     <main id="pageContent" class="page-content">
 
         <section id="homePage" class="page active-page">
 
             <div class="profile-hero">
+
                 <div class="avatar">LG</div>
+
                 <div>
                     <h2 id="homeName">LEVEL_GROUP</h2>
                     <p class="online-dot">● Online</p>
                 </div>
+
             </div>
 
+
             <div class="wallet-grid">
+
                 <div class="balance-card">
                     <span>EFC balans</span>
                     <strong id="efcBalance">0</strong>
@@ -47,33 +126,77 @@
                     <strong id="uzsBalance">0</strong>
                     <small>so‘m</small>
                 </div>
+
             </div>
 
+
             <div class="bonus-grid">
-                <button class="bonus-card" data-page="wheel">
+
+                <button
+                    class="bonus-card"
+                    data-page="wheel"
+                    type="button"
+                >
                     🎁 Kundalik bonus
                     <small>Klaim qilish</small>
                 </button>
 
-                <button class="bonus-card" data-page="wheel">
+                <button
+                    class="bonus-card"
+                    data-page="wheel"
+                    type="button"
+                >
                     ▶️ Reklama bonus
                     <small>5 ta mavjud</small>
                 </button>
+
             </div>
+
 
             <h3 class="section-title">Asosiy bo‘limlar</h3>
 
+
             <div class="main-grid">
-                <button class="menu-card" data-page="shop">🛒<span>Coin Shop</span></button>
-                <button class="menu-card" data-page="p2p">🤝<span>P2P Market</span></button>
-                <button class="menu-card" data-page="arena">⚔️<span>1vs1 Arena</span></button>
-                <button class="menu-card" data-page="wheel">🎰<span>Wheel</span></button>
-                <button class="menu-card" data-page="orders">📜<span>Orders</span></button>
-                <button class="menu-card" data-page="profile">👤<span>Profil</span></button>
-                <button class="menu-card" data-page="support">🎧<span>Qo‘llab-quvvatlash</span></button>
+
+                <button class="menu-card" data-page="shop" type="button">
+                    🛒
+                    <span>Coin Shop</span>
+                </button>
+
+                <button class="menu-card" data-page="p2p" type="button">
+                    🤝
+                    <span>P2P Market</span>
+                </button>
+
+                <button class="menu-card" data-page="arena" type="button">
+                    ⚔️
+                    <span>1vs1 Arena</span>
+                </button>
+
+                <button class="menu-card" data-page="wheel" type="button">
+                    🎰
+                    <span>Wheel</span>
+                </button>
+
+                <button class="menu-card" data-page="orders" type="button">
+                    📜
+                    <span>Orders</span>
+                </button>
+
+                <button class="menu-card" data-page="profile" type="button">
+                    👤
+                    <span>Profil</span>
+                </button>
+
+                <button class="menu-card" data-page="support" type="button">
+                    🎧
+                    <span>Qo‘llab-quvvatlash</span>
+                </button>
+
             </div>
 
         </section>
+
 
         <section id="p2pPage" class="page"></section>
         <section id="arenaPage" class="page"></section>
@@ -84,15 +207,38 @@
 
     </main>
 
+
     <nav class="bottom-nav">
-        <button class="nav-btn active" data-page="home">🏠<span>Asosiy</span></button>
-        <button class="nav-btn" data-page="p2p">🤝<span>P2P</span></button>
-        <button class="nav-btn" data-page="arena">⚔️<span>Arena</span></button>
-        <button class="nav-btn" data-page="wheel">🎰<span>Wheel</span></button>
-        <button class="nav-btn" data-page="profile">👤<span>Profil</span></button>
+
+        <button class="nav-btn active" data-page="home" type="button">
+            🏠
+            <span>Asosiy</span>
+        </button>
+
+        <button class="nav-btn" data-page="p2p" type="button">
+            🤝
+            <span>P2P</span>
+        </button>
+
+        <button class="nav-btn" data-page="arena" type="button">
+            ⚔️
+            <span>Arena</span>
+        </button>
+
+        <button class="nav-btn" data-page="wheel" type="button">
+            🎰
+            <span>Wheel</span>
+        </button>
+
+        <button class="nav-btn" data-page="profile" type="button">
+            👤
+            <span>Profil</span>
+        </button>
+
     </nav>
 
 </div>
+
 
 <script src="config.js"></script>
 <script src="api.js"></script>
