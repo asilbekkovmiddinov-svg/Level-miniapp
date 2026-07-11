@@ -89,7 +89,7 @@ async function openPage(page) {
 async function loadHome() {
     Navbar.setActive("home");
     showPage("homePage", "LEVEL_GROUP");
-    await loadWalletPage();
+    await loadHomeBalances();
 }
 
 async function refreshCurrentPage() {

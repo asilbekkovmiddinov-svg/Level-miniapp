@@ -14,11 +14,66 @@ async function updateUserSeen() {
 
     return await api(`/user/${TELEGRAM_ID}/seen`, "POST");
 }
+const WALLET_REQUEST_TIMEOUT_MS = 15000;
 
+const WALLET_API_MESSAGES = {
+    401: "Telegram sessiyasi topilmadi yoki muddati tugagan. MiniApp’ni qayta oching.", 403: "Wallet ma’lumotini olish uchun ruxsat yo‘q.", 404: "Wallet yoki foydalanuvchi topilmadi.", 409: "Wallet ma’lumoti yangilanmoqda. Qayta urinib ko‘ring.", 500: "Serverda vaqtinchalik xatolik yuz berdi.",
+};
+function getWalletInitData() {
+    return window.Telegram?.WebApp?.initData || tg.initData || "";
+}
 async function getWallet() {
-    if (!TELEGRAM_ID) return null;
+    const initData = getWalletInitData();
+    if (!initData) {
+        return {
+            success: false,
+            status_code: 401,
+            message: WALLET_API_MESSAGES[401],
+        };
+    }
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), WALLET_REQUEST_TIMEOUT_MS);
+    let response;
+    try {
+        response = await fetch(`${API_URL}/wallet`, {
+            method: "GET",
+            headers: { "X-Telegram-Init-Data": initData },
+            signal: controller.signal,
+        });
+    } catch (error) {
+        const isTimeout = error?.name === "AbortError";
+        return {
+            success: false,
+            status_code: isTimeout ? 504 : 503,
+            message: isTimeout
+                ? "Server javobi kutilgan vaqtdan oshdi."
+                : "Internet yoki server bilan aloqa uzildi.",
+        };
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+    let payload;
+    try {
+        payload = await response.json();
+    } catch {
+        return {
+            success: false,
+            status_code: response.status,
+            message: "Server noto‘g‘ri javob qaytardi. Qayta urinib ko‘ring.",
+        };
+    }
+    if (!response.ok) {
+        return {
+            success: false,
+            status_code: response.status,
+            message: payload?.message
+                || payload?.detail
+                || WALLET_API_MESSAGES[response.status]
+                || "Wallet ma’lumotini yuklab bo‘lmadi.",
+        };
+    }
 
-    return await api(`/wallet/${TELEGRAM_ID}`);
+    return { ...payload, success: true };
 }
 
 async function createDeposit(amount) {
