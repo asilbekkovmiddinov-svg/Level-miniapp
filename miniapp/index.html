@@ -2,79 +2,57 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     >
-
     <meta name="theme-color" content="#050609">
-
     <title>LEVEL_GROUP</title>
-
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="splash.css?v=2.0.3">
+    <link rel="stylesheet" href="home.css?v=2.1.0">
 </head>
-
 <body>
-
 <div id="loader" class="loader splash-screen">
-
     <div class="splash-background">
         <div class="splash-grid"></div>
         <div class="splash-glow splash-glow-one"></div>
         <div class="splash-glow splash-glow-two"></div>
         <div class="splash-particles"></div>
     </div>
-
     <div class="splash-content">
-
         <div class="splash-logo-wrapper">
-
             <div class="splash-orbit orbit-one"></div>
             <div class="splash-orbit orbit-two"></div>
-
             <div class="splash-logo-mark">
                 <span class="logo-letter logo-letter-l">L</span>
                 <span class="logo-letter logo-letter-g">G</span>
                 <div class="logo-shine"></div>
             </div>
-
         </div>
-
         <div class="splash-brand-block">
             <h1
                 id="splashBrandText"
                 class="splash-brand-text"
                 aria-label="LEVEL_GROUP"
             ></h1>
-
             <p class="splash-tagline">
                 PLAY <span>•</span> TRADE <span>•</span> WIN
             </p>
         </div>
-
         <div class="splash-progress">
             <div class="splash-progress-track">
                 <div class="splash-progress-bar"></div>
             </div>
-
             <p id="splashStatus" class="splash-status">
                 Premium platforma tayyorlanmoqda
             </p>
         </div>
-
     </div>
-
 </div>
-
-
 <div id="app" class="app hidden">
-
     <header class="app-header">
-
         <button
             class="back-btn"
             id="backBtn"
@@ -83,9 +61,7 @@
         >
             ←
         </button>
-
         <h1 id="pageTitle">LEVEL_GROUP</h1>
-
         <button
             class="icon-btn"
             id="refreshBtn"
@@ -94,160 +70,97 @@
         >
             ↻
         </button>
-
     </header>
-
-
     <main id="pageContent" class="page-content">
-
         <section id="homePage" class="page active-page">
-
-            <div class="profile-hero">
-
-                <div class="avatar">LG</div>
-
+            <div class="home-hero">
+                <div class="home-avatar" aria-hidden="true"></div>
                 <div>
+                    <p class="home-eyebrow">Xush kelibsiz</p>
                     <h2 id="homeName">LEVEL_GROUP</h2>
-                    <p class="online-dot">● Online</p>
+                    <p class="home-online"><i></i>Platforma faol</p>
                 </div>
-
+                <button class="home-bell menu-card" data-page="profile" type="button" aria-label="Bildirishnomalar">♢</button>
             </div>
-
-
-            <div class="wallet-grid">
-
-                <div class="balance-card">
-                    <span>EFC balans</span>
-                    <strong id="efcBalance">0</strong>
-                    <small>coins</small>
+            <article class="premium-wallet">
+                <div class="wallet-top">
+                    <span class="wallet-label">Umumiy balans</span>
+                    <span class="wallet-chip">SECURE WALLET</span>
                 </div>
-
-                <div class="balance-card">
-                    <span>UZS balans</span>
-                    <strong id="uzsBalance">0</strong>
-                    <small>so‘m</small>
+                <div class="wallet-values">
+                    <div class="home-balance">
+                        <span>EFC balans</span><strong id="efcBalance">0</strong><small>EFC</small>
+                    </div>
+                    <i class="balance-divider"></i>
+                    <div class="home-balance">
+                        <span>UZS balans</span><strong id="uzsBalance">0</strong><small>SO‘M</small>
+                    </div>
                 </div>
-
+                <div class="wallet-actions">
+                    <button class="wallet-action primary" onclick="openDeposit()" type="button">＋ To‘ldirish</button>
+                    <button class="wallet-action" onclick="openWithdraw()" type="button">↗ Yechish</button>
+                </div>
+            </article>
+            <div class="home-section-head"><h3>Asosiy maydon</h3><span>LEVEL ECOSYSTEM</span></div>
+            <div class="quick-grid">
+                <button class="quick-card featured menu-card" data-page="arena" type="button">
+                    <span class="quick-icon">⚔</span><strong>1vs1 Arena</strong><small>Raqib toping va mahoratingizni isbotlang</small>
+                </button>
+                <button class="quick-card menu-card" data-page="p2p" type="button">
+                    <span class="quick-icon">⇄</span><strong>P2P Market</strong><small>EFC savdosi</small>
+                </button>
+                <button class="quick-card menu-card" data-page="shop" type="button">
+                    <span class="quick-icon">◇</span><strong>Coin Shop</strong><small>Premium coinlar</small>
+                </button>
+                <button class="quick-card menu-card" data-page="wheel" type="button">
+                    <span class="quick-icon">✦</span><strong>Lucky Wheel</strong><small>Omadingizni sinang</small>
+                </button>
+                <button class="quick-card menu-card" data-page="orders" type="button">
+                    <span class="quick-icon">▤</span><strong>Buyurtmalar</strong><small>Tarix va holatlar</small>
+                </button>
             </div>
-
-
-            <div class="bonus-grid">
-
-                <button
-                    class="bonus-card"
-                    data-page="wheel"
-                    type="button"
-                >
-                    🎁 Kundalik bonus
-                    <small>Klaim qilish</small>
-                </button>
-
-                <button
-                    class="bonus-card"
-                    data-page="wheel"
-                    type="button"
-                >
-                    ▶️ Reklama bonus
-                    <small>5 ta mavjud</small>
-                </button>
-
-            </div>
-
-
-            <h3 class="section-title">Asosiy bo‘limlar</h3>
-
-
-            <div class="main-grid">
-
-                <button class="menu-card" data-page="shop" type="button">
-                    🛒
-                    <span>Coin Shop</span>
-                </button>
-
-                <button class="menu-card" data-page="p2p" type="button">
-                    🤝
-                    <span>P2P Market</span>
-                </button>
-
-                <button class="menu-card" data-page="arena" type="button">
-                    ⚔️
-                    <span>1vs1 Arena</span>
-                </button>
-
-                <button class="menu-card" data-page="wheel" type="button">
-                    🎰
-                    <span>Wheel</span>
-                </button>
-
-                <button class="menu-card" data-page="orders" type="button">
-                    📜
-                    <span>Orders</span>
-                </button>
-
-                <button class="menu-card" data-page="profile" type="button">
-                    👤
-                    <span>Profil</span>
-                </button>
-
-                <button class="menu-card" data-page="support" type="button">
-                    🎧
-                    <span>Qo‘llab-quvvatlash</span>
-                </button>
-
-            </div>
-
+            <div class="home-section-head"><h3>Kunlik imkoniyat</h3><span>BUGUN</span></div>
+            <button class="bonus-strip menu-card" data-page="wheel" type="button">
+                <span class="bonus-orb">✦</span>
+                <span class="bonus-copy"><strong>Bonus aylantirish</strong><small>Bepul urinish va reklama mukofotlari</small></span>
+                <span class="bonus-arrow">›</span>
+            </button>
         </section>
-
-
         <section id="p2pPage" class="page"></section>
         <section id="arenaPage" class="page"></section>
         <section id="shopPage" class="page"></section>
         <section id="wheelPage" class="page"></section>
         <section id="ordersPage" class="page"></section>
         <section id="profilePage" class="page"></section>
-
     </main>
-
-
     <nav class="bottom-nav">
-
         <button class="nav-btn active" data-page="home" type="button">
             🏠
             <span>Asosiy</span>
         </button>
-
         <button class="nav-btn" data-page="p2p" type="button">
             🤝
             <span>P2P</span>
         </button>
-
         <button class="nav-btn" data-page="arena" type="button">
             ⚔️
             <span>Arena</span>
         </button>
-
         <button class="nav-btn" data-page="wheel" type="button">
             🎰
             <span>Wheel</span>
         </button>
-
         <button class="nav-btn" data-page="profile" type="button">
             👤
             <span>Profil</span>
         </button>
-
     </nav>
-
 </div>
-
-
 <script src="config.js"></script>
 <script src="api.js"></script>
-
 <script src="components/loader.js"></script>
 <script src="components/modal.js"></script>
 <script src="components/navbar.js"></script>
-
 <script src="pages/wallet.js"></script>
 <script src="pages/shop.js"></script>
 <script src="pages/p2p.js"></script>
@@ -255,9 +168,7 @@
 <script src="pages/wheel.js"></script>
 <script src="pages/orders.js"></script>
 <script src="pages/profile.js"></script>
-
 <script src="splash.js?v=2.0.3"></script>
 <script src="app.js"></script>
-
 </body>
 </html>
