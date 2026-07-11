@@ -35,6 +35,9 @@ const WITHDRAW_API_MESSAGES = {
     409: "Withdraw so‘rovi allaqachon yaratilgan yoki qayta urinilmoqda.",
     500: "Serverda vaqtinchalik xatolik yuz berdi.",
 };
+const TRANSACTION_API_MESSAGES = {
+    400: "Transaction filterlari noto‘g‘ri.", 401: "Telegram sessiyasi topilmadi yoki muddati tugagan.", 403: "Transaction tarixini ko‘rish uchun ruxsat yo‘q.", 404: "Transactionlar topilmadi.", 409: "Transactionlar yangilanmoqda.", 500: "Serverda vaqtinchalik xatolik yuz berdi.",
+};
 function getWalletInitData() {
     return window.Telegram?.WebApp?.initData || tg.initData || "";
 }
@@ -111,6 +114,11 @@ async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
         card_holder: cardHolder,
         bank_name: bankName,
     }, WITHDRAW_API_MESSAGES, "Withdraw yaratib bo‘lmadi.");
+}
+
+async function getTransactions(params = {}) {
+    const query = new URLSearchParams({ limit: "20", offset: "0", ...params });
+    return await secureTelegramRequest(`/transactions?${query}`, "GET", null, TRANSACTION_API_MESSAGES, "Transaction tarixini yuklab bo‘lmadi.");
 }
 
 async function getProducts(category = "") {

@@ -3,6 +3,7 @@ let walletLastError = null;
 const MIN_DEPOSIT_AMOUNT = 15000;
 let depositState = { mode: "idle", raw: "", amount: null, error: "", result: null, submitting: false };
 let withdrawState = { mode: "idle", cardNumber: "", cardHolder: "", bankName: "", raw: "", amount: null, error: "", result: null, submitting: false };
+let transactionState = { items: [], offset: 0, hasMore: false, loading: false, filters: {} };
 
 function formatWalletBalance(value) {
     return Number(value).toLocaleString("uz-UZ");
@@ -63,10 +64,41 @@ function renderWalletPage(data) {
         </div>
         <section id="walletDepositPanel"></section>
         <section id="walletWithdrawPanel"></section>
+        <section id="walletHistoryPanel" class="history-panel"></section>
     </div>`;
     renderDepositPanel();
     renderWithdrawPanel();
+    renderTransactionHistory();
 }
+
+function getHistoryPanel() { return document.getElementById("walletHistoryPanel"); }
+function historyLabel(type) { return ({ DEPOSIT: "Deposit", WITHDRAW_REQUEST: "Pul yechish", WITHDRAW_REJECTED: "Withdraw qaytarildi", WHEEL_REWARD: "Wheel mukofoti", MATCH_REWARD: "Arena mukofoti", MATCH_SPEND: "Arena ishtiroki", ORDER_PAYMENT: "Buyurtma to‘lovi", ORDER_REFUND: "Buyurtma qaytarildi", ADMIN_ADD_EFC: "EFC qo‘shildi" }[type] || type || "Transaction"); }
+function transactionAmount(item) { return `${item.direction === "CREDIT" ? "+" : "-"}${formatWalletBalance(item.amount)} ${item.currency}`; }
+function transactionDate(value) { return value ? new Date(value).toLocaleString("uz-UZ") : "—"; }
+
+function renderTransactionHistory() {
+    const panel = getHistoryPanel(); if (!panel) return;
+    const state = transactionState;
+    const controls = `<div class="history-filters"><button onclick="setHistoryFilter('currency','')">Barchasi</button><button onclick="setHistoryFilter('currency','EFC')">EFC</button><button onclick="setHistoryFilter('currency','UZS')">UZS</button><button onclick="setHistoryFilter('direction','CREDIT')">Kirim</button><button onclick="setHistoryFilter('direction','DEBIT')">Chiqim</button><select onchange="setHistoryFilter('status',this.value)"><option value="">Status</option><option>SUCCESS</option><option>PENDING</option></select><select onchange="setHistoryFilter('transaction_type',this.value)"><option value="">Turi</option><option value="DEPOSIT">Deposit</option><option value="WITHDRAW_REQUEST">Withdraw</option><option value="WHEEL_REWARD">Wheel</option></select></div>`;
+    if (state.loading && !state.items.length) { panel.innerHTML = `<h3>Transaction tarixi</h3>${controls}<div class="history-skeleton">Yuklanmoqda...</div>`; return; }
+    if (state.error) { panel.innerHTML = `<h3>Transaction tarixi</h3>${controls}<div class="history-empty">${escapeWalletText(state.error)}<button onclick="loadTransactions(true)">Qayta urinish</button></div>`; return; }
+    const rows = state.items.map((item, index) => `<button class="history-item ${item.direction === "CREDIT" ? "credit" : "debit"}" onclick="openTransactionDetail(${index})"><span><b>${historyLabel(item.transaction_type)}</b><small>${transactionDate(item.created_at)}</small></span><strong>${transactionAmount(item)}</strong><i>${escapeWalletText(item.status || "SUCCESS")}</i></button>`).join("");
+    const body = rows || '<div class="history-empty">Hozircha transactionlar yo‘q.</div>';
+    const more = state.hasMore ? `<button class="history-more" onclick="loadTransactions(false)" ${state.loading ? "disabled" : ""}>${state.loading ? "Yuklanmoqda..." : "Yana yuklash"}</button>` : state.items.length ? '<p class="history-end">Barcha transactionlar yuklandi.</p>' : "";
+    panel.innerHTML = `<h3>Transaction tarixi</h3>${controls}<div class="history-list">${body}</div>${more}<div id="transactionDetail"></div>`;
+}
+
+function setHistoryFilter(name, value) { transactionState.filters[name] = value; loadTransactions(true); }
+async function loadTransactions(reset) {
+    if (transactionState.loading) return;
+    if (reset) { transactionState.items = []; transactionState.offset = 0; transactionState.hasMore = false; transactionState.error = ""; }
+    transactionState.loading = true; renderTransactionHistory();
+    const result = await getTransactions({ ...transactionState.filters, offset: String(transactionState.offset), limit: "20" });
+    transactionState.loading = false;
+    if (!result || result.success === false || !Array.isArray(result.items)) { transactionState.error = result?.message || "Transaction tarixini yuklab bo‘lmadi."; renderTransactionHistory(); return; }
+    transactionState.items.push(...result.items); transactionState.offset += result.items.length; transactionState.hasMore = Boolean(result.has_more); renderTransactionHistory();
+}
+function openTransactionDetail(index) { const item = transactionState.items[index], panel = document.getElementById("transactionDetail"); if (!item || !panel) return; panel.innerHTML = `<article class="transaction-detail"><b>${historyLabel(item.transaction_type)}</b><p>ID: ${item.id}</p><p>${transactionAmount(item)} · ${escapeWalletText(item.status)}</p><p>${escapeWalletText(item.description || "Izoh yo‘q")}</p><p>${transactionDate(item.created_at)}</p><button onclick="this.parentElement.remove()">Yopish</button></article>`; }
 
 function getDepositPanel() {
     return document.getElementById("walletDepositPanel");
@@ -320,6 +352,7 @@ async function loadWalletPage() {
             return null;
         }
         renderWalletPage(data);
+        await loadTransactions(true);
         return data;
     } catch (error) {
         console.error(error);
