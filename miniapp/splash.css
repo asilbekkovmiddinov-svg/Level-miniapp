@@ -134,13 +134,8 @@
     justify-content: center;
     border-radius: 30px;
     overflow: hidden;
-    background:
-        linear-gradient(
-            145deg,
-            rgba(255, 70, 82, 0.98),
-            rgba(118, 4, 14, 0.98)
-        );
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: #030305;
+    border: 1px solid rgba(255, 43, 56, 0.2);
     box-shadow:
         0 18px 50px rgba(0, 0, 0, 0.65),
         0 0 36px rgba(255, 35, 53, 0.32),
@@ -161,14 +156,13 @@
     animation: splashLogoShine 2.7s ease-in-out infinite;
 }
 
-.splash-logo span {
+.splash-logo img {
     position: relative;
     z-index: 1;
-    color: var(--splash-white);
-    font-size: 31px;
-    font-weight: 950;
-    letter-spacing: -2px;
-    text-shadow: 0 5px 18px rgba(0, 0, 0, 0.42);
+    width: 128%;
+    height: 128%;
+    object-fit: cover;
+    border-radius: 28px;
 }
 
 .splash-brand {

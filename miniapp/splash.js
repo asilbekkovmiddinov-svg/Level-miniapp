@@ -48,7 +48,12 @@ const SplashScreen = (() => {
                         <div class="splash-logo-ring"></div>
 
                         <div class="splash-logo" aria-hidden="true">
-                            <span>LG</span>
+                            <img
+                                src="assets/level-group-emblem.png"
+                                alt=""
+                                width="128"
+                                height="128"
+                            >
                         </div>
                     </div>
 
