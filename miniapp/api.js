@@ -27,6 +27,14 @@ const DEPOSIT_API_MESSAGES = {
     409: "Deposit so‘rovi allaqachon yaratilgan yoki qayta urinilmoqda.",
     500: "Serverda vaqtinchalik xatolik yuz berdi.",
 };
+const WITHDRAW_API_MESSAGES = {
+    400: "Withdraw ma’lumotlari qabul qilinmadi.",
+    401: "Telegram sessiyasi topilmadi yoki muddati tugagan. MiniApp’ni qayta oching.",
+    403: "Withdraw yaratish uchun ruxsat yo‘q.",
+    404: "Foydalanuvchi yoki hamyon topilmadi.",
+    409: "Withdraw so‘rovi allaqachon yaratilgan yoki qayta urinilmoqda.",
+    500: "Serverda vaqtinchalik xatolik yuz berdi.",
+};
 function getWalletInitData() {
     return window.Telegram?.WebApp?.initData || tg.initData || "";
 }
@@ -97,13 +105,12 @@ async function createDeposit(amount) {
 }
 
 async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
-    return await api("/withdraw/create", "POST", {
-        telegram_id: TELEGRAM_ID,
+    return await secureTelegramRequest("/withdraw/create", "POST", {
         amount,
         card_number: cardNumber,
         card_holder: cardHolder,
         bank_name: bankName,
-    });
+    }, WITHDRAW_API_MESSAGES, "Withdraw yaratib bo‘lmadi.");
 }
 
 async function getProducts(category = "") {

@@ -2,6 +2,7 @@ let walletData = null;
 let walletLastError = null;
 const MIN_DEPOSIT_AMOUNT = 15000;
 let depositState = { mode: "idle", raw: "", amount: null, error: "", result: null, submitting: false };
+let withdrawState = { mode: "idle", cardNumber: "", cardHolder: "", bankName: "", raw: "", amount: null, error: "", result: null, submitting: false };
 
 function formatWalletBalance(value) {
     return Number(value).toLocaleString("uz-UZ");
@@ -38,6 +39,7 @@ function renderWalletPage(data) {
     const page = getWalletPage();
     if (!page) return;
 
+    walletData = data;
     const updatedAt = new Date().toLocaleString("uz-UZ");
     page.innerHTML = `<div class="wallet-screen">
         <article class="wallet-header">
@@ -57,11 +59,13 @@ function renderWalletPage(data) {
         <div class="wallet-meta">Oxirgi yangilanish: <b>${updatedAt}</b></div>
         <div class="wallet-actions-disabled">
             <button class="wallet-action-primary" type="button" onclick="openDeposit()">＋ To‘ldirish<small>UZS deposit</small></button>
-            <button class="wallet-action-disabled" type="button" disabled>↗ Yechish<small>Keyingi bosqichda</small></button>
+            <button class="wallet-action-primary wallet-withdraw-action" type="button" onclick="openWithdraw()">↗ Yechish<small>UZS withdraw</small></button>
         </div>
         <section id="walletDepositPanel"></section>
+        <section id="walletWithdrawPanel"></section>
     </div>`;
     renderDepositPanel();
+    renderWithdrawPanel();
 }
 
 function getDepositPanel() {
@@ -165,6 +169,117 @@ async function submitDeposit() {
     if (wallet) renderWalletPage(wallet);
 }
 
+function getWithdrawPanel() {
+    return document.getElementById("walletWithdrawPanel");
+}
+
+function formatCardNumber(value) {
+    return String(value || "").replace(/\D/g, "").slice(0, 16).match(/.{1,4}/g)?.join(" ") || "";
+}
+
+function validateWithdraw() {
+    const cardNumber = withdrawState.cardNumber.replace(/\D/g, "");
+    if (cardNumber.length !== 16) return "Karta raqami 16 ta raqamdan iborat bo‘lishi kerak.";
+    if (withdrawState.cardHolder.trim().length < 3) return "Karta egasining ism-familiyasi juda qisqa.";
+    if (!withdrawState.bankName.trim()) return "Bank nomini kiriting.";
+
+    const amount = getDepositAmount(withdrawState.raw);
+    if (!amount.amount) return amount.error;
+    if (amount.amount > Number(walletData?.uzs_balance)) return "UZS balansingiz bu summa uchun yetarli emas.";
+    return { amount: amount.amount, cardNumber };
+}
+
+function renderWithdrawPanel() {
+    const panel = getWithdrawPanel();
+    if (!panel || withdrawState.mode === "idle") return;
+
+    if (withdrawState.mode === "success") {
+        const withdraw = withdrawState.result || {};
+        const createdAt = withdraw.created_at || withdraw.createdAt || new Date().toLocaleString("uz-UZ");
+        panel.innerHTML = `<article class="withdraw-panel withdraw-success"><span>WITHDRAW YARATILDI</span><strong>${formatWalletBalance(withdrawState.amount)} UZS</strong><p>ID: ${escapeWalletText(withdraw.withdraw_id || withdraw.id || "—")}</p><p>Status: <b>${escapeWalletText(withdraw.status || "PENDING")}</b></p><p>Karta: **** ${escapeWalletText(withdrawState.cardNumber.slice(-4))}</p><p>Yaratilgan: ${escapeWalletText(createdAt)}</p><small>${escapeWalletText(withdraw.message || "To‘lov 24 soat ichida yuboriladi.")}</small></article>`;
+        return;
+    }
+
+    if (withdrawState.mode === "confirm") {
+        panel.innerHTML = `<article class="withdraw-panel"><span>WITHDRAWNI TASDIQLASH</span><strong>${formatWalletBalance(withdrawState.amount)} UZS</strong><p>Karta: <b>${formatCardNumber(withdrawState.cardNumber)}</b></p><p>Egasi: <b>${escapeWalletText(withdrawState.cardHolder)}</b></p><p>Bank: <b>${escapeWalletText(withdrawState.bankName)}</b></p><em>To‘lov 24 soat ichida yuboriladi.</em><div class="deposit-buttons"><button type="button" class="deposit-secondary" onclick="editWithdraw()">Ortga</button><button type="button" class="withdraw-submit" onclick="submitWithdraw()">Tasdiqlash</button></div></article>`;
+        return;
+    }
+
+    const isSubmitting = withdrawState.mode === "submitting";
+    const error = withdrawState.error ? `<p class="deposit-error">${escapeWalletText(withdrawState.error)}</p>` : "";
+    const submitLabel = isSubmitting ? "Yuborilmoqda..." : withdrawState.error ? "Qayta urinish" : "Davom etish";
+    panel.innerHTML = `<article class="withdraw-panel"><span>UZS WITHDRAW</span><label for="withdrawCard">Karta raqami</label><input id="withdrawCard" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000" value="${formatCardNumber(withdrawState.cardNumber)}" oninput="handleWithdrawCard(this)" ${isSubmitting ? "disabled" : ""}><label for="withdrawHolder">Karta egasi</label><input id="withdrawHolder" autocomplete="cc-name" placeholder="Ism Familiya" value="${escapeWalletText(withdrawState.cardHolder)}" oninput="handleWithdrawField('cardHolder', this.value)" ${isSubmitting ? "disabled" : ""}><label for="withdrawBank">Bank nomi</label><input id="withdrawBank" autocomplete="organization" placeholder="Bank nomi" value="${escapeWalletText(withdrawState.bankName)}" oninput="handleWithdrawField('bankName', this.value)" ${isSubmitting ? "disabled" : ""}><label for="withdrawAmount">Summa (minimum 15 000 UZS)</label><input id="withdrawAmount" inputmode="numeric" autocomplete="off" placeholder="15 000" value="${escapeWalletText(withdrawState.raw)}" oninput="handleWithdrawField('raw', this.value)" onblur="formatWithdrawAmount()" ${isSubmitting ? "disabled" : ""}>${error}<div class="deposit-buttons"><button type="button" class="deposit-secondary" onclick="closeWithdraw()" ${isSubmitting ? "disabled" : ""}>Bekor qilish</button><button type="button" class="withdraw-submit" onclick="confirmWithdraw()" ${isSubmitting ? "disabled" : ""}>${submitLabel}</button></div></article>`;
+}
+
+function closeWithdraw() {
+    withdrawState.mode = "idle";
+    const panel = getWithdrawPanel();
+    if (panel) panel.innerHTML = "";
+}
+
+function handleWithdrawCard(input) {
+    withdrawState.cardNumber = input.value.replace(/\D/g, "");
+    input.value = formatCardNumber(withdrawState.cardNumber);
+    withdrawState.error = withdrawState.cardNumber.length > 16 ? "Karta raqami 16 ta raqamdan iborat bo‘lishi kerak." : "";
+}
+
+function handleWithdrawField(field, value) {
+    withdrawState[field] = value;
+    withdrawState.error = "";
+}
+
+function formatWithdrawAmount() {
+    const amount = getDepositAmount(withdrawState.raw);
+    if (amount.amount) {
+        withdrawState.raw = formatWalletBalance(amount.amount);
+        renderWithdrawPanel();
+    }
+}
+
+function editWithdraw() {
+    withdrawState.mode = "form";
+    renderWithdrawPanel();
+}
+
+function confirmWithdraw() {
+    const value = validateWithdraw();
+    if (typeof value === "string") {
+        withdrawState.mode = "form";
+        withdrawState.error = value;
+        renderWithdrawPanel();
+        return;
+    }
+    withdrawState.amount = value.amount;
+    withdrawState.cardNumber = value.cardNumber;
+    withdrawState.raw = formatWalletBalance(value.amount);
+    withdrawState.error = "";
+    withdrawState.mode = "confirm";
+    renderWithdrawPanel();
+}
+
+async function submitWithdraw() {
+    if (withdrawState.submitting || !withdrawState.amount) return;
+
+    withdrawState.submitting = true;
+    withdrawState.mode = "submitting";
+    renderWithdrawPanel();
+    const result = await createWithdraw(withdrawState.amount, withdrawState.cardNumber, withdrawState.cardHolder.trim(), withdrawState.bankName.trim());
+    withdrawState.submitting = false;
+    if (!result || result.success === false) {
+        withdrawState.mode = "form";
+        withdrawState.error = result?.message || "Withdraw yaratib bo‘lmadi.";
+        renderWithdrawPanel();
+        return;
+    }
+
+    withdrawState.result = result.data || result;
+    withdrawState.result.status = withdrawState.result.status || "PENDING";
+    withdrawState.mode = "success";
+    renderWithdrawPanel();
+    const wallet = await requestWalletData();
+    if (wallet) renderWalletPage(wallet);
+}
+
 async function requestWalletData() {
     const result = await getWallet();
     if (!result || result.success === false) {
@@ -218,5 +333,6 @@ async function refreshWallet() {
 }
 
 async function openWithdraw() {
-    tg.showPopup({ title: "UZS yechish", message: "Yechish MiniApp’da keyingi bosqichda ochiladi.", buttons: [{ type: "ok", text: "Tushunarli" }] });
+    withdrawState = { mode: "form", cardNumber: "", cardHolder: "", bankName: "", raw: "", amount: null, error: "", result: null, submitting: false };
+    renderWithdrawPanel();
 }
