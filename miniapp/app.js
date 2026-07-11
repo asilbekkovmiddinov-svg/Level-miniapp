@@ -2,6 +2,11 @@ window.addEventListener("load", async () => {
     Loader.show();
 
     try {
+        const homeName = document.getElementById("homeName");
+        if (homeName) {
+            homeName.textContent = USERNAME ? `@${USERNAME}` : FIRST_NAME;
+        }
+
         await registerUser();
         await updateUserSeen();
 
