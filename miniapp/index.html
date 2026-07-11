@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="splash.css?v=3.1.0">
     <link rel="stylesheet" href="splash-animations.css?v=3.1.0">
     <link rel="stylesheet" href="home.css?v=2.1.0">
+    <link rel="stylesheet" href="wallet.css?v=1.0.0">
 </head>
 <body>
 <div id="app" class="app hidden">
@@ -53,11 +54,11 @@
                 </div>
                 <div class="wallet-values">
                     <div class="home-balance">
-                        <span>EFC balans</span><strong id="efcBalance">0</strong><small>EFC</small>
+                        <span>EFC balans</span><strong id="efcBalance">—</strong><small>EFC</small>
                     </div>
                     <i class="balance-divider"></i>
                     <div class="home-balance">
-                        <span>UZS balans</span><strong id="uzsBalance">0</strong><small>SO‘M</small>
+                        <span>UZS balans</span><strong id="uzsBalance">—</strong><small>SO‘M</small>
                     </div>
                 </div>
                 <div class="wallet-actions">
@@ -122,6 +123,7 @@
         <section id="wheelPage" class="page"></section>
         <section id="ordersPage" class="page"></section>
         <section id="profilePage" class="page"></section>
+        <section id="walletPage" class="page" aria-live="polite"></section>
     </main>
     <nav class="bottom-nav">
         <button class="nav-btn active" data-page="home" type="button">

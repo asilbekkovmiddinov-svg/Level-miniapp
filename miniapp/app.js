@@ -78,6 +78,9 @@ async function openPage(page) {
         case "orders":
             await loadOrdersPage();
             break;
+        case "wallet":
+            await loadWalletPage();
+            break;
         case "profile":
             await loadProfilePage();
             break;
