@@ -20,6 +20,7 @@ window.addEventListener("load", async () => {
         Modal.error("Mini App yuklanishda xatolik yuz berdi.");
     } finally {
         Loader.hide();
+        window.dispatchEvent(new CustomEvent("levelgroup:app-ready"));
     }
 });
 
