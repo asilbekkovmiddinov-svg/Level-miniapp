@@ -19,25 +19,37 @@ const WALLET_REQUEST_TIMEOUT_MS = 15000;
 const WALLET_API_MESSAGES = {
     401: "Telegram sessiyasi topilmadi yoki muddati tugagan. MiniApp’ni qayta oching.", 403: "Wallet ma’lumotini olish uchun ruxsat yo‘q.", 404: "Wallet yoki foydalanuvchi topilmadi.", 409: "Wallet ma’lumoti yangilanmoqda. Qayta urinib ko‘ring.", 500: "Serverda vaqtinchalik xatolik yuz berdi.",
 };
+const DEPOSIT_API_MESSAGES = {
+    400: "Deposit summasi qabul qilinmadi.",
+    401: "Telegram sessiyasi topilmadi yoki muddati tugagan. MiniApp’ni qayta oching.",
+    403: "Deposit yaratish uchun ruxsat yo‘q.",
+    404: "Foydalanuvchi yoki hamyon topilmadi.",
+    409: "Deposit so‘rovi allaqachon yaratilgan yoki qayta urinilmoqda.",
+    500: "Serverda vaqtinchalik xatolik yuz berdi.",
+};
 function getWalletInitData() {
     return window.Telegram?.WebApp?.initData || tg.initData || "";
 }
-async function getWallet() {
+async function secureTelegramRequest(path, method, body, messages, fallbackMessage) {
     const initData = getWalletInitData();
     if (!initData) {
         return {
             success: false,
             status_code: 401,
-            message: WALLET_API_MESSAGES[401],
+            message: messages[401],
         };
     }
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), WALLET_REQUEST_TIMEOUT_MS);
     let response;
     try {
-        response = await fetch(`${API_URL}/wallet`, {
-            method: "GET",
-            headers: { "X-Telegram-Init-Data": initData },
+        response = await fetch(`${API_URL}${path}`, {
+            method,
+            headers: {
+                "Content-Type": "application/json",
+                "X-Telegram-Init-Data": initData,
+            },
+            body: body ? JSON.stringify(body) : undefined,
             signal: controller.signal,
         });
     } catch (error) {
@@ -68,19 +80,20 @@ async function getWallet() {
             status_code: response.status,
             message: payload?.message
                 || payload?.detail
-                || WALLET_API_MESSAGES[response.status]
-                || "Wallet ma’lumotini yuklab bo‘lmadi.",
+                || messages[response.status]
+                || fallbackMessage,
         };
     }
 
     return { ...payload, success: true };
 }
 
+async function getWallet() {
+    return await secureTelegramRequest("/wallet", "GET", null, WALLET_API_MESSAGES, "Wallet ma’lumotini yuklab bo‘lmadi.");
+}
+
 async function createDeposit(amount) {
-    return await api("/deposit/create", "POST", {
-        telegram_id: TELEGRAM_ID,
-        amount,
-    });
+    return await secureTelegramRequest("/deposit/create", "POST", { amount }, DEPOSIT_API_MESSAGES, "Deposit yaratib bo‘lmadi.");
 }
 
 async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
