@@ -1,0 +1,64 @@
+.cinematic-mesh { animation: meshDrift 9s ease-in-out infinite alternate; }
+.cinematic-spotlight { animation: spotlightBreathe 5s ease-in-out infinite; }
+.cinematic-rings i { animation: ringExpand 3.8s 1.05s ease-out infinite; }
+.cinematic-rings i:nth-child(2) { animation-delay: 1.85s; }
+.cinematic-rings i:nth-child(3) { animation-delay: 2.65s; }
+.cinematic-particles i { animation: particleFloat 4.7s ease-in-out infinite; }
+.cinematic-particles i:nth-child(1){animation-delay:.9s}
+.cinematic-particles i:nth-child(2){animation-delay:1.7s}
+.cinematic-particles i:nth-child(3){animation-delay:2.3s}
+.cinematic-particles i:nth-child(4){animation-delay:1.3s}
+.cinematic-particles i:nth-child(5){animation-delay:2.9s}
+.energy-seed { animation: seedIgnite 1.1s .16s ease-out both; }
+.cinematic-logo-shell { animation: logoReveal .88s .48s cubic-bezier(.18,.84,.25,1) forwards; }
+.logo-energy { animation: glowBreathe 2.8s 1.25s ease-in-out infinite; }
+.logo-sweep::after { animation: logoSweep 2.9s 1.35s ease-in-out infinite; }
+.logo-reflection { animation: reflectionIn .75s 1.05s forwards; }
+.cinematic-letter { animation: letterReveal .46s var(--delay) cubic-bezier(.2,.8,.2,1) forwards; }
+.cinematic-letter.is-accent { animation: letterReveal .46s var(--delay) forwards, underscorePulse 1.15s 2.1s ease-in-out 2; }
+.cinematic-subtitle { animation: subtitleIn .55s 1.84s forwards; }
+.cinematic-subtitle::after { animation: subtitleScan 1.25s 2.08s ease-out both; }
+.cinematic-bar::after { animation: progressSweep 1.35s ease-in-out infinite; }
+.cinematic-splash.is-ready .cinematic-bar { animation: readyFlash .4s ease-out; }
+
+@keyframes seedIgnite {
+    0%{opacity:0;transform:translate(-50%,-50%) scale(0)}
+    42%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(16)}
+}
+@keyframes logoReveal { to{opacity:1;filter:brightness(1);transform:translateY(0) scale(1)} }
+@keyframes glowBreathe { 0%,100%{opacity:.45;transform:scale(.9)} 50%{opacity:.82;transform:scale(1.07)} }
+@keyframes logoSweep {
+    0%,35%{left:-85%;opacity:0}
+    47%{opacity:.72}
+    70%,100%{left:150%;opacity:0}
+}
+@keyframes reflectionIn { to{opacity:1} }
+@keyframes letterReveal { to{opacity:1;transform:translateY(0);filter:blur(0)} }
+@keyframes underscorePulse { 0%,100%{opacity:1;text-shadow:none} 50%{opacity:.4;text-shadow:0 0 8px #ed263f} }
+@keyframes subtitleIn { to{opacity:1;transform:none} }
+@keyframes subtitleScan {
+    0%{opacity:0;transform:translateX(-130%)}
+    20%{opacity:.72}
+    80%{opacity:.4}
+    100%{opacity:0;transform:translateX(130%)}
+}
+@keyframes progressSweep { 0%{transform:translateX(-120%)} 75%,100%{transform:translateX(120%)} }
+@keyframes readyFlash { 50%{box-shadow:0 0 13px 2px rgba(237,38,63,.7)} }
+@keyframes ringExpand {
+    0%{opacity:0;transform:scale(.25)}
+    22%{opacity:.48}
+    100%{opacity:0;transform:scale(1.23)}
+}
+@keyframes particleFloat {
+    0%,100%{opacity:0;transform:translateY(9px)}
+    35%{opacity:.44}
+    72%{opacity:.14;transform:translateY(-20px)}
+}
+@keyframes meshDrift { to{transform:scale(1.2) translate3d(2%,-1%,0)} }
+@keyframes spotlightBreathe { 50%{opacity:.5;transform:scaleX(1.035)} }
+
+@media(prefers-reduced-motion:reduce){
+    .cinematic-splash *,.cinematic-splash *::after{animation-duration:.01ms!important;animation-delay:0ms!important}
+    .cinematic-bar{width:100%!important}
+}

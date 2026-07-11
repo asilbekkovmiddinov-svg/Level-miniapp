@@ -44,7 +44,7 @@ const SplashScreen = (() => {
                     <div class="cinematic-logo-shell">
                         <div class="logo-energy"></div>
                         <div class="logo-sweep"></div>
-                        <img src="assets/splash-emblem.webp?v=3.0.0" width="256" height="256" alt="LEVEL_GROUP">
+                        <img src="assets/splash-emblem-transparent.png?v=3.1.0" width="512" height="512" alt="LEVEL_GROUP">
                     </div>
                     <div class="logo-reflection" aria-hidden="true"></div>
                     <h1 class="cinematic-brand" aria-label="LEVEL_GROUP">${letters()}</h1>
