@@ -4,6 +4,7 @@ const MIN_DEPOSIT_AMOUNT = 15000;
 let depositState = { mode: "idle", raw: "", amount: null, error: "", result: null, submitting: false };
 let withdrawState = { mode: "idle", cardNumber: "", cardHolder: "", bankName: "", raw: "", amount: null, error: "", result: null, submitting: false };
 let transactionState = { items: [], offset: 0, hasMore: false, loading: false, filters: {} };
+let walletPageLoadVersion = 0;
 
 function formatWalletBalance(value) {
     return Number(value).toLocaleString("uz-UZ");
@@ -123,7 +124,15 @@ function renderDepositPanel() {
         const deposit = depositState.result || {};
         const createdAt = deposit.created_at || deposit.createdAt || new Date().toLocaleString("uz-UZ");
         const uploaded = deposit.receipt_uploaded;
-        panel.innerHTML = `<article class="deposit-panel deposit-success"><span>${uploaded ? "RECEIPT YUBORILDI" : "RECEIPT KERAK"}</span><strong>${amountText}</strong><p>ID: ${escapeWalletText(deposit.id || deposit.deposit_id || "—")}</p><p>Status: <b>${escapeWalletText(deposit.status || "PENDING")}</b></p><p>${uploaded ? "Receipt muvaffaqiyatli yuborildi." : "Deposit yakunlanishi uchun receipt yuklang."}</p>${uploaded ? "" : '<input id="receiptFile" type="file" accept="image/jpeg,image/png,image/webp" onchange="selectDepositReceipt(this)"><div id="receiptPreview"></div><button class="deposit-submit" onclick="uploadSelectedReceipt()">Receipt yuborish</button>'}<small>${escapeWalletText(deposit.message || "")}</small></article>`;
+        const receiptError = depositState.error ? `<p class="deposit-error">${escapeWalletText(depositState.error)}</p>` : "";
+        const notification = uploaded && deposit.notification_status
+            ? `<p>Admin xabarnomasi: <b>${escapeWalletText(deposit.notification_status)}</b></p>`
+            : "";
+        const preview = depositState.previewUrl
+            ? `<div id="receiptPreview"><img src="${escapeWalletText(depositState.previewUrl)}" alt="Receipt preview"><button type="button" onclick="removeDepositReceipt()" ${depositState.uploading ? "disabled" : ""}>Olib tashlash</button></div>`
+            : '<div id="receiptPreview"></div>';
+        const uploadUi = uploaded ? "" : `<input id="receiptFile" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onchange="selectDepositReceipt(this)" ${depositState.uploading ? "disabled" : ""}>${preview}<div class="deposit-buttons"><button type="button" class="deposit-secondary" onclick="removeDepositReceipt()" ${(!depositState.file || depositState.uploading) ? "disabled" : ""}>Bekor qilish</button><button class="deposit-submit" onclick="uploadSelectedReceipt()" ${(!depositState.file || depositState.uploading) ? "disabled" : ""}>${depositState.uploading ? `Yuklanmoqda ${depositState.uploadProgress || 0}%` : "Receipt yuborish"}</button></div>`;
+        panel.innerHTML = `<article class="deposit-panel deposit-success"><span>${uploaded ? "RECEIPT YUBORILDI" : "RECEIPT KERAK"}</span><strong>${amountText}</strong><p>ID: ${escapeWalletText(deposit.id || deposit.deposit_id || "—")}</p><p>Status: <b>${escapeWalletText(deposit.status || "PENDING")}</b></p><p>${uploaded ? "Receipt muvaffaqiyatli yuborildi." : "Deposit yakunlanishi uchun receipt yuklang."}</p>${notification}${receiptError}${uploadUi}<small>${escapeWalletText(deposit.message || "")}</small></article>`;
         return;
     }
 
@@ -202,9 +211,60 @@ async function submitDeposit() {
     if (wallet) renderWalletPage(wallet);
 }
 
-function selectDepositReceipt(input) { const file = input.files?.[0]; if (!file) return; if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 5 * 1024 * 1024) { depositState.error = "Faqat JPG, PNG yoki WEBP va 5 MB gacha ruxsat."; renderDepositPanel(); return; } depositState.file = file; const preview = document.getElementById("receiptPreview"); if (preview) preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Receipt preview"><button onclick="removeDepositReceipt()">Olib tashlash</button>`; }
-function removeDepositReceipt() { depositState.file = null; renderDepositPanel(); }
-async function uploadSelectedReceipt() { if (depositState.uploading || !depositState.file) return; depositState.uploading = true; const deposit = depositState.result || {}; const result = await uploadDepositReceipt(deposit.id || deposit.deposit_id, depositState.file, () => {}); depositState.uploading = false; if (!result || result.success === false) { depositState.error = result?.message || "Receipt yuklanmadi. Qayta urinib ko‘ring."; renderDepositPanel(); return; } depositState.result = { ...deposit, ...result, receipt_uploaded: true }; renderDepositPanel(); }
+function selectDepositReceipt(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+    if (!new Set(["jpg", "jpeg", "png", "webp"]).has(extension) || !allowedTypes.has(file.type) || file.size > 5 * 1024 * 1024) {
+        depositState.error = "Faqat JPG, JPEG, PNG yoki WEBP va 5 MB gacha ruxsat.";
+        renderDepositPanel();
+        return;
+    }
+    if (depositState.previewUrl) URL.revokeObjectURL(depositState.previewUrl);
+    depositState.file = file;
+    depositState.previewUrl = URL.createObjectURL(file);
+    depositState.error = "";
+    renderDepositPanel();
+}
+
+function removeDepositReceipt() {
+    if (depositState.previewUrl) URL.revokeObjectURL(depositState.previewUrl);
+    depositState.file = null;
+    depositState.previewUrl = "";
+    depositState.error = "";
+    renderDepositPanel();
+}
+
+async function uploadSelectedReceipt() {
+    if (depositState.uploading || !depositState.file) return;
+    const deposit = depositState.result || {};
+    const depositId = deposit.id || deposit.deposit_id;
+    if (!depositId) {
+        depositState.error = "Deposit ID topilmadi. Qayta deposit yaratmang, sahifani yangilang.";
+        renderDepositPanel();
+        return;
+    }
+    depositState.uploading = true;
+    depositState.uploadProgress = 0;
+    depositState.error = "";
+    renderDepositPanel();
+    const result = await uploadDepositReceipt(depositId, depositState.file, (progress) => {
+        depositState.uploadProgress = progress;
+        renderDepositPanel();
+    });
+    depositState.uploading = false;
+    if (!result || result.success === false) {
+        depositState.error = result?.message || "Receipt yuklanmadi. Qayta urinib ko‘ring.";
+        renderDepositPanel();
+        return;
+    }
+    if (depositState.previewUrl) URL.revokeObjectURL(depositState.previewUrl);
+    depositState.previewUrl = "";
+    depositState.file = null;
+    depositState.result = { ...deposit, ...result, receipt_uploaded: true };
+    renderDepositPanel();
+}
 
 function getWithdrawPanel() {
     return document.getElementById("walletWithdrawPanel");
@@ -346,12 +406,14 @@ async function loadHomeBalances() {
 }
 
 async function loadWalletPage() {
+    const requestVersion = ++walletPageLoadVersion;
     Navbar.setActive("wallet");
     showPage("walletPage", "Hamyon");
     renderWalletLoading();
 
     try {
         const data = await requestWalletData();
+        if (requestVersion !== walletPageLoadVersion) return null;
         if (!data) {
             renderWalletError(walletLastError);
             return null;

@@ -1,23 +1,20 @@
 async function registerUser() {
-    if (!TELEGRAM_ID) return null;
-
-    return await api("/user/register", "POST", {
-        telegram_id: TELEGRAM_ID,
-        first_name: FIRST_NAME || "User",
-        username: USERNAME || null,
-        language: "uz",
-    });
+    return await secureTelegramRequest(
+        "/user/register", "POST", null, WALLET_API_MESSAGES,
+        "Profilni ro‘yxatdan o‘tkazib bo‘lmadi."
+    );
 }
 
 async function updateUserSeen() {
-    if (!TELEGRAM_ID) return null;
-
-    return await api(`/user/${TELEGRAM_ID}/seen`, "POST");
+    return await secureTelegramRequest(
+        "/user/seen", "POST", null, WALLET_API_MESSAGES,
+        "Faollikni yangilab bo‘lmadi."
+    );
 }
 const WALLET_REQUEST_TIMEOUT_MS = 15000;
 
 const WALLET_API_MESSAGES = {
-    401: "Telegram sessiyasi topilmadi yoki muddati tugagan. MiniApp’ni qayta oching.", 403: "Wallet ma’lumotini olish uchun ruxsat yo‘q.", 404: "Wallet yoki foydalanuvchi topilmadi.", 409: "Wallet ma’lumoti yangilanmoqda. Qayta urinib ko‘ring.", 500: "Serverda vaqtinchalik xatolik yuz berdi.",
+    401: "Telegram sessiyasi topilmadi yoki muddati tugagan. MiniApp’ni qayta oching.", 403: "Wallet ma’lumotini olish uchun ruxsat yo‘q.", 404: "Wallet yoki foydalanuvchi topilmadi.", 409: "Wallet ma’lumoti yangilanmoqda. Qayta urinib ko‘ring.", 413: "Yuborilgan fayl juda katta.", 415: "Fayl formati qo‘llab-quvvatlanmaydi.", 422: "Yuborilgan ma’lumotlar noto‘g‘ri.", 500: "Serverda vaqtinchalik xatolik yuz berdi.", 503: "Server xizmati vaqtincha ishlamayapti.",
 };
 const DEPOSIT_API_MESSAGES = {
     400: "Deposit summasi qabul qilinmadi.",
@@ -25,7 +22,7 @@ const DEPOSIT_API_MESSAGES = {
     403: "Deposit yaratish uchun ruxsat yo‘q.",
     404: "Foydalanuvchi yoki hamyon topilmadi.",
     409: "Deposit so‘rovi allaqachon yaratilgan yoki qayta urinilmoqda.",
-    500: "Serverda vaqtinchalik xatolik yuz berdi.",
+    413: "Yuborilgan fayl juda katta.", 415: "Fayl formati qo‘llab-quvvatlanmaydi.", 422: "Yuborilgan ma’lumotlar noto‘g‘ri.", 500: "Serverda vaqtinchalik xatolik yuz berdi.", 503: "Server xizmati vaqtincha ishlamayapti.",
 };
 const WITHDRAW_API_MESSAGES = {
     400: "Withdraw ma’lumotlari qabul qilinmadi.",
@@ -33,10 +30,13 @@ const WITHDRAW_API_MESSAGES = {
     403: "Withdraw yaratish uchun ruxsat yo‘q.",
     404: "Foydalanuvchi yoki hamyon topilmadi.",
     409: "Withdraw so‘rovi allaqachon yaratilgan yoki qayta urinilmoqda.",
-    500: "Serverda vaqtinchalik xatolik yuz berdi.",
+    413: "Yuborilgan fayl juda katta.", 415: "Fayl formati qo‘llab-quvvatlanmaydi.", 422: "Yuborilgan ma’lumotlar noto‘g‘ri.", 500: "Serverda vaqtinchalik xatolik yuz berdi.", 503: "Server xizmati vaqtincha ishlamayapti.",
 };
 const TRANSACTION_API_MESSAGES = {
-    400: "Transaction filterlari noto‘g‘ri.", 401: "Telegram sessiyasi topilmadi yoki muddati tugagan.", 403: "Transaction tarixini ko‘rish uchun ruxsat yo‘q.", 404: "Transactionlar topilmadi.", 409: "Transactionlar yangilanmoqda.", 500: "Serverda vaqtinchalik xatolik yuz berdi.",
+    400: "Transaction filterlari noto‘g‘ri.", 401: "Telegram sessiyasi topilmadi yoki muddati tugagan.", 403: "Transaction tarixini ko‘rish uchun ruxsat yo‘q.", 404: "Transactionlar topilmadi.", 409: "Transactionlar yangilanmoqda.", 422: "Yuborilgan ma’lumotlar noto‘g‘ri.", 500: "Serverda vaqtinchalik xatolik yuz berdi.", 503: "Server xizmati vaqtincha ishlamayapti.",
+};
+const RECEIPT_API_MESSAGES = {
+    400: "Receipt fayli qabul qilinmadi.", 401: "Telegram sessiyasi topilmadi yoki muddati tugagan. MiniApp’ni qayta oching.", 403: "Bu deposit uchun receipt yuborishga ruxsat yo‘q.", 404: "Deposit topilmadi.", 409: "Receipt holati o‘zgargan. Qayta urinib ko‘ring.", 413: "Receipt hajmi 5 MB dan oshmasligi kerak.", 415: "Faqat JPG, JPEG, PNG yoki WEBP rasm yuboring.", 422: "Receipt ma’lumotlari noto‘g‘ri.", 500: "Receipt saqlashda vaqtinchalik xatolik yuz berdi.", 503: "Server xizmati vaqtincha ishlamayapti.",
 };
 function getWalletInitData() {
     return window.Telegram?.WebApp?.initData || tg.initData || "";
@@ -89,10 +89,7 @@ async function secureTelegramRequest(path, method, body, messages, fallbackMessa
         return {
             success: false,
             status_code: response.status,
-            message: payload?.message
-                || payload?.detail
-                || messages[response.status]
-                || fallbackMessage,
+            message: messages[response.status] || fallbackMessage,
         };
     }
 
@@ -119,7 +116,7 @@ async function uploadDepositReceipt(depositId, file, onProgress) {
         request.upload.onprogress = (event) => { if (event.lengthComputable && onProgress) onProgress(Math.round(event.loaded * 100 / event.total)); };
         request.onerror = () => resolve({ success: false, status_code: 503, message: "Internet yoki server bilan aloqa uzildi." });
         request.ontimeout = () => resolve({ success: false, status_code: 504, message: "Server javobi kutilgan vaqtdan oshdi." });
-        request.onload = () => { try { const data = JSON.parse(request.responseText); resolve({ ...data, success: request.status >= 200 && request.status < 300, status_code: request.status, message: data.message || data.detail }); } catch { resolve({ success: false, status_code: request.status, message: "Server noto‘g‘ri javob qaytardi." }); } };
+        request.onload = () => { try { const data = JSON.parse(request.responseText); const success = request.status >= 200 && request.status < 300; resolve({ ...data, success, status_code: request.status, message: success ? data.message : (RECEIPT_API_MESSAGES[request.status] || "Receipt yuklanmadi. Qayta urinib ko‘ring.") }); } catch { resolve({ success: false, status_code: request.status, message: "Server noto‘g‘ri javob qaytardi." }); } };
         request.send(form);
     });
 }
