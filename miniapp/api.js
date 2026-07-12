@@ -107,6 +107,23 @@ async function createDeposit(amount) {
     return await secureTelegramRequest("/deposit/create", "POST", { amount }, DEPOSIT_API_MESSAGES, "Deposit yaratib bo‘lmadi.");
 }
 
+async function uploadDepositReceipt(depositId, file, onProgress) {
+    const initData = getWalletInitData();
+    if (!initData) return { success: false, status_code: 401, message: "Telegram sessiyasi topilmadi." };
+    const form = new FormData(); form.append("file", file);
+    return await new Promise((resolve) => {
+        const request = new XMLHttpRequest();
+        request.open("POST", `${API_URL}/deposits/${depositId}/receipt`);
+        request.setRequestHeader("X-Telegram-Init-Data", initData);
+        request.timeout = WALLET_REQUEST_TIMEOUT_MS;
+        request.upload.onprogress = (event) => { if (event.lengthComputable && onProgress) onProgress(Math.round(event.loaded * 100 / event.total)); };
+        request.onerror = () => resolve({ success: false, status_code: 503, message: "Internet yoki server bilan aloqa uzildi." });
+        request.ontimeout = () => resolve({ success: false, status_code: 504, message: "Server javobi kutilgan vaqtdan oshdi." });
+        request.onload = () => { try { const data = JSON.parse(request.responseText); resolve({ ...data, success: request.status >= 200 && request.status < 300, status_code: request.status, message: data.message || data.detail }); } catch { resolve({ success: false, status_code: request.status, message: "Server noto‘g‘ri javob qaytardi." }); } };
+        request.send(form);
+    });
+}
+
 async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
     return await secureTelegramRequest("/withdraw/create", "POST", {
         amount,
