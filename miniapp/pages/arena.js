@@ -1,770 +1,305 @@
-let arenaRatingLimit = 10;
+class ArenaApiError extends Error {
+    constructor(message, { status = 0, retryable = false } = {}) {
+        super(message);
+        this.name = "ArenaApiError";
+        this.status = status;
+        this.retryable = retryable;
+    }
+}
+
+class ArenaApiClient {
+    constructor({
+        baseUrl = typeof API_URL !== "undefined" ? API_URL : "",
+        timeoutMs = 10000,
+        retries = 2,
+        fetchImpl = globalThis.fetch,
+        initDataProvider = () => globalThis.Telegram?.WebApp?.initData || "",
+    } = {}) {
+        this.baseUrl = String(baseUrl).replace(/\/$/, "");
+        this.timeoutMs = Math.max(50, Number(timeoutMs) || 10000);
+        this.retries = Math.max(0, Number(retries) || 0);
+        this.fetchImpl = fetchImpl;
+        this.initDataProvider = initDataProvider;
+    }
+
+    async request(path, { query = null } = {}) {
+        const initData = this.initDataProvider();
+        if (!initData) {
+            throw new ArenaApiError("Telegram tasdiqlash ma’lumoti topilmadi.", { status: 401 });
+        }
+        const params = new URLSearchParams();
+        Object.entries(query || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== "") {
+                params.set(key, String(value));
+            }
+        });
+        const suffix = params.size ? `?${params.toString()}` : "";
+        const transientStatuses = new Set([429, 500, 502, 503, 504]);
+        for (let attempt = 0; attempt <= this.retries; attempt += 1) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+            try {
+                const response = await this.fetchImpl(`${this.baseUrl}${path}${suffix}`, {
+                    method: "GET",
+                    headers: { "X-Telegram-Init-Data": initData },
+                    signal: controller.signal,
+                });
+                let payload;
+                try {
+                    payload = await response.json();
+                } catch (_) {
+                    throw new ArenaApiError("Arena serveridan noto‘g‘ri javob olindi.");
+                }
+                if (!response.ok) {
+                    const retryable = transientStatuses.has(response.status);
+                    if (retryable && attempt < this.retries) continue;
+                    throw new ArenaApiError(arenaHttpMessage(response.status), {
+                        status: response.status,
+                        retryable,
+                    });
+                }
+                return payload;
+            } catch (error) {
+                if (error instanceof ArenaApiError) throw error;
+                const timeout = error?.name === "AbortError";
+                if (attempt < this.retries) continue;
+                throw new ArenaApiError(
+                    timeout
+                        ? "Arena serveri javob bermadi. Qayta urinib ko‘ring."
+                        : "Arena serveri bilan aloqa o‘rnatilmadi.",
+                    { retryable: true },
+                );
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+        throw new ArenaApiError("Arena so‘rovi bajarilmadi.");
+    }
+
+    async openMatches({ skip = 0, limit = 20 } = {}) {
+        return normalizeMatchList(await this.request("/matches/open", { query: { skip, limit } }));
+    }
+
+    async myMatches({ skip = 0, limit = 20 } = {}) {
+        return normalizeMatchList(await this.request("/matches/me", { query: { skip, limit } }));
+    }
+
+    async match(matchId) {
+        return normalizeMatch(await this.request(`/matches/${Number(matchId)}`));
+    }
+
+    async stats() {
+        return await this.request("/matches/stats/me");
+    }
+
+    async leaderboard({ period = "all", limit = 20 } = {}) {
+        const payload = await this.request("/matches/leaderboard", { query: { period, limit } });
+        if (!payload || !Array.isArray(payload.users)) {
+            throw new ArenaApiError("Arena reyting javobi noto‘g‘ri formatda.");
+        }
+        return payload;
+    }
+
+    async guide() {
+        return await this.request("/matches/guide");
+    }
+}
+
+function arenaHttpMessage(status) {
+    const messages = {
+        400: "Arena so‘rovi noto‘g‘ri.",
+        401: "Telegram tasdiqlashi yaroqsiz yoki eskirgan.",
+        403: "Bu Arena ma’lumotini ko‘rishga ruxsat yo‘q.",
+        404: "Arena match topilmadi.",
+        409: "Match holati o‘zgargan. Ma’lumotni yangilang.",
+        422: "Arena so‘rovi formati noto‘g‘ri.",
+        429: "Arena serveri band. Birozdan keyin urinib ko‘ring.",
+    };
+    return status >= 500
+        ? "Arena serverida vaqtinchalik xatolik yuz berdi."
+        : messages[status] || "Arena so‘rovi bajarilmadi.";
+}
+
+function normalizeMatch(value) {
+    if (!value || !Number.isInteger(value.id) || typeof value.status !== "string") {
+        throw new ArenaApiError("Arena match javobi noto‘g‘ri formatda.");
+    }
+    return {
+        id: value.id,
+        gameType: value.game_type || "EFOOTBALL",
+        creatorName: value.creator_display_name || "O‘yinchi",
+        opponentName: value.opponent_display_name || "Raqib kutilmoqda",
+        stakeEfc: String(value.efc_amount ?? "0"),
+        totalPool: String(value.total_pool ?? "0"),
+        winnerReward: String(value.winner_reward ?? "0"),
+        status: value.status,
+        scheduledAt: value.scheduled_at || null,
+        creatorReady: Boolean(value.creator_ready),
+        opponentReady: Boolean(value.opponent_ready),
+        roomCode: value.room_code || null,
+        resultType: value.result_type || null,
+    };
+}
+
+function normalizeMatchList(value) {
+    if (!value || !Array.isArray(value.matches)) {
+        throw new ArenaApiError("Arena matchlar ro‘yxati noto‘g‘ri formatda.");
+    }
+    return value.matches.map(normalizeMatch);
+}
+
+const arenaApiClient = new ArenaApiClient();
+const arenaView = { tab: "open", loading: false };
+
+function arenaEscape(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function arenaStatus(status) {
+    return ({
+        WAITING_PLAYER: "Raqib kutilmoqda",
+        WAITING_READY: "Tayyorlik kutilmoqda",
+        ROOM_READY: "Room tayyor",
+        PLAYING: "O‘yin davom etmoqda",
+        TECHNICAL_REVIEW: "Texnik tekshiruv",
+        WAITING_ADMIN: "Admin tekshirmoqda",
+        COMPLETED: "Yakunlangan",
+        CANCELLED: "Bekor qilingan",
+    })[status] || status;
+}
+
+function arenaDate(value) {
+    if (!value) return "Vaqt belgilanmagan";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? "Vaqt noto‘g‘ri"
+        : date.toLocaleString("uz-UZ", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function arenaSkeleton() {
+    return `<div class="arena-v2-skeleton">${Array.from({ length: 3 }, () =>
+        "<div><i></i><b></b><span></span></div>").join("")}</div>`;
+}
+
+function arenaState(title, message, retry = true) {
+    return `<div class="arena-v2-state"><span>⚔️</span><h3>${arenaEscape(title)}</h3>
+        <p>${arenaEscape(message)}</p>${retry ? '<button onclick="retryArenaView()">Qayta urinish</button>' : ""}</div>`;
+}
+
+function arenaMatchCard(match) {
+    return `<button class="arena-v2-match" onclick="loadArenaMatchDetail(${match.id})">
+        <div><small>${arenaEscape(match.gameType.replaceAll("_", " "))}</small>
+        <em>${arenaEscape(arenaStatus(match.status))}</em></div>
+        <section><span><b>${arenaEscape(match.creatorName)}</b><small>PLAYER 1</small></span>
+        <strong>VS</strong><span><b>${arenaEscape(match.opponentName)}</b><small>PLAYER 2</small></span></section>
+        <footer><span>${arenaEscape(arenaDate(match.scheduledAt))}</span><b>${arenaEscape(match.stakeEfc)} EFC</b></footer>
+    </button>`;
+}
 
 async function loadArenaPage() {
     Navbar.setActive("arena");
-    showPage("arenaPage", "1vs1 Arena");
-
+    showPage("arenaPage", "Arena");
     const page = document.getElementById("arenaPage");
+    if (!page) return;
+    page.innerHTML = `<div class="arena-v2">
+        <header><small>LEVEL_GROUP</small><h2>Battle Arena</h2><p>Raqobat. Mahorat. G‘alaba.</p>
+            <div id="arenaV2Stats">Statistika yuklanmoqda...</div></header>
+        <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="my">Mening</button>
+            <button data-arena-tab="rating">Reyting</button><button data-arena-tab="guide">Qo‘llanma</button></nav>
+        <main id="arenaV2Content">${arenaSkeleton()}</main></div>`;
+    page.querySelectorAll("[data-arena-tab]").forEach((button) => {
+        button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
+    });
+    loadArenaStats();
+    await loadArenaTab(arenaView.tab);
+}
 
-    if (!page) {
-        Modal.error("Arena sahifasi topilmadi.");
+async function loadArenaStats() {
+    const target = document.getElementById("arenaV2Stats");
+    if (!target) return;
+    try {
+        const stats = await arenaApiClient.stats();
+        target.innerHTML = `<b>${arenaEscape(stats.total_matches ?? 0)}</b> match · <b>${arenaEscape(stats.wins ?? 0)}</b> g‘alaba · <b>${arenaEscape(stats.rating ?? 0)}</b> reyting`;
+    } catch (_) {
+        target.textContent = "Shaxsiy statistika vaqtincha mavjud emas";
+    }
+}
+
+async function loadArenaTab(tab) {
+    if (arenaView.loading) return;
+    arenaView.tab = tab;
+    arenaView.loading = true;
+    const content = document.getElementById("arenaV2Content");
+    if (!content) {
+        arenaView.loading = false;
         return;
     }
-
-    page.innerHTML = `
-        <div class="arena-premium">
-
-            <div class="arena-hero">
-                <div class="arena-hero-glow"></div>
-
-                <div class="arena-hero-top">
-                    <div>
-                        <div class="arena-badge">⚔️ LEVEL_GROUP ARENA</div>
-                        <h2>1vs1 Battle Arena</h2>
-                        <p>EFC tikib, real o‘yinchi bilan 1vs1 jang qiling.</p>
-                    </div>
-
-                    <div class="arena-cup">🏆</div>
-                </div>
-
-                <div class="arena-stats-grid">
-                    <div class="arena-stat-card">
-                        <span>Online</span>
-                        <strong id="arenaOnlineCount">--</strong>
-                        <small>foydalanuvchi</small>
-                    </div>
-
-                    <div class="arena-stat-card">
-                        <span>Aktiv match</span>
-                        <strong id="arenaActiveCount">--</strong>
-                        <small>hozir</small>
-                    </div>
-
-                    <div class="arena-stat-card">
-                        <span>Ochiq e’lon</span>
-                        <strong id="arenaOpenCount">--</strong>
-                        <small>qabul qilish mumkin</small>
-                    </div>
-
-                    <div class="arena-stat-card">
-                        <span>Bugun EFC</span>
-                        <strong id="arenaTodayEfc">--</strong>
-                        <small>aylandi</small>
-                    </div>
-                </div>
-            </div>
-
-            <div class="arena-premium-tabs">
-                <button class="arena-premium-tab active" data-tab="open">
-                    <span>📋</span>
-                    Ochiq
-                </button>
-                <button class="arena-premium-tab" data-tab="my">
-                    <span>🕹</span>
-                    Mening
-                </button>
-                <button class="arena-premium-tab" data-tab="create">
-                    <span>➕</span>
-                    Yaratish
-                </button>
-                <button class="arena-premium-tab" data-tab="rating">
-                    <span>🏆</span>
-                    Reyting
-                </button>
-                <button class="arena-premium-tab" data-tab="guide">
-                    <span>📘</span>
-                    Qo‘llanma
-                </button>
-            </div>
-
-            <div id="arenaContent" class="arena-premium-content">
-                <div class="arena-loading-box">Arena yuklanmoqda...</div>
-            </div>
-        </div>
-    `;
-
-    bindArenaPremiumTabs();
-    await loadArenaDashboard();
-    await loadArenaOpenMatches();
-}
-
-
-function bindArenaPremiumTabs() {
-    document.querySelectorAll(".arena-premium-tab").forEach((tab) => {
-        tab.addEventListener("click", async () => {
-            document.querySelectorAll(".arena-premium-tab").forEach((item) => {
-                item.classList.remove("active");
-            });
-
-            tab.classList.add("active");
-
-            const tabName = tab.dataset.tab;
-
-            if (tabName === "open") {
-                await loadArenaOpenMatches();
-            } else if (tabName === "my") {
-                await loadArenaMyMatches();
-            } else if (tabName === "create") {
-                loadArenaCreateForm();
-            } else if (tabName === "rating") {
-                arenaRatingLimit = 10;
-                await loadArenaRating();
-            } else if (tabName === "guide") {
-                await loadArenaGuide();
-            }
-        });
-    });
-}
-
-
-function getArenaContent() {
-    return document.getElementById("arenaContent");
-}
-
-
-async function loadArenaDashboard() {
+    document.querySelectorAll("[data-arena-tab]").forEach((button) =>
+        button.classList.toggle("active", button.dataset.arenaTab === tab));
+    content.innerHTML = arenaSkeleton();
     try {
-        const overview = await getMatchOverview();
-
-        setArenaStat("arenaOnlineCount", overview.online_users ?? 0);
-        setArenaStat("arenaActiveCount", overview.active_matches ?? 0);
-        setArenaStat("arenaOpenCount", overview.open_matches ?? 0);
-        setArenaStat(
-            "arenaTodayEfc",
-            Number(overview.today_efc_pool ?? 0).toLocaleString()
-        );
-    } catch (error) {
-        console.error(error);
-
-        setArenaStat("arenaOnlineCount", "--");
-        setArenaStat("arenaActiveCount", "--");
-        setArenaStat("arenaOpenCount", "--");
-        setArenaStat("arenaTodayEfc", "--");
-    }
-}
-
-
-function setArenaStat(id, value) {
-    const element = document.getElementById(id);
-
-    if (element) {
-        element.textContent = value;
-    }
-}
-
-
-function formatArenaDate(value) {
-    if (!value) return "Noma’lum";
-
-    try {
-        const date = new Date(value);
-
-        return date.toLocaleString("uz-UZ", {
-            timeZone: "Asia/Tashkent",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-        });
-    } catch (error) {
-        return value;
-    }
-}
-
-
-function getStatusLabel(status) {
-    const labels = {
-        WAITING_PLAYER: "Ochiq",
-        SCHEDULED: "Rejalangan",
-        READY_CHECK: "Ready",
-        WAITING_ROOM_CODE: "Room Code",
-        ROOM_CREATED: "Room yaratildi",
-        MATCH_STARTED: "Boshlangan",
-        WAITING_ADMIN: "Admin tekshiradi",
-        TECHNICAL_WIN: "Texnik g‘alaba",
-        CANCELLED: "Bekor qilingan",
-        COMPLETED: "Yakunlangan",
-    };
-
-    return labels[status] || status;
-}
-
-
-function getPlayerName(match, type) {
-    if (type === "creator") {
-        if (match.creator_username) return `@${match.creator_username}`;
-        if (match.creator_first_name) return match.creator_first_name;
-        return String(match.creator_telegram_id).slice(-5);
-    }
-
-    if (!match.opponent_telegram_id) return "Raqib yo‘q";
-
-    if (match.opponent_username) return `@${match.opponent_username}`;
-    if (match.opponent_first_name) return match.opponent_first_name;
-    return String(match.opponent_telegram_id).slice(-5);
-}
-
-
-function formatArenaMatchCard(match, mode = "open") {
-    const roomCode = match.room_code || "Hali yo‘q";
-    const creatorName = getPlayerName(match, "creator");
-    const opponentName = getPlayerName(match, "opponent");
-    const isCreator = Number(match.creator_telegram_id) === Number(TELEGRAM_ID);
-
-    let actions = "";
-
-    if (mode === "open" && match.status === "WAITING_PLAYER") {
-        actions = `
-            <button class="arena-main-action arena-accept-btn" data-id="${match.id}">
-                ✅ Matchni qabul qilish
-            </button>
-        `;
-    }
-
-    if (mode === "my" && match.status === "READY_CHECK") {
-        actions += `
-            <button class="arena-main-action arena-ready-btn" data-id="${match.id}">
-                ✅ Men tayyorman
-            </button>
-        `;
-    }
-
-    if (mode === "my" && match.status === "WAITING_ROOM_CODE") {
-        if (isCreator) {
-            actions += `
-                <button class="arena-main-action arena-room-btn" data-id="${match.id}">
-                    🔐 Room Code yozish
-                </button>
-            `;
+        if (tab === "open" || tab === "my") {
+            const matches = tab === "open"
+                ? await arenaApiClient.openMatches()
+                : await arenaApiClient.myMatches();
+            content.innerHTML = matches.length
+                ? `<div class="arena-v2-list">${matches.map(arenaMatchCard).join("")}</div>`
+                : arenaState("Matchlar topilmadi", tab === "open" ? "Hozircha ochiq match yo‘q." : "Sizda hali Arena matchlari yo‘q.", false);
+        } else if (tab === "rating") {
+            const data = await arenaApiClient.leaderboard();
+            content.innerHTML = data.users.length
+                ? `<div class="arena-v2-ranking">${data.users.map((user, index) => `<div><b>#${index + 1}</b><span>${arenaEscape(user.display_name || "O‘yinchi")}</span><strong>${arenaEscape(user.rating ?? 0)}</strong></div>`).join("")}</div>`
+                : arenaState("Reyting bo‘sh", "Hali reyting ma’lumotlari yo‘q.", false);
         } else {
-            actions += `
-                <div class="arena-wait-box">
-                    ⏳ Yaratuvchi Room Code yozishini kuting
-                </div>
-            `;
+            const guide = await arenaApiClient.guide();
+            content.innerHTML = `<article class="arena-v2-guide"><h3>Arena qo‘llanmasi</h3><p>${arenaEscape(guide.description || guide.guide || "Arena qoidalariga rioya qiling.")}</p></article>`;
         }
-    }
-
-    return `
-        <div class="arena-vs-card">
-            <div class="arena-vs-header">
-                <div>
-                    <span>Match #${match.id}</span>
-                    <b>${getStatusLabel(match.status)}</b>
-                </div>
-                <div class="arena-prize">${match.winner_reward} EFC</div>
-            </div>
-
-            <div class="arena-vs-body">
-                <div class="arena-player">
-                    <div class="arena-player-avatar">P1</div>
-                    <strong>${creatorName}</strong>
-                    <small>Yaratuvchi</small>
-                </div>
-
-                <div class="arena-vs-center">
-                    <div class="arena-vs-text">VS</div>
-                    <small>${match.efc_amount} EFC</small>
-                </div>
-
-                <div class="arena-player">
-                    <div class="arena-player-avatar opponent">P2</div>
-                    <strong>${opponentName}</strong>
-                    <small>${match.opponent_telegram_id ? "Raqib" : "Kutilmoqda"}</small>
-                </div>
-            </div>
-
-            <div class="arena-match-details">
-                <div>
-                    <span>🕒 Vaqt</span>
-                    <b>${formatArenaDate(match.scheduled_at)}</b>
-                </div>
-                <div>
-                    <span>🔐 Room</span>
-                    <b>${roomCode}</b>
-                </div>
-            </div>
-
-            ${actions ? `<div class="arena-card-actions">${actions}</div>` : ""}
-        </div>
-    `;
-}
-
-
-async function loadArenaOpenMatches() {
-    const content = getArenaContent();
-
-    if (!content) return;
-
-    content.innerHTML = `<div class="arena-loading-box">⚔️ Ochiq matchlar yuklanmoqda...</div>`;
-
-    try {
-        const data = await getOpenMatches();
-        const matches = data.matches || [];
-
-        await loadArenaDashboard();
-
-        if (!matches.length) {
-            content.innerHTML = `
-                <div class="arena-empty-premium">
-                    <div class="arena-empty-icon">⚔️</div>
-                    <h3>Hozircha ochiq match yo‘q</h3>
-                    <p>Birinchi bo‘lib 1vs1 match yarating va raqib kuting.</p>
-                    <button class="arena-main-action" onclick="loadArenaCreateForm()">
-                        ➕ Match yaratish
-                    </button>
-                </div>
-            `;
-            return;
-        }
-
-        content.innerHTML = `
-            <div class="arena-list-title">
-                <h3>📋 Ochiq matchlar</h3>
-                <span>${matches.length} ta e’lon</span>
-            </div>
-
-            ${matches.map((match) => formatArenaMatchCard(match, "open")).join("")}
-        `;
-
-        bindArenaAcceptButtons();
     } catch (error) {
-        console.error(error);
-        content.innerHTML = `
-            <div class="arena-empty-premium">
-                <div class="arena-empty-icon">❌</div>
-                <h3>Xatolik</h3>
-                <p>Ochiq matchlarni yuklab bo‘lmadi.</p>
-            </div>
-        `;
-    }
-}
-
-
-function bindArenaAcceptButtons() {
-    document.querySelectorAll(".arena-accept-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            const matchId = button.dataset.id;
-
-            Loader.show();
-
-            try {
-                await acceptMatch(matchId);
-                Modal.success("Match qabul qilindi!");
-                await loadArenaMyMatches();
-            } catch (error) {
-                console.error(error);
-                Modal.error(error.message || "Matchni qabul qilib bo‘lmadi.");
-            } finally {
-                Loader.hide();
-            }
-        });
-    });
-}
-
-
-async function loadArenaMyMatches() {
-    const content = getArenaContent();
-
-    if (!content) return;
-
-    content.innerHTML = `<div class="arena-loading-box">🕹 Matchlaringiz yuklanmoqda...</div>`;
-
-    try {
-        const data = await getMyMatches();
-        const matches = data.matches || [];
-
-        await loadArenaDashboard();
-
-        if (!matches.length) {
-            content.innerHTML = `
-                <div class="arena-empty-premium">
-                    <div class="arena-empty-icon">🕹</div>
-                    <h3>Sizda hali match yo‘q</h3>
-                    <p>Match yarating yoki ochiq e’lonlardan birini qabul qiling.</p>
-                    <button class="arena-main-action" onclick="loadArenaCreateForm()">
-                        ➕ Match yaratish
-                    </button>
-                </div>
-            `;
-            return;
-        }
-
-        content.innerHTML = `
-            <div class="arena-list-title">
-                <h3>🕹 Mening matchlarim</h3>
-                <span>${matches.length} ta match</span>
-            </div>
-
-            ${matches.map((match) => formatArenaMatchCard(match, "my")).join("")}
-        `;
-
-        bindArenaReadyButtons();
-        bindArenaRoomButtons();
-    } catch (error) {
-        console.error(error);
-        content.innerHTML = `
-            <div class="arena-empty-premium">
-                <div class="arena-empty-icon">❌</div>
-                <h3>Xatolik</h3>
-                <p>Matchlaringizni yuklab bo‘lmadi.</p>
-            </div>
-        `;
-    }
-}
-
-
-function bindArenaReadyButtons() {
-    document.querySelectorAll(".arena-ready-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            const matchId = button.dataset.id;
-
-            Loader.show();
-
-            try {
-                await setReady(matchId);
-                Modal.success("Tayyor holatingiz qabul qilindi!");
-                await loadArenaMyMatches();
-            } catch (error) {
-                console.error(error);
-                Modal.error(error.message || "Ready bosib bo‘lmadi.");
-            } finally {
-                Loader.hide();
-            }
-        });
-    });
-}
-
-
-function bindArenaRoomButtons() {
-    document.querySelectorAll(".arena-room-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            const matchId = button.dataset.id;
-            const roomCode = prompt("Room Code kiriting:");
-
-            if (!roomCode || roomCode.trim().length < 3) {
-                Modal.error("Room Code kamida 3 ta belgidan iborat bo‘lishi kerak.");
-                return;
-            }
-
-            Loader.show();
-
-            try {
-                await createRoomCode(matchId, roomCode.trim());
-                Modal.success("Room Code saqlandi!");
-                await loadArenaMyMatches();
-            } catch (error) {
-                console.error(error);
-                Modal.error(error.message || "Room Code saqlanmadi.");
-            } finally {
-                Loader.hide();
-            }
-        });
-    });
-}
-
-
-function loadArenaCreateForm() {
-    const content = getArenaContent();
-
-    if (!content) return;
-
-    content.innerHTML = `
-        <div class="arena-create-premium">
-            <div class="arena-create-head">
-                <div>
-                    <span>⚔️ Yangi Battle</span>
-                    <h3>1vs1 match yaratish</h3>
-                    <p>EFC miqdorini tanlang va match vaqtini belgilang.</p>
-                </div>
-            </div>
-
-            <div class="arena-quick-amounts">
-                <button data-amount="100">100</button>
-                <button data-amount="250">250</button>
-                <button data-amount="500">500</button>
-                <button data-amount="1000">1000</button>
-            </div>
-
-            <label class="arena-label">EFC miqdori</label>
-            <input
-                id="arenaAmountInput"
-                class="arena-input"
-                type="number"
-                min="1"
-                placeholder="Masalan: 100"
-            />
-
-            <label class="arena-label">Match vaqti</label>
-            <input
-                id="arenaTimeInput"
-                class="arena-input"
-                type="datetime-local"
-            />
-
-            <div class="arena-prize-preview">
-                <div>
-                    <span>Umumiy pool</span>
-                    <b id="arenaPoolPreview">0 EFC</b>
-                </div>
-                <div>
-                    <span>Komissiya</span>
-                    <b id="arenaCommissionPreview">0 EFC</b>
-                </div>
-                <div>
-                    <span>G‘olib oladi</span>
-                    <b id="arenaRewardPreview">0 EFC</b>
-                </div>
-            </div>
-
-            <button id="arenaCreateBtn" class="arena-main-action">
-                ✅ Match yaratish
-            </button>
-
-            <p class="arena-warning">
-                Match yaratilganda EFC balansingiz locked_efc ga o‘tadi.
-            </p>
-        </div>
-    `;
-
-    bindArenaCreateFormEvents();
-}
-
-
-function bindArenaCreateFormEvents() {
-    const amountInput = document.getElementById("arenaAmountInput");
-    const createBtn = document.getElementById("arenaCreateBtn");
-
-    document.querySelectorAll(".arena-quick-amounts button").forEach((button) => {
-        button.addEventListener("click", () => {
-            amountInput.value = button.dataset.amount;
-            updateArenaPrizePreview();
-        });
-    });
-
-    if (amountInput) {
-        amountInput.addEventListener("input", updateArenaPrizePreview);
-    }
-
-    if (createBtn) {
-        createBtn.addEventListener("click", createArenaMatchFromForm);
-    }
-}
-
-
-function updateArenaPrizePreview() {
-    const amountInput = document.getElementById("arenaAmountInput");
-
-    const amount = Number(amountInput.value || 0);
-    const pool = amount * 2;
-    const commission = pool * 0.05;
-    const reward = pool - commission;
-
-    document.getElementById("arenaPoolPreview").textContent = `${pool} EFC`;
-    document.getElementById("arenaCommissionPreview").textContent = `${commission} EFC`;
-    document.getElementById("arenaRewardPreview").textContent = `${reward} EFC`;
-}
-
-
-async function createArenaMatchFromForm() {
-    const amountInput = document.getElementById("arenaAmountInput");
-    const timeInput = document.getElementById("arenaTimeInput");
-
-    const amount = Number(amountInput.value);
-    const timeValue = timeInput.value;
-
-    if (!amount || amount <= 0) {
-        Modal.error("EFC miqdorini to‘g‘ri kiriting.");
-        return;
-    }
-
-    if (!timeValue) {
-        Modal.error("Match vaqtini tanlang.");
-        return;
-    }
-
-    const scheduledAt = `${timeValue}:00+05:00`;
-
-    Loader.show();
-
-    try {
-        await createMatch(amount, scheduledAt);
-        Modal.success("Match e’loni yaratildi!");
-        await loadArenaMyMatches();
-    } catch (error) {
-        console.error(error);
-        Modal.error(error.message || "Match yaratib bo‘lmadi.");
+        content.innerHTML = arenaState("Arena yuklanmadi", error.message);
     } finally {
-        Loader.hide();
+        arenaView.loading = false;
     }
 }
 
-
-async function loadArenaRating() {
-    const content = getArenaContent();
-
-    if (!content) return;
-
-    content.innerHTML = `<div class="arena-loading-box">🏆 Reyting yuklanmoqda...</div>`;
-
+async function loadArenaMatchDetail(matchId) {
+    const content = document.getElementById("arenaV2Content");
+    if (!content || arenaView.loading) return;
+    arenaView.loading = true;
+    content.innerHTML = arenaSkeleton();
     try {
-        const data = await getMatchLeaderboard("all");
-        const users = data.users || [];
-        const visibleUsers = users.slice(0, arenaRatingLimit);
-        const myUser = users.find(
-            (user) => Number(user.telegram_id) === Number(TELEGRAM_ID)
-        );
-
-        if (!users.length) {
-            content.innerHTML = `
-                <div class="arena-empty-premium">
-                    <div class="arena-empty-icon">🏆</div>
-                    <h3>Reyting hali yo‘q</h3>
-                    <p>Hali hech kim match yakunlamagan.</p>
-                </div>
-            `;
-            return;
-        }
-
-        content.innerHTML = `
-            ${formatArenaPodium(users)}
-
-            ${myUser ? formatMyArenaRating(myUser, users) : ""}
-
-            <div class="arena-list-title">
-                <h3>🏆 Umumiy reyting</h3>
-                <span>${visibleUsers.length}/${users.length}</span>
-            </div>
-
-            <div class="arena-rating-table">
-                ${visibleUsers
-                    .map((user, index) => formatArenaRatingRow(user, index + 1))
-                    .join("")}
-            </div>
-
-            ${
-                arenaRatingLimit < users.length
-                    ? `
-                        <button id="arenaShowMoreRating" class="arena-secondary-action">
-                            Yana ko‘rsatish
-                        </button>
-                    `
-                    : ""
-            }
-        `;
-
-        const showMoreBtn = document.getElementById("arenaShowMoreRating");
-
-        if (showMoreBtn) {
-            showMoreBtn.addEventListener("click", async () => {
-                arenaRatingLimit += 10;
-                await loadArenaRating();
-            });
-        }
+        const match = await arenaApiClient.match(matchId);
+        content.innerHTML = `<article class="arena-v2-detail"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
+            <small>MATCH #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
+            <div><span>Status</span><b>${arenaEscape(arenaStatus(match.status))}</b></div>
+            <div><span>O‘yin</span><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></div>
+            <div><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></div>
+            <div><span>Mukofot</span><b>${arenaEscape(match.winnerReward)} EFC</b></div>
+            <div><span>Vaqt</span><b>${arenaEscape(arenaDate(match.scheduledAt))}</b></div></article>`;
     } catch (error) {
-        console.error(error);
-        content.innerHTML = `
-            <div class="arena-empty-premium">
-                <div class="arena-empty-icon">❌</div>
-                <h3>Xatolik</h3>
-                <p>Reytingni yuklab bo‘lmadi.</p>
-            </div>
-        `;
+        content.innerHTML = arenaState("Match ochilmadi", error.message);
+    } finally {
+        arenaView.loading = false;
     }
 }
 
-
-function formatArenaPodium(users) {
-    const first = users[0];
-    const second = users[1];
-    const third = users[2];
-
-    return `
-        <div class="arena-podium">
-            ${second ? formatPodiumPlayer(second, 2, "🥈") : ""}
-            ${first ? formatPodiumPlayer(first, 1, "🥇") : ""}
-            ${third ? formatPodiumPlayer(third, 3, "🥉") : ""}
-        </div>
-    `;
+function retryArenaView() {
+    loadArenaTab(arenaView.tab);
 }
 
+Object.assign(globalThis, { loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView });
 
-function formatPodiumPlayer(user, place, medal) {
-    return `
-        <div class="arena-podium-card place-${place}">
-            <div class="arena-podium-medal">${medal}</div>
-            <strong>${String(user.telegram_id).slice(-5)}</strong>
-            <span>${user.rating}</span>
-            <small>${user.wins}W / ${user.losses}L</small>
-        </div>
-    `;
+if (typeof module !== "undefined") {
+    module.exports = {
+        ArenaApiClient,
+        ArenaApiError,
+        normalizeMatch,
+        normalizeMatchList,
+        arenaSkeleton,
+        arenaState,
+    };
 }
-
-
-function formatMyArenaRating(myUser, users) {
-    const myIndex = users.findIndex(
-        (user) => Number(user.telegram_id) === Number(TELEGRAM_ID)
-    );
-    const place = myIndex >= 0 ? myIndex + 1 : "-";
-
-    return `
-        <div class="arena-my-rating">
-            <div>
-                <span>Mening reytingim</span>
-                <h3>#${place}</h3>
-                <p>${myUser.wins} g‘alaba • ${myUser.losses} mag‘lubiyat</p>
-            </div>
-            <strong>${myUser.rating}</strong>
-        </div>
-    `;
-}
-
-
-function formatArenaRatingRow(user, place) {
-    const isMe = Number(user.telegram_id) === Number(TELEGRAM_ID);
-
-    return `
-        <div class="arena-rating-row ${isMe ? "me" : ""}">
-            <div class="arena-rating-place">#${place}</div>
-            <div class="arena-rating-user">
-                <strong>${String(user.telegram_id).slice(-5)}</strong>
-                <span>${user.wins}W / ${user.losses}L • ${user.win_rate}%</span>
-            </div>
-            <div class="arena-rating-score">
-                ${user.rating}
-            </div>
-        </div>
-    `;
-}
-
-
-async function loadArenaGuide() {
-    const content = getArenaContent();
-
-    if (!content) return;
-
-    content.innerHTML = `<div class="arena-loading-box">📘 Qo‘llanma yuklanmoqda...</div>`;
-
-    try {
-        const guide = await getMatchGuide();
-
-        content.innerHTML = `
-            <div class="arena-guide-premium">
-                <div class="arena-empty-icon">📘</div>
-                <h3>${guide.title}</h3>
-                <p>${guide.text.replaceAll("\n", "<br>")}</p>
-            </div>
-        `;
-    } catch (error) {
-        console.error(error);
-        content.innerHTML = `
-            <div class="arena-empty-premium">
-                <div class="arena-empty-icon">❌</div>
-                <h3>Xatolik</h3>
-                <p>Qo‘llanmani yuklab bo‘lmadi.</p>
-            </div>
-        `;
-    }
-    }

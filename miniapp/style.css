@@ -1234,3 +1234,39 @@ body {
     font-weight: 900;
     font-size: 14px;
     }
+}
+
+/* Arena V2 foundation */
+.arena-v2 { display: grid; gap: 14px; color: #f8fafc; }
+.arena-v2 > header { position: relative; overflow: hidden; padding: 24px 20px; border: 1px solid rgba(239,68,68,.28); border-radius: 24px; background: radial-gradient(circle at 85% 10%, rgba(239,68,68,.3), transparent 42%), linear-gradient(145deg,#17181d,#090a0d); box-shadow: 0 18px 45px rgba(0,0,0,.3); }
+.arena-v2 > header::after { content: "VS"; position: absolute; right: 18px; top: 4px; font: 900 68px/1 system-ui; color: rgba(255,255,255,.035); transform: skew(-8deg); }
+.arena-v2 > header small { color: #ef4444; font-weight: 900; letter-spacing: .18em; }
+.arena-v2 > header h2 { margin: 7px 0 4px; font-size: 30px; text-transform: uppercase; }
+.arena-v2 > header p { margin: 0 0 18px; color: #9ca3af; }
+#arenaV2Stats { width: fit-content; padding: 8px 11px; border-radius: 10px; background: rgba(255,255,255,.06); color: #cbd5e1; font-size: 12px; }
+#arenaV2Stats b { color: #fff; }
+.arena-v2 > nav { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; padding: 5px; border-radius: 16px; background: #111218; }
+.arena-v2 > nav button { border: 0; border-radius: 12px; padding: 11px 4px; background: transparent; color: #8b8f9b; font-weight: 800; font-size: 12px; }
+.arena-v2 > nav button.active { background: linear-gradient(135deg,#dc2626,#7f1d1d); color: #fff; box-shadow: 0 7px 20px rgba(220,38,38,.25); }
+.arena-v2-list { display: grid; gap: 11px; }
+.arena-v2-match { width: 100%; padding: 15px; border: 1px solid rgba(255,255,255,.075); border-radius: 20px; background: linear-gradient(145deg,#17181e,#0d0e12); color: #fff; text-align: left; box-shadow: 0 12px 28px rgba(0,0,0,.22); }
+.arena-v2-match > div,.arena-v2-match footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.arena-v2-match > div small { color: #f87171; font-weight: 900; }
+.arena-v2-match em { padding: 5px 8px; border-radius: 99px; background: rgba(239,68,68,.12); color: #fca5a5; font-size: 10px; font-style: normal; }
+.arena-v2-match section { display: grid; grid-template-columns: 1fr 42px 1fr; align-items: center; gap: 8px; margin: 18px 0; text-align: center; }
+.arena-v2-match section span { display: grid; gap: 5px; min-width: 0; }
+.arena-v2-match section b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arena-v2-match section small,.arena-v2-match footer span { color: #717684; font-size: 10px; }
+.arena-v2-match section > strong { color: #ef4444; font-style: italic; }
+.arena-v2-match footer { padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }
+.arena-v2-match footer b { color: #f87171; }
+.arena-v2-skeleton { display: grid; gap: 11px; }
+.arena-v2-skeleton > div { display: grid; gap: 12px; height: 145px; padding: 16px; border-radius: 20px; background: #15161b; overflow: hidden; }
+.arena-v2-skeleton i,.arena-v2-skeleton b,.arena-v2-skeleton span { border-radius: 8px; background: linear-gradient(90deg,#1c1e24,#2a2d35,#1c1e24); background-size: 220% 100%; animation: arena-shimmer 1.2s infinite; }
+.arena-v2-skeleton i { width: 40%; }.arena-v2-skeleton b { width: 75%; }.arena-v2-skeleton span { width: 55%; }
+@keyframes arena-shimmer { to { background-position: -220% 0; } }
+.arena-v2-state,.arena-v2-guide { padding: 34px 20px; border: 1px solid rgba(255,255,255,.07); border-radius: 20px; background: #131419; text-align: center; }
+.arena-v2-state > span { font-size: 34px; }.arena-v2-state h3 { margin: 10px 0 5px; }.arena-v2-state p,.arena-v2-guide p { color: #979ca8; line-height: 1.55; }
+.arena-v2-state button,.arena-v2-detail > button { border: 0; border-radius: 12px; padding: 11px 15px; background: #dc2626; color: #fff; font-weight: 800; }
+.arena-v2-ranking { display: grid; gap: 8px; }.arena-v2-ranking > div { display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: center; padding: 14px; border-radius: 15px; background: #15161b; }.arena-v2-ranking b { color: #ef4444; }.arena-v2-ranking strong { color: #fca5a5; }
+.arena-v2-detail { display: grid; gap: 11px; padding: 18px; border-radius: 22px; background: linear-gradient(145deg,#17181e,#0c0d10); }.arena-v2-detail > button { width: fit-content; background: #25272e; }.arena-v2-detail > small { margin-top: 8px; color: #ef4444; font-weight: 900; }.arena-v2-detail h3 { margin: 0 0 8px; font-size: 21px; }.arena-v2-detail h3 i { color: #ef4444; }.arena-v2-detail > div { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid rgba(255,255,255,.06); }.arena-v2-detail span { color: #858a96; }.arena-v2-detail b { text-align: right; }
