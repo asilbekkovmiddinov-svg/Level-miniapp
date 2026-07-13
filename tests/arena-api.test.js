@@ -9,6 +9,8 @@ const {
     normalizeMatch,
     runArenaMutation,
     arenaCountdown,
+    renderArenaRoomPanel,
+    copyArenaRoomCode,
 } = require("../miniapp/pages/arena.js");
 
 function response(payload, status = 200) {
@@ -322,5 +324,93 @@ test("ready error mapping is safe for all documented mutation statuses", async (
             return true;
         });
         assert.equal(calls, 1, "Ready POST must never retry automatically");
+    }
+});
+
+test("creator room code submit uses authenticated contract once", async () => {
+    const calls = [];
+    const client = new ArenaApiClient({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        retries: 3,
+        fetchImpl: async (url, options) => {
+            calls.push({ url, options });
+            return response({ ...rawMatch, status: "ROOM_READY", room_code: "ROOM-42" });
+        },
+    });
+
+    const match = await client.setRoomCode(42, "  ROOM-42  ");
+    assert.equal(calls.length, 1);
+    assert.equal(new URL(calls[0].url).pathname, "/matches/42/room-code");
+    assert.equal(calls[0].options.method, "POST");
+    assert.equal(calls[0].options.headers["X-Telegram-Init-Data"], "verified-init-data");
+    assert.deepEqual(JSON.parse(calls[0].options.body), { room_code: "ROOM-42" });
+    assert.equal(match.roomCode, "ROOM-42");
+});
+
+test("room panel separates creator and opponent UX and follows polling data", () => {
+    const storage = new Map();
+    global.localStorage = {
+        getItem: (key) => storage.get(key) || null,
+        setItem: (key, value) => storage.set(key, value),
+    };
+    const roomReady = normalizeMatch({ ...rawMatch, status: "ROOM_READY", room_code: null });
+
+    storage.set("arena-role-42", "creator");
+    assert.match(renderArenaRoomPanel(roomReady), /arenaRoomCodeInput/);
+    storage.set("arena-role-42", "opponent");
+    const opponent = renderArenaRoomPanel(roomReady);
+    assert.match(opponent, /Room code kutilmoqda/);
+    assert.doesNotMatch(opponent, /arenaRoomCodeInput/);
+
+    const updated = normalizeMatch({ ...rawMatch, status: "ROOM_READY", room_code: "POLL-777" });
+    assert.match(renderArenaRoomPanel(updated), /POLL-777/);
+    assert.equal(renderArenaRoomPanel(normalizeMatch({ ...rawMatch, status: "PLAYING" })), "");
+    delete global.localStorage;
+});
+
+test("room code copy uses displayed value and reports clipboard result", async () => {
+    let copied = null;
+    Object.defineProperty(global, "navigator", {
+        configurable: true,
+        value: { clipboard: { writeText: async (value) => { copied = value; } } },
+    });
+    const button = {
+        textContent: "Nusxalash",
+        closest: () => ({ querySelector: () => ({ textContent: "SAFE-123" }) }),
+    };
+    assert.equal(await copyArenaRoomCode(button), true);
+    assert.equal(copied, "SAFE-123");
+    assert.equal(button.textContent, "Nusxalandi ✓");
+    delete global.navigator;
+});
+
+test("room code validation and documented errors stay safe without POST retry", async () => {
+    let emptyCalls = 0;
+    const validationClient = new ArenaApiClient({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        fetchImpl: async () => { emptyCalls += 1; },
+    });
+    await assert.rejects(validationClient.setRoomCode(42, "  "), (error) => error.status === 400);
+    assert.equal(emptyCalls, 0);
+
+    for (const status of [400, 401, 403, 404, 409, 422]) {
+        let calls = 0;
+        const client = new ArenaApiClient({
+            baseUrl: "https://backend.example",
+            initDataProvider: () => "verified-init-data",
+            retries: 3,
+            fetchImpl: async () => {
+                calls += 1;
+                return response({ detail: `private-room-${status}` }, status);
+            },
+        });
+        await assert.rejects(client.setRoomCode(42, "ROOM"), (error) => {
+            assert.equal(error.status, status);
+            assert.equal(error.message.includes("private"), false);
+            return true;
+        });
+        assert.equal(calls, 1);
     }
 });

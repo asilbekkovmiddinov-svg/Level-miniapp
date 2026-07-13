@@ -144,6 +144,17 @@ class ArenaApiClient {
             body: {},
         }));
     }
+
+    async setRoomCode(matchId, roomCode) {
+        const normalized = String(roomCode || "").trim();
+        if (!normalized) {
+            throw new ArenaApiError("Room code kiritilishi shart.", { status: 400 });
+        }
+        return normalizeMatch(await this.request(`/matches/${Number(matchId)}/room-code`, {
+            method: "POST",
+            body: { room_code: normalized },
+        }));
+    }
 }
 
 function arenaHttpMessage(status) {
@@ -255,6 +266,28 @@ function arenaCountdown(target, now = Date.now()) {
 
 function arenaReadyStorageKey(matchId) {
     return `arena-ready-${Number(matchId)}`;
+}
+
+function arenaRoleStorageKey(matchId) {
+    return `arena-role-${Number(matchId)}`;
+}
+
+function rememberArenaRole(matchId, role) {
+    if (role !== "creator" && role !== "opponent") return;
+    try {
+        globalThis.localStorage?.setItem(arenaRoleStorageKey(matchId), role);
+    } catch (_) {
+        // Role hint is optional; authorization always remains on the backend.
+    }
+}
+
+function getArenaRole(matchId) {
+    try {
+        const role = globalThis.localStorage?.getItem(arenaRoleStorageKey(matchId));
+        return role === "creator" || role === "opponent" ? role : null;
+    } catch (_) {
+        return null;
+    }
 }
 
 function isArenaSelfReady(matchId) {
@@ -424,6 +457,7 @@ async function confirmArenaCreate() {
     try {
         const match = await runArenaMutation(() => arenaApiClient.createMatch(draft));
         if (!match) return;
+        rememberArenaRole(match.id, "creator");
         arenaView.createDraft = null;
         content.innerHTML = `<div class="arena-v2-success"><span>✓</span><h3>Match yaratildi</h3><p>Match #${match.id} raqib kutmoqda.</p><button onclick="loadArenaTab('my')">Mening matchlarim</button></div>`;
     } catch (error) {
@@ -449,6 +483,7 @@ async function confirmArenaJoin(matchId) {
     try {
         const match = await runArenaMutation(() => arenaApiClient.acceptMatch(matchId, { rulesAccepted: true }));
         if (!match) return;
+        rememberArenaRole(match.id, "opponent");
         document.querySelector(`[data-match-card="${Number(matchId)}"]`)?.remove();
         content.innerHTML = `<div class="arena-v2-success"><span>✓</span><h3>Match qabul qilindi</h3><p>Match Mening bo‘limiga qo‘shildi.</p></div>`;
         await loadArenaTab("my");
@@ -489,6 +524,7 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
     const selfReady = isArenaSelfReady(match.id);
     const bothReady = match.creatorReady && match.opponentReady;
     const readyTarget = match.readyDeadlineAt || match.scheduledAt;
+    const roomPanel = renderArenaRoomPanel(match);
     content.innerHTML = `<article class="arena-v2-detail arena-v2-live"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
         <small>MATCH #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
         <div><span>Status</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
@@ -507,9 +543,83 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
                 ? '<p class="arena-v2-ready-success">✓ Siz tayyorsiz. Ikkinchi o‘yinchi holati avtomatik yangilanadi.</p>'
                 : `<button class="arena-v2-ready-button" ${readyPending ? "disabled" : ""} onclick="submitArenaReady(${match.id})">${readyPending ? "Saqlanmoqda..." : "✓ TAYYORMAN"}</button>`}
         </section>` : ""}
+        ${roomPanel}
         ${notice ? `<p class="arena-v2-live-notice">${arenaEscape(notice)}</p>` : ""}
     </article>`;
     updateArenaCountdown();
+}
+
+function renderArenaRoomPanel(match, { pending = false } = {}) {
+    if (match.status !== "ROOM_READY") return "";
+    const role = getArenaRole(match.id);
+    if (match.roomCode) {
+        return `<section class="arena-v2-room-panel has-code">
+            <small>ROOM CODE</small><strong>${arenaEscape(match.roomCode)}</strong>
+            <p>${role === "creator" ? "Room code saqlandi." : "Creator yuborgan room code."}</p>
+            <button onclick="copyArenaRoomCode(this)">Nusxalash</button>
+        </section>`;
+    }
+    if (role === "creator") {
+        return `<section class="arena-v2-room-panel creator">
+            <small>CREATOR PANEL</small><h4>Room code kiriting</h4>
+            <p>Room code faqat bir marta yuboriladi va keyin o‘zgartirilmaydi.</p>
+            <input id="arenaRoomCodeInput" type="text" maxlength="64" autocomplete="off" placeholder="Room code" ${pending ? "disabled" : ""}>
+            <button class="arena-v2-room-submit" ${pending ? "disabled" : ""} onclick="submitArenaRoomCode(${match.id})">${pending ? "Saqlanmoqda..." : "Room codeni yuborish"}</button>
+        </section>`;
+    }
+    return `<section class="arena-v2-room-panel opponent">
+        <small>${role === "opponent" ? "OPPONENT PANEL" : "ROOM PANEL"}</small><h4>Room code kutilmoqda</h4>
+        <p>Room codeni faqat Creator kiritadi. Kod paydo bo‘lganda bu panel avtomatik yangilanadi.</p>
+        <span class="arena-v2-room-wait">••••••</span>
+    </section>`;
+}
+
+async function submitArenaRoomCode(matchId) {
+    if (arenaView.mutationPending || getArenaRole(matchId) !== "creator") return;
+    const input = document.getElementById("arenaRoomCodeInput");
+    const roomCode = String(input?.value || "").trim();
+    if (!roomCode) {
+        input?.focus();
+        return;
+    }
+    let current;
+    try {
+        current = await arenaApiClient.match(matchId);
+        if (current.status !== "ROOM_READY" || current.roomCode) {
+            throw new ArenaApiError("Room code holati o‘zgargan.", { status: 409 });
+        }
+        const content = document.getElementById("arenaV2Content");
+        if (content) content.querySelector(".arena-v2-room-panel")?.replaceWith(arenaHtmlElement(renderArenaRoomPanel(current, { pending: true })));
+        const match = await runArenaMutation(() => arenaApiClient.setRoomCode(matchId, roomCode));
+        if (!match) return;
+        renderArenaMatchDetail(match, { notice: "Room code muvaffaqiyatli saqlandi." });
+    } catch (error) {
+        if (current) renderArenaMatchDetail(current, { notice: error.message });
+        else {
+            const content = document.getElementById("arenaV2Content");
+            if (content) content.innerHTML = `<div class="arena-v2-state"><span>⚠️</span><h3>Room code saqlanmadi</h3>
+                <p>${arenaEscape(error.message)}</p><button onclick="loadArenaMatchDetail(${Number(matchId)})">Qayta urinish</button></div>`;
+        }
+    }
+}
+
+function arenaHtmlElement(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html.trim();
+    return template.content.firstElementChild;
+}
+
+async function copyArenaRoomCode(button) {
+    try {
+        const roomCode = button?.closest(".arena-v2-room-panel")?.querySelector("strong")?.textContent;
+        if (!roomCode || !globalThis.navigator?.clipboard?.writeText) return false;
+        await globalThis.navigator.clipboard.writeText(roomCode);
+        if (button) button.textContent = "Nusxalandi ✓";
+        return true;
+    } catch (_) {
+        if (button) button.textContent = "Nusxalab bo‘lmadi";
+        return false;
+    }
 }
 
 function updateArenaCountdown(now = Date.now()) {
@@ -571,6 +681,7 @@ Object.assign(globalThis, {
     prepareArenaCreate, confirmArenaCreate, renderArenaCreateForm,
     showArenaJoinConfirm, confirmArenaJoin,
     submitArenaReady, updateArenaCountdown,
+    submitArenaRoomCode, copyArenaRoomCode,
 });
 
 if (typeof module !== "undefined") {
@@ -585,5 +696,7 @@ if (typeof module !== "undefined") {
         arenaCountdown,
         renderArenaMatchDetail,
         updateArenaCountdown,
+        renderArenaRoomPanel,
+        copyArenaRoomCode,
     };
 }
