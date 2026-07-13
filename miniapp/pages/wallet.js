@@ -230,7 +230,7 @@ function openDepositPaymentDetails(result) {
         : "Deposit summasi";
     showWalletAction(`
         <header><small>DEPOSIT #${details.depositId}</small><h3>To‘lov rekvizitlari</h3></header>
-        <div class="wallet-payment-details">
+        <form class="wallet-payment-details" onsubmit="return false">
             <label>Karta raqami
                 <input id="depositPaymentCard" value="${walletEscape(details.cardNumber)}" readonly>
             </label>
@@ -249,7 +249,7 @@ function openDepositPaymentDetails(result) {
                 onclick="openDepositEvidence(${details.depositId})">
                 Men to‘lov qildim
             </button>
-        </div>`);
+        </form>`);
 }
 
 async function copyDepositCard(button) {
