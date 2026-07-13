@@ -169,12 +169,56 @@ async function createWalletDeposit(amount) {
     try {
         const result = await createDeposit(amount);
         walletActionPending = false;
-        document.getElementById("walletActionOverlay")?.remove();
-        Modal.success(`Deposit #${result.deposit_id} yaratildi. Status: ${result.status}.`);
+        openDepositEvidence(result.deposit_id);
         await refreshWallet();
     } catch (error) {
         setWalletSubmitting(false);
         walletFormError(error.message || "Deposit so‘rovi yaratilmadi.");
+    }
+}
+
+function openDepositEvidence(depositId) {
+    const id = Number(depositId);
+    showWalletAction(`
+        <header><small>DEPOSIT #${id}</small><h3>To‘lov chekini yuboring</h3></header>
+        <form onsubmit="submitDepositEvidence(event, ${id})">
+            <label>Chek rasmi
+                <input name="evidence" type="file" accept="image/*" required>
+            </label>
+            <p>Kamera yoki galereyadan to‘lov screenshotini tanlang.</p>
+            <div id="walletFormError" class="wallet-form-error"></div>
+            <button class="wallet-form-submit" type="submit">Chekni yuborish</button>
+        </form>`);
+}
+
+function validateDepositEvidence(file) {
+    if (!file || !String(file.type || "").startsWith("image/")) {
+        return { valid: false, message: "Galereya yoki kameradan rasm tanlang." };
+    }
+    return { valid: true, file };
+}
+
+async function submitDepositEvidence(event, depositId) {
+    event.preventDefault();
+    if (walletActionPending) return;
+
+    const file = event.currentTarget.elements.evidence?.files?.[0];
+    const validation = validateDepositEvidence(file);
+    if (!validation.valid) {
+        walletFormError(validation.message);
+        return;
+    }
+
+    setWalletSubmitting(true);
+    walletFormError("");
+    try {
+        await uploadDepositEvidence(depositId, validation.file);
+        walletActionPending = false;
+        document.getElementById("walletActionOverlay")?.remove();
+        Modal.success("Chek yuborildi. Admin tasdiqlashini kuting.");
+    } catch (error) {
+        setWalletSubmitting(false);
+        walletFormError(error.message || "Chekni yuborib bo‘lmadi.");
     }
 }
 
@@ -238,6 +282,7 @@ if (typeof module !== "undefined" && module.exports) {
         normalizeWalletData,
         validateDepositAmount,
         validateWithdrawForm,
+        validateDepositEvidence,
         walletCardDigits,
     };
 }
