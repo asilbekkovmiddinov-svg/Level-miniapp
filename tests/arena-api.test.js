@@ -7,6 +7,7 @@ const {
     arenaSkeleton,
     arenaState,
     normalizeMatch,
+    runArenaMutation,
 } = require("../miniapp/pages/arena.js");
 
 function response(payload, status = 200) {
@@ -155,4 +156,114 @@ test("timeout aborts safely and loading/error states are renderable", async () =
     });
     assert.match(arenaSkeleton(), /arena-v2-skeleton/);
     assert.match(arenaState("Xatolik", "Qayta urinib ko‘ring"), /retryArenaView/);
+});
+
+test("create mutation uses authenticated production contract without identity fields", async () => {
+    const calls = [];
+    const client = new ArenaApiClient({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        retries: 2,
+        fetchImpl: async (url, options) => {
+            calls.push({ url, options });
+            return response({ ...rawMatch, status: "WAITING_PLAYER" });
+        },
+    });
+
+    const match = await client.createMatch({
+        gameType: "EFOOTBALL",
+        stakeEfc: 100,
+        scheduledAt: "2030-01-01T12:00:00.000Z",
+        rulesAccepted: true,
+    });
+
+    assert.equal(match.id, 42);
+    assert.equal(calls.length, 1, "POST mutations must not retry automatically");
+    assert.equal(new URL(calls[0].url).pathname, "/matches/");
+    assert.equal(calls[0].options.method, "POST");
+    assert.equal(calls[0].options.headers["X-Telegram-Init-Data"], "verified-init-data");
+    assert.equal(calls[0].options.headers["Content-Type"], "application/json");
+    const body = JSON.parse(calls[0].options.body);
+    assert.deepEqual(body, {
+        game_type: "EFOOTBALL",
+        stake_efc: 100,
+        scheduled_at: "2030-01-01T12:00:00.000Z",
+        rules_accepted: true,
+    });
+    assert.equal("telegram_id" in body, false);
+    assert.equal("username" in body, false);
+});
+
+test("join mutation sends only rules acceptance and verified initData", async () => {
+    let call;
+    const client = new ArenaApiClient({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        retries: 0,
+        fetchImpl: async (url, options) => {
+            call = { url, options };
+            return response(rawMatch);
+        },
+    });
+
+    await client.acceptMatch(42, { rulesAccepted: true });
+    assert.equal(new URL(call.url).pathname, "/matches/42/accept");
+    assert.equal(call.options.method, "POST");
+    assert.equal(call.options.headers["X-Telegram-Init-Data"], "verified-init-data");
+    assert.deepEqual(JSON.parse(call.options.body), { rules_accepted: true });
+});
+
+test("rules acceptance is required before create or join reaches the network", async () => {
+    let calls = 0;
+    const client = new ArenaApiClient({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        fetchImpl: async () => { calls += 1; },
+    });
+
+    await assert.rejects(
+        client.createMatch({ gameType: "EFOOTBALL", stakeEfc: 100, scheduledAt: "2030-01-01T12:00:00Z", rulesAccepted: false }),
+        (error) => error instanceof ArenaApiError && error.status === 400,
+    );
+    await assert.rejects(
+        client.acceptMatch(42, { rulesAccepted: false }),
+        (error) => error instanceof ArenaApiError && error.status === 400,
+    );
+    assert.equal(calls, 0);
+});
+
+test("mutation guard blocks double submit while the first request is pending", async () => {
+    let release;
+    let calls = 0;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const first = runArenaMutation(async () => {
+        calls += 1;
+        await pending;
+        return "created";
+    });
+    const second = await runArenaMutation(async () => {
+        calls += 1;
+        return "duplicate";
+    });
+
+    assert.equal(second, null);
+    assert.equal(calls, 1);
+    release();
+    assert.equal(await first, "created");
+});
+
+test("mutation HTTP errors are safe and map expected backend statuses", async () => {
+    for (const status of [400, 401, 403, 404, 409, 422]) {
+        const client = new ArenaApiClient({
+            baseUrl: "https://backend.example",
+            initDataProvider: () => "verified-init-data",
+            retries: 2,
+            fetchImpl: async () => response({ detail: `private-${status}` }, status),
+        });
+        await assert.rejects(client.acceptMatch(42, { rulesAccepted: true }), (error) => {
+            assert.equal(error.status, status);
+            assert.equal(error.message.includes("private"), false);
+            return true;
+        });
+    }
 });

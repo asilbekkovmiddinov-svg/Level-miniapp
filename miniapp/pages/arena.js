@@ -22,7 +22,7 @@ class ArenaApiClient {
         this.initDataProvider = initDataProvider;
     }
 
-    async request(path, { query = null } = {}) {
+    async request(path, { method = "GET", query = null, body = null } = {}) {
         const initData = this.initDataProvider();
         if (!initData) {
             throw new ArenaApiError("Telegram tasdiqlash ma’lumoti topilmadi.", { status: 401 });
@@ -35,13 +35,18 @@ class ArenaApiClient {
         });
         const suffix = params.size ? `?${params.toString()}` : "";
         const transientStatuses = new Set([429, 500, 502, 503, 504]);
-        for (let attempt = 0; attempt <= this.retries; attempt += 1) {
+        const maxAttempts = method === "GET" ? this.retries : 0;
+        for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), this.timeoutMs);
             try {
                 const response = await this.fetchImpl(`${this.baseUrl}${path}${suffix}`, {
-                    method: "GET",
-                    headers: { "X-Telegram-Init-Data": initData },
+                    method,
+                    headers: {
+                        "X-Telegram-Init-Data": initData,
+                        ...(body ? { "Content-Type": "application/json" } : {}),
+                    },
+                    ...(body ? { body: JSON.stringify(body) } : {}),
                     signal: controller.signal,
                 });
                 let payload;
@@ -52,7 +57,7 @@ class ArenaApiClient {
                 }
                 if (!response.ok) {
                     const retryable = transientStatuses.has(response.status);
-                    if (retryable && attempt < this.retries) continue;
+                    if (retryable && attempt < maxAttempts) continue;
                     throw new ArenaApiError(arenaHttpMessage(response.status), {
                         status: response.status,
                         retryable,
@@ -62,7 +67,7 @@ class ArenaApiClient {
             } catch (error) {
                 if (error instanceof ArenaApiError) throw error;
                 const timeout = error?.name === "AbortError";
-                if (attempt < this.retries) continue;
+                if (attempt < maxAttempts) continue;
                 throw new ArenaApiError(
                     timeout
                         ? "Arena serveri javob bermadi. Qayta urinib ko‘ring."
@@ -102,6 +107,35 @@ class ArenaApiClient {
 
     async guide() {
         return await this.request("/matches/guide");
+    }
+
+    async createMatch({ gameType, stakeEfc, scheduledAt, rulesAccepted }) {
+        if (rulesAccepted !== true) {
+            throw new ArenaApiError("Arena qoidalarini qabul qilish majburiy.", {
+                status: 400,
+            });
+        }
+        return normalizeMatch(await this.request("/matches/", {
+            method: "POST",
+            body: {
+                game_type: gameType,
+                stake_efc: stakeEfc,
+                scheduled_at: scheduledAt,
+                rules_accepted: true,
+            },
+        }));
+    }
+
+    async acceptMatch(matchId, { rulesAccepted }) {
+        if (rulesAccepted !== true) {
+            throw new ArenaApiError("Arena qoidalarini qabul qilish majburiy.", {
+                status: 400,
+            });
+        }
+        return normalizeMatch(await this.request(`/matches/${Number(matchId)}/accept`, {
+            method: "POST",
+            body: { rules_accepted: true },
+        }));
     }
 }
 
@@ -149,7 +183,17 @@ function normalizeMatchList(value) {
 }
 
 const arenaApiClient = new ArenaApiClient();
-const arenaView = { tab: "open", loading: false };
+const arenaView = { tab: "open", loading: false, mutationPending: false, createDraft: null };
+
+async function runArenaMutation(task) {
+    if (arenaView.mutationPending) return null;
+    arenaView.mutationPending = true;
+    try {
+        return await task();
+    } finally {
+        arenaView.mutationPending = false;
+    }
+}
 
 function arenaEscape(value) {
     return String(value ?? "")
@@ -191,14 +235,17 @@ function arenaState(title, message, retry = true) {
         <p>${arenaEscape(message)}</p>${retry ? '<button onclick="retryArenaView()">Qayta urinish</button>' : ""}</div>`;
 }
 
-function arenaMatchCard(match) {
-    return `<button class="arena-v2-match" onclick="loadArenaMatchDetail(${match.id})">
+function arenaMatchCard(match, mode = "open") {
+    const join = mode === "open" && match.status === "WAITING_PLAYER"
+        ? `<button class="arena-v2-join" onclick="event.stopPropagation();showArenaJoinConfirm(${match.id})">Qo‘shilish</button>`
+        : "";
+    return `<article class="arena-v2-match" data-match-card="${match.id}" onclick="loadArenaMatchDetail(${match.id})">
         <div><small>${arenaEscape(match.gameType.replaceAll("_", " "))}</small>
         <em>${arenaEscape(arenaStatus(match.status))}</em></div>
         <section><span><b>${arenaEscape(match.creatorName)}</b><small>PLAYER 1</small></span>
         <strong>VS</strong><span><b>${arenaEscape(match.opponentName)}</b><small>PLAYER 2</small></span></section>
         <footer><span>${arenaEscape(arenaDate(match.scheduledAt))}</span><b>${arenaEscape(match.stakeEfc)} EFC</b></footer>
-    </button>`;
+        ${join}</article>`;
 }
 
 async function loadArenaPage() {
@@ -210,7 +257,8 @@ async function loadArenaPage() {
         <header><small>LEVEL_GROUP</small><h2>Battle Arena</h2><p>Raqobat. Mahorat. G‘alaba.</p>
             <div id="arenaV2Stats">Statistika yuklanmoqda...</div></header>
         <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="my">Mening</button>
-            <button data-arena-tab="rating">Reyting</button><button data-arena-tab="guide">Qo‘llanma</button></nav>
+            <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
+            <button data-arena-tab="guide">Qo‘llanma</button></nav>
         <main id="arenaV2Content">${arenaSkeleton()}</main></div>`;
     page.querySelectorAll("[data-arena-tab]").forEach((button) => {
         button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
@@ -248,8 +296,10 @@ async function loadArenaTab(tab) {
                 ? await arenaApiClient.openMatches()
                 : await arenaApiClient.myMatches();
             content.innerHTML = matches.length
-                ? `<div class="arena-v2-list">${matches.map(arenaMatchCard).join("")}</div>`
+                ? `<div class="arena-v2-list">${matches.map((match) => arenaMatchCard(match, tab)).join("")}</div>`
                 : arenaState("Matchlar topilmadi", tab === "open" ? "Hozircha ochiq match yo‘q." : "Sizda hali Arena matchlari yo‘q.", false);
+        } else if (tab === "create") {
+            renderArenaCreateForm();
         } else if (tab === "rating") {
             const data = await arenaApiClient.leaderboard();
             content.innerHTML = data.users.length
@@ -264,6 +314,98 @@ async function loadArenaTab(tab) {
     } finally {
         arenaView.loading = false;
     }
+}
+
+function renderArenaCreateForm(draft = arenaView.createDraft || {}) {
+    const content = document.getElementById("arenaV2Content");
+    if (!content) return;
+    const now = new Date(Date.now() + 10 * 60 * 1000);
+    const defaultTime = now.toISOString().slice(0, 16);
+    content.innerHTML = `<form class="arena-v2-create" onsubmit="prepareArenaCreate(event)">
+        <small>YANGI MATCH</small><h3>Arena e’loni yaratish</h3>
+        <label>O‘yin turi<select name="gameType" required>
+            <option value="EFOOTBALL" ${draft.gameType === "EFOOTBALL" ? "selected" : ""}>eFootball</option>
+            <option value="PUBG_MOBILE" ${draft.gameType === "PUBG_MOBILE" ? "selected" : ""}>PUBG Mobile</option>
+            <option value="FC_MOBILE" ${draft.gameType === "FC_MOBILE" ? "selected" : ""}>FC Mobile</option>
+        </select></label>
+        <label>EFC stake<input name="stakeEfc" type="number" inputmode="decimal" min="1" step="1" value="${arenaEscape(draft.stakeEfc || "100")}" required></label>
+        <div class="arena-v2-stakes">${[50, 100, 250, 500].map((value) => `<button type="button" onclick="this.form.stakeEfc.value=${value}">${value} EFC</button>`).join("")}</div>
+        <label>Match vaqti<input name="scheduledAt" type="datetime-local" value="${arenaEscape(draft.localTime || defaultTime)}" required></label>
+        <label class="arena-v2-rules"><input name="rulesAccepted" type="checkbox" ${draft.rulesAccepted ? "checked" : ""} required><span>Screenshot va video evidence majburiyligini hamda Arena qoidalarini qabul qilaman.</span></label>
+        <button class="arena-v2-submit" type="submit">Davom etish</button></form>`;
+}
+
+function prepareArenaCreate(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const draft = {
+        gameType: form.gameType.value,
+        stakeEfc: Number(form.stakeEfc.value),
+        localTime: form.scheduledAt.value,
+        scheduledAt: new Date(form.scheduledAt.value).toISOString(),
+        rulesAccepted: form.rulesAccepted.checked,
+    };
+    if (!draft.rulesAccepted || !Number.isFinite(draft.stakeEfc) || draft.stakeEfc <= 0) {
+        renderArenaMutationError("Stake va qoidalar tasdig‘ini tekshiring.", "renderArenaCreateForm()", draft);
+        return;
+    }
+    arenaView.createDraft = draft;
+    const content = document.getElementById("arenaV2Content");
+    content.innerHTML = `<div class="arena-v2-confirm"><small>TASDIQLASH</small><h3>Match yaratilsinmi?</h3>
+        <div><span>O‘yin</span><b>${arenaEscape(draft.gameType.replaceAll("_", " "))}</b></div>
+        <div><span>Stake</span><b>${arenaEscape(draft.stakeEfc)} EFC</b></div>
+        <div><span>Vaqt</span><b>${arenaEscape(arenaDate(draft.scheduledAt))}</b></div>
+        <button class="arena-v2-submit" onclick="confirmArenaCreate()">Tasdiqlash</button>
+        <button class="arena-v2-cancel" onclick="renderArenaCreateForm()">Orqaga</button></div>`;
+}
+
+async function confirmArenaCreate() {
+    const draft = arenaView.createDraft;
+    if (!draft) return renderArenaCreateForm();
+    const content = document.getElementById("arenaV2Content");
+    content.innerHTML = arenaSkeleton();
+    try {
+        const match = await runArenaMutation(() => arenaApiClient.createMatch(draft));
+        if (!match) return;
+        arenaView.createDraft = null;
+        content.innerHTML = `<div class="arena-v2-success"><span>✓</span><h3>Match yaratildi</h3><p>Match #${match.id} raqib kutmoqda.</p><button onclick="loadArenaTab('my')">Mening matchlarim</button></div>`;
+    } catch (error) {
+        renderArenaMutationError(error.message, "confirmArenaCreate()", draft);
+    }
+}
+
+function showArenaJoinConfirm(matchId) {
+    const content = document.getElementById("arenaV2Content");
+    content.innerHTML = `<div class="arena-v2-confirm"><small>MATCH #${Number(matchId)}</small><h3>Matchga qo‘shilasizmi?</h3>
+        <label class="arena-v2-rules"><input id="arenaJoinRules" type="checkbox"><span>Evidence va Arena qoidalarini qabul qilaman.</span></label>
+        <button class="arena-v2-submit" onclick="confirmArenaJoin(${Number(matchId)})">Qo‘shilishni tasdiqlash</button>
+        <button class="arena-v2-cancel" onclick="loadArenaTab('open')">Bekor qilish</button></div>`;
+}
+
+async function confirmArenaJoin(matchId) {
+    const accepted = document.getElementById("arenaJoinRules")?.checked === true;
+    if (!accepted) {
+        return renderArenaMutationError("Arena qoidalarini qabul qilish majburiy.", `showArenaJoinConfirm(${Number(matchId)})`);
+    }
+    const content = document.getElementById("arenaV2Content");
+    content.innerHTML = arenaSkeleton();
+    try {
+        const match = await runArenaMutation(() => arenaApiClient.acceptMatch(matchId, { rulesAccepted: true }));
+        if (!match) return;
+        document.querySelector(`[data-match-card="${Number(matchId)}"]`)?.remove();
+        content.innerHTML = `<div class="arena-v2-success"><span>✓</span><h3>Match qabul qilindi</h3><p>Match Mening bo‘limiga qo‘shildi.</p></div>`;
+        await loadArenaTab("my");
+    } catch (error) {
+        renderArenaMutationError(error.message, `showArenaJoinConfirm(${Number(matchId)})`);
+    }
+}
+
+function renderArenaMutationError(message, retryAction, draft = null) {
+    if (draft) arenaView.createDraft = draft;
+    const content = document.getElementById("arenaV2Content");
+    if (!content) return;
+    content.innerHTML = `<div class="arena-v2-state"><span>⚠️</span><h3>Amal bajarilmadi</h3><p>${arenaEscape(message)}</p>
+        <button onclick="${arenaEscape(retryAction)}">Qayta urinish</button></div>`;
 }
 
 async function loadArenaMatchDetail(matchId) {
@@ -291,7 +433,11 @@ function retryArenaView() {
     loadArenaTab(arenaView.tab);
 }
 
-Object.assign(globalThis, { loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView });
+Object.assign(globalThis, {
+    loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
+    prepareArenaCreate, confirmArenaCreate, renderArenaCreateForm,
+    showArenaJoinConfirm, confirmArenaJoin,
+});
 
 if (typeof module !== "undefined") {
     module.exports = {
@@ -301,5 +447,6 @@ if (typeof module !== "undefined") {
         normalizeMatchList,
         arenaSkeleton,
         arenaState,
+        runArenaMutation,
     };
 }
