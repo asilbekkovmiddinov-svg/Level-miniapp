@@ -15,17 +15,37 @@ async function updateUserSeen() {
     return await api(`/user/${TELEGRAM_ID}/seen`, "POST");
 }
 
-async function getWallet() {
-    const initData = window.Telegram?.WebApp?.initData || tg?.initData || "";
+function telegramInitData() {
+    return window.Telegram?.WebApp?.initData || tg?.initData || "";
+}
+
+function walletHttpMessage(status) {
+    const messages = {
+        400: "Kiritilgan ma’lumotlarni tekshiring.",
+        401: "Telegram tasdiqlashi yaroqsiz yoki eskirgan.",
+        403: "Bu amalni bajarishga ruxsat yo‘q.",
+        404: "Hamyon topilmadi.",
+        409: "So‘rov holati o‘zgargan. Qayta urinib ko‘ring.",
+        422: "Kiritilgan ma’lumotlar formati noto‘g‘ri.",
+    };
+    return status >= 500
+        ? "Serverda vaqtinchalik xatolik yuz berdi."
+        : messages[status] || "So‘rovni bajarib bo‘lmadi.";
+}
+
+async function walletRequest(path, { method = "GET", body = null } = {}) {
+    const initData = telegramInitData();
     if (!initData) {
         throw new Error("Telegram tasdiqlash ma’lumoti topilmadi.");
     }
 
-    const response = await fetch(`${API_URL}/wallet`, {
-        method: "GET",
+    const response = await fetch(`${API_URL}${path}`, {
+        method,
         headers: {
             "X-Telegram-Init-Data": initData,
+            ...(body ? { "Content-Type": "application/json" } : {}),
         },
+        ...(body ? { body: JSON.stringify(body) } : {}),
     });
 
     let payload;
@@ -36,26 +56,32 @@ async function getWallet() {
     }
 
     if (!response.ok) {
-        throw new Error("Hamyonni yuklab bo‘lmadi.");
+        throw new Error(walletHttpMessage(response.status));
     }
 
     return payload;
 }
 
+async function getWallet() {
+    return await walletRequest("/wallet");
+}
+
 async function createDeposit(amount) {
-    return await api("/deposit/create", "POST", {
-        telegram_id: TELEGRAM_ID,
-        amount,
+    return await walletRequest("/deposit/create", {
+        method: "POST",
+        body: { amount },
     });
 }
 
 async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
-    return await api("/withdraw/create", "POST", {
-        telegram_id: TELEGRAM_ID,
-        amount,
-        card_number: cardNumber,
-        card_holder: cardHolder,
-        bank_name: bankName,
+    return await walletRequest("/withdraw/create", {
+        method: "POST",
+        body: {
+            amount,
+            card_number: cardNumber,
+            card_holder: cardHolder,
+            bank_name: bankName,
+        },
     });
 }
 
