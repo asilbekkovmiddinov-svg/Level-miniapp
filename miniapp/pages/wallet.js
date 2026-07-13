@@ -169,12 +169,109 @@ async function createWalletDeposit(amount) {
     try {
         const result = await createDeposit(amount);
         walletActionPending = false;
-        openDepositEvidence(result.deposit_id);
+        openDepositPaymentDetails(result);
         await refreshWallet();
     } catch (error) {
         setWalletSubmitting(false);
         walletFormError(error.message || "Deposit so‘rovi yaratilmadi.");
     }
+}
+
+function walletEscape(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function normalizeDepositPaymentDetails(result) {
+    const details = result?.payment_details
+        || result?.payment_requisites
+        || result?.requisites
+        || result;
+    const normalized = {
+        depositId: Number(result?.deposit_id ?? result?.id),
+        amount: walletAmount(result?.amount),
+        cardNumber: String(
+            details?.card_number
+            || details?.payment_card_number
+            || details?.card
+            || "",
+        ).trim(),
+        cardHolder: String(
+            details?.card_holder
+            || details?.payment_card_holder
+            || details?.holder_name
+            || "",
+        ).trim(),
+        bankName: String(
+            details?.bank_name
+            || details?.payment_bank_name
+            || details?.bank
+            || "",
+        ).trim(),
+    };
+
+    if (!Number.isInteger(normalized.depositId) || normalized.depositId <= 0) {
+        throw new Error("Backend deposit ID qaytarmadi.");
+    }
+    if (!normalized.cardNumber || !normalized.cardHolder || !normalized.bankName) {
+        throw new Error("Backend to‘lov rekvizitlarini to‘liq qaytarmadi.");
+    }
+    return normalized;
+}
+
+function openDepositPaymentDetails(result) {
+    const details = normalizeDepositPaymentDetails(result);
+    const formattedAmount = details.amount
+        ? `${details.amount.toLocaleString("uz-UZ")} UZS`
+        : "Deposit summasi";
+    showWalletAction(`
+        <header><small>DEPOSIT #${details.depositId}</small><h3>To‘lov rekvizitlari</h3></header>
+        <div class="wallet-payment-details">
+            <label>Karta raqami
+                <input id="depositPaymentCard" value="${walletEscape(details.cardNumber)}" readonly>
+            </label>
+            <button class="wallet-form-submit" type="button" onclick="copyDepositCard(this)">
+                Copy
+            </button>
+            <label>Karta egasi
+                <input value="${walletEscape(details.cardHolder)}" readonly>
+            </label>
+            <label>Bank nomi
+                <input value="${walletEscape(details.bankName)}" readonly>
+            </label>
+            <p>${walletEscape(formattedAmount)} summani yuqoridagi kartaga o‘tkazing.</p>
+            <div id="walletFormError" class="wallet-form-error"></div>
+            <button class="wallet-form-submit" type="button"
+                onclick="openDepositEvidence(${details.depositId})">
+                Men to‘lov qildim
+            </button>
+        </div>`);
+}
+
+async function copyDepositCard(button) {
+    const input = document.getElementById("depositPaymentCard");
+    const cardNumber = String(input?.value || "").trim();
+    if (!cardNumber) return false;
+
+    try {
+        await navigator.clipboard.writeText(cardNumber);
+    } catch (_error) {
+        input.focus();
+        input.select();
+        if (!document.execCommand?.("copy")) {
+            walletFormError("Karta raqamini nusxalab bo‘lmadi.");
+            return false;
+        }
+    }
+
+    if (button) {
+        button.textContent = "Nusxalandi ✓";
+    }
+    return true;
 }
 
 function openDepositEvidence(depositId) {
@@ -280,6 +377,7 @@ async function createWalletWithdraw(data) {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         normalizeWalletData,
+        normalizeDepositPaymentDetails,
         validateDepositAmount,
         validateWithdrawForm,
         validateDepositEvidence,
