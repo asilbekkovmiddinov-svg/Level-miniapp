@@ -137,6 +137,13 @@ class ArenaApiClient {
             body: { rules_accepted: true },
         }));
     }
+
+    async readyMatch(matchId) {
+        return normalizeMatch(await this.request(`/matches/${Number(matchId)}/ready`, {
+            method: "POST",
+            body: {},
+        }));
+    }
 }
 
 function arenaHttpMessage(status) {
@@ -168,6 +175,8 @@ function normalizeMatch(value) {
         winnerReward: String(value.winner_reward ?? "0"),
         status: value.status,
         scheduledAt: value.scheduled_at || null,
+        readyWindowStartedAt: value.ready_window_started_at || null,
+        readyDeadlineAt: value.ready_deadline_at || null,
         creatorReady: Boolean(value.creator_ready),
         opponentReady: Boolean(value.opponent_ready),
         roomCode: value.room_code || null,
@@ -183,7 +192,15 @@ function normalizeMatchList(value) {
 }
 
 const arenaApiClient = new ArenaApiClient();
-const arenaView = { tab: "open", loading: false, mutationPending: false, createDraft: null };
+const arenaView = {
+    tab: "open",
+    loading: false,
+    mutationPending: false,
+    createDraft: null,
+    detailMatchId: null,
+    countdownTimer: null,
+    refreshTimer: null,
+};
 
 async function runArenaMutation(task) {
     if (arenaView.mutationPending) return null;
@@ -223,6 +240,45 @@ function arenaDate(value) {
     return Number.isNaN(date.getTime())
         ? "Vaqt noto‘g‘ri"
         : date.toLocaleString("uz-UZ", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function arenaCountdown(target, now = Date.now()) {
+    const targetTime = new Date(target).getTime();
+    if (!target || Number.isNaN(targetTime)) return "--:--";
+    const remaining = Math.max(0, targetTime - Number(now));
+    const totalSeconds = Math.floor(remaining / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours ? `${String(hours).padStart(2, "0")}:` : ""}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function arenaReadyStorageKey(matchId) {
+    return `arena-ready-${Number(matchId)}`;
+}
+
+function isArenaSelfReady(matchId) {
+    try {
+        return globalThis.localStorage?.getItem(arenaReadyStorageKey(matchId)) === "1";
+    } catch (_) {
+        return false;
+    }
+}
+
+function rememberArenaSelfReady(matchId) {
+    try {
+        globalThis.localStorage?.setItem(arenaReadyStorageKey(matchId), "1");
+    } catch (_) {
+        // Storage is optional; backend remains the source of truth.
+    }
+}
+
+function stopArenaLiveUpdates() {
+    if (arenaView.countdownTimer) clearInterval(arenaView.countdownTimer);
+    if (arenaView.refreshTimer) clearInterval(arenaView.refreshTimer);
+    arenaView.countdownTimer = null;
+    arenaView.refreshTimer = null;
+    arenaView.detailMatchId = null;
 }
 
 function arenaSkeleton() {
@@ -280,6 +336,7 @@ async function loadArenaStats() {
 
 async function loadArenaTab(tab) {
     if (arenaView.loading) return;
+    stopArenaLiveUpdates();
     arenaView.tab = tab;
     arenaView.loading = true;
     const content = document.getElementById("arenaV2Content");
@@ -415,17 +472,93 @@ async function loadArenaMatchDetail(matchId) {
     content.innerHTML = arenaSkeleton();
     try {
         const match = await arenaApiClient.match(matchId);
-        content.innerHTML = `<article class="arena-v2-detail"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
-            <small>MATCH #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
-            <div><span>Status</span><b>${arenaEscape(arenaStatus(match.status))}</b></div>
-            <div><span>O‘yin</span><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></div>
-            <div><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></div>
-            <div><span>Mukofot</span><b>${arenaEscape(match.winnerReward)} EFC</b></div>
-            <div><span>Vaqt</span><b>${arenaEscape(arenaDate(match.scheduledAt))}</b></div></article>`;
+        renderArenaMatchDetail(match);
+        startArenaLiveUpdates(match.id);
     } catch (error) {
-        content.innerHTML = arenaState("Match ochilmadi", error.message);
+        content.innerHTML = `<div class="arena-v2-state"><span>⚔️</span><h3>Match ochilmadi</h3>
+            <p>${arenaEscape(error.message)}</p><button onclick="loadArenaMatchDetail(${Number(matchId)})">Qayta urinish</button></div>`;
     } finally {
         arenaView.loading = false;
+    }
+}
+
+function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {}) {
+    const content = document.getElementById("arenaV2Content");
+    if (!content) return;
+    const readyWindowOpen = match.status === "WAITING_READY";
+    const selfReady = isArenaSelfReady(match.id);
+    const bothReady = match.creatorReady && match.opponentReady;
+    const readyTarget = match.readyDeadlineAt || match.scheduledAt;
+    content.innerHTML = `<article class="arena-v2-detail arena-v2-live"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
+        <small>MATCH #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
+        <div><span>Status</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
+        <div><span>O‘yin</span><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></div>
+        <div><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></div>
+        <div><span>Mukofot</span><b>${arenaEscape(match.winnerReward)} EFC</b></div>
+        <div><span>Match boshlanishi</span><b>${arenaEscape(arenaDate(match.scheduledAt))}</b></div>
+        <section class="arena-v2-countdown ${readyWindowOpen ? "is-live" : ""}">
+            <small>${readyWindowOpen ? "READY OYNASI" : "MATCH BOSHLANISHIGA"}</small>
+            <strong id="arenaCountdown" data-target="${arenaEscape(readyTarget || "")}">${arenaCountdown(readyTarget)}</strong>
+        </section>
+        ${readyWindowOpen ? `<section class="arena-v2-ready-panel">
+            <div><span>Player 1</span><b class="${match.creatorReady ? "is-ready" : ""}">${match.creatorReady ? "Tayyor" : "Kutilmoqda"}</b></div>
+            <div><span>Player 2</span><b class="${match.opponentReady ? "is-ready" : ""}">${match.opponentReady ? "Tayyor" : "Kutilmoqda"}</b></div>
+            ${selfReady || bothReady
+                ? '<p class="arena-v2-ready-success">✓ Siz tayyorsiz. Ikkinchi o‘yinchi holati avtomatik yangilanadi.</p>'
+                : `<button class="arena-v2-ready-button" ${readyPending ? "disabled" : ""} onclick="submitArenaReady(${match.id})">${readyPending ? "Saqlanmoqda..." : "✓ TAYYORMAN"}</button>`}
+        </section>` : ""}
+        ${notice ? `<p class="arena-v2-live-notice">${arenaEscape(notice)}</p>` : ""}
+    </article>`;
+    updateArenaCountdown();
+}
+
+function updateArenaCountdown(now = Date.now()) {
+    const target = document.getElementById("arenaCountdown");
+    if (!target) return null;
+    const value = arenaCountdown(target.dataset.target, now);
+    target.textContent = value;
+    target.classList.toggle("is-expired", value === "00:00");
+    return value;
+}
+
+function startArenaLiveUpdates(matchId) {
+    stopArenaLiveUpdates();
+    arenaView.detailMatchId = Number(matchId);
+    arenaView.countdownTimer = setInterval(() => updateArenaCountdown(), 1000);
+    arenaView.refreshTimer = setInterval(() => refreshArenaMatchStatus(matchId), 10000);
+}
+
+async function refreshArenaMatchStatus(matchId) {
+    if (arenaView.detailMatchId !== Number(matchId) || arenaView.mutationPending) return;
+    try {
+        const match = await arenaApiClient.match(matchId);
+        if (arenaView.detailMatchId === Number(matchId)) renderArenaMatchDetail(match);
+    } catch (_) {
+        // Keep the last safe state; the next interval retries the read.
+    }
+}
+
+async function submitArenaReady(matchId) {
+    if (arenaView.mutationPending) return;
+    let current;
+    try {
+        current = await arenaApiClient.match(matchId);
+        if (current.status !== "WAITING_READY") {
+            throw new ArenaApiError("Ready oynasi hozir ochiq emas.", { status: 409 });
+        }
+        renderArenaMatchDetail(current, { readyPending: true });
+        const match = await runArenaMutation(() => arenaApiClient.readyMatch(matchId));
+        if (!match) return;
+        rememberArenaSelfReady(matchId);
+        renderArenaMatchDetail(match, { notice: "Ready holatingiz saqlandi." });
+    } catch (error) {
+        if (current) {
+            renderArenaMatchDetail(current, { notice: error.message });
+        } else {
+            const content = document.getElementById("arenaV2Content");
+            if (content) content.innerHTML = `<div class="arena-v2-state"><span>⚠️</span><h3>Ready saqlanmadi</h3>
+                <p>${arenaEscape(error.message)}</p><button onclick="loadArenaMatchDetail(${Number(matchId)})">Qayta urinish</button></div>`;
+        }
     }
 }
 
@@ -437,6 +570,7 @@ Object.assign(globalThis, {
     loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
     prepareArenaCreate, confirmArenaCreate, renderArenaCreateForm,
     showArenaJoinConfirm, confirmArenaJoin,
+    submitArenaReady, updateArenaCountdown,
 });
 
 if (typeof module !== "undefined") {
@@ -448,5 +582,8 @@ if (typeof module !== "undefined") {
         arenaSkeleton,
         arenaState,
         runArenaMutation,
+        arenaCountdown,
+        renderArenaMatchDetail,
+        updateArenaCountdown,
     };
 }

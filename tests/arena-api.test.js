@@ -8,6 +8,7 @@ const {
     arenaState,
     normalizeMatch,
     runArenaMutation,
+    arenaCountdown,
 } = require("../miniapp/pages/arena.js");
 
 function response(payload, status = 200) {
@@ -265,5 +266,61 @@ test("mutation HTTP errors are safe and map expected backend statuses", async ()
             assert.equal(error.message.includes("private"), false);
             return true;
         });
+    }
+});
+
+test("ready mutation posts an empty authenticated body without automatic retry", async () => {
+    const calls = [];
+    const client = new ArenaApiClient({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        retries: 3,
+        fetchImpl: async (url, options) => {
+            calls.push({ url, options });
+            return response({
+                ...rawMatch,
+                creator_ready: true,
+                ready_window_started_at: "2030-01-01T11:55:00Z",
+                ready_deadline_at: "2030-01-01T12:00:00Z",
+            });
+        },
+    });
+
+    const match = await client.readyMatch(42);
+    assert.equal(calls.length, 1);
+    assert.equal(new URL(calls[0].url).pathname, "/matches/42/ready");
+    assert.equal(calls[0].options.method, "POST");
+    assert.equal(calls[0].options.headers["X-Telegram-Init-Data"], "verified-init-data");
+    assert.deepEqual(JSON.parse(calls[0].options.body), {});
+    assert.equal(match.creatorReady, true);
+    assert.equal(match.readyDeadlineAt, "2030-01-01T12:00:00Z");
+});
+
+test("countdown renders deterministic live and expired values", () => {
+    const target = "2030-01-01T12:00:00.000Z";
+    assert.equal(arenaCountdown(target, Date.parse("2030-01-01T11:54:59.000Z")), "05:01");
+    assert.equal(arenaCountdown(target, Date.parse("2030-01-01T10:59:59.000Z")), "01:00:01");
+    assert.equal(arenaCountdown(target, Date.parse("2030-01-01T12:00:01.000Z")), "00:00");
+    assert.equal(arenaCountdown(null), "--:--");
+});
+
+test("ready error mapping is safe for all documented mutation statuses", async () => {
+    for (const status of [400, 401, 403, 404, 409, 422]) {
+        let calls = 0;
+        const client = new ArenaApiClient({
+            baseUrl: "https://backend.example",
+            initDataProvider: () => "verified-init-data",
+            retries: 3,
+            fetchImpl: async () => {
+                calls += 1;
+                return response({ detail: `sensitive-ready-${status}` }, status);
+            },
+        });
+        await assert.rejects(client.readyMatch(42), (error) => {
+            assert.equal(error.status, status);
+            assert.equal(error.message.includes("sensitive"), false);
+            return true;
+        });
+        assert.equal(calls, 1, "Ready POST must never retry automatically");
     }
 });

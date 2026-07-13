@@ -1286,3 +1286,16 @@ body {
 .arena-v2-confirm footer { display: grid; grid-template-columns: 1fr 1.4fr; gap: 9px; }.arena-v2-confirm .arena-v2-rules { display: grid; }
 .arena-v2-success { display: grid; gap: 9px; padding: 14px; border-radius: 14px; background: rgba(34,197,94,.09); color: #bbf7d0; }.arena-v2-success b { color: #fff; }
 @media (max-width: 370px) { .arena-v2 > nav { gap: 3px; }.arena-v2 > nav button { font-size: 10px; }.arena-v2-stakes { grid-template-columns: repeat(2,1fr); } }
+
+/* Arena V2 ready and countdown */
+.arena-v2-live .arena-v2-status-live { position: relative; color: #fca5a5; animation: arena-status-pulse 1.8s ease-in-out infinite; }
+.arena-v2-countdown { display: grid !important; justify-items: center !important; gap: 7px !important; margin-top: 5px; padding: 18px !important; border: 1px solid rgba(255,255,255,.07) !important; border-radius: 17px; background: #0a0b0f; text-align: center; }
+.arena-v2-countdown small { color: #8b8f9b; font-weight: 900; letter-spacing: .12em; }.arena-v2-countdown strong { color: #fff; font: 900 34px/1 ui-monospace,monospace; letter-spacing: .06em; }
+.arena-v2-countdown.is-live { border-color: rgba(239,68,68,.35) !important; background: radial-gradient(circle,rgba(239,68,68,.15),transparent 70%),#0a0b0f; }.arena-v2-countdown.is-live strong { color: #f87171; }.arena-v2-countdown strong.is-expired { opacity: .65; }
+.arena-v2-ready-panel { display: grid; gap: 9px; padding: 15px; border: 1px solid rgba(239,68,68,.16); border-radius: 17px; background: rgba(239,68,68,.055); }
+.arena-v2-ready-panel > div { display: flex; justify-content: space-between; gap: 12px; }.arena-v2-ready-panel > div span { color: #9ca3af; }.arena-v2-ready-panel > div b { color: #fca5a5; }.arena-v2-ready-panel > div b.is-ready { color: #4ade80; }
+.arena-v2-ready-button { margin-top: 7px; border: 0; border-radius: 14px; padding: 15px; background: linear-gradient(135deg,#ef4444,#991b1b); color: #fff; font-weight: 950; letter-spacing: .08em; box-shadow: 0 10px 28px rgba(220,38,38,.25); }.arena-v2-ready-button:disabled { cursor: wait; opacity: .55; }
+.arena-v2-ready-success { margin: 7px 0 0; padding: 12px; border-radius: 12px; background: rgba(34,197,94,.1); color: #86efac; font-weight: 800; line-height: 1.45; }
+.arena-v2-live-notice { margin: 0; padding: 11px; border-radius: 11px; background: rgba(255,255,255,.055); color: #d1d5db; text-align: center; }
+@keyframes arena-status-pulse { 0%,100% { opacity: .7; } 50% { opacity: 1; text-shadow: 0 0 14px rgba(239,68,68,.45); } }
+@media (prefers-reduced-motion: reduce) { .arena-v2-live .arena-v2-status-live { animation: none; } }
