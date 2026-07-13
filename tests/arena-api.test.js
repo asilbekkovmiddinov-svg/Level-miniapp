@@ -80,6 +80,27 @@ test("all Arena reads send verified initData and production paths", async () => 
     });
 });
 
+test("default fetch keeps the browser global receiver", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+        globalThis.fetch = async function (url, options) {
+            assert.equal(this, globalThis);
+            assert.equal(new URL(url).pathname, "/matches/open");
+            assert.equal(options.headers["X-Telegram-Init-Data"], "verified-init-data");
+            return response({ matches: [] });
+        };
+        const client = new ArenaApiClient({
+            baseUrl: "https://backend.example",
+            initDataProvider: () => "verified-init-data",
+            retries: 0,
+        });
+
+        assert.deepEqual(await client.openMatches(), []);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test("missing initData is rejected before network", async () => {
     let called = false;
     const client = new ArenaApiClient({
