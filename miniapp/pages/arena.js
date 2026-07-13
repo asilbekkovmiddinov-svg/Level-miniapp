@@ -12,7 +12,7 @@ class ArenaApiClient {
         baseUrl = typeof API_URL !== "undefined" ? API_URL : "",
         timeoutMs = 10000,
         retries = 2,
-        fetchImpl = globalThis.fetch,
+        fetchImpl = (...args) => globalThis.fetch(...args),
         initDataProvider = () => globalThis.Telegram?.WebApp?.initData || "",
     } = {}) {
         this.baseUrl = String(baseUrl).replace(/\/$/, "");
