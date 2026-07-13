@@ -6,6 +6,9 @@ const path = require("node:path");
 
 const {
     normalizeWalletData,
+    normalizeDepositPaymentDetails,
+    depositBankByKey,
+    depositCopyRow,
     validateDepositAmount,
     validateWithdrawForm,
     walletCardDigits,
@@ -135,4 +138,73 @@ test("wallet action validation enforces backend-compatible input", () => {
         bankName: "Test Bank",
         balance: 50000,
     }).valid, false);
+});
+
+
+test("deposit payment details normalize backend contract", () => {
+    const nested = normalizeDepositPaymentDetails({
+        deposit_id: 21,
+        amount: 25000,
+        payment_details: {
+            card_number: "8600 1111 2222 3333",
+            card_holder: "LEVEL GROUP",
+            bank_name: "Test Bank",
+        },
+    });
+    assert.deepEqual(nested, {
+        depositId: 21,
+        amount: 25000,
+        cardNumber: "8600 1111 2222 3333",
+        cardHolder: "LEVEL GROUP",
+        bankName: "Test Bank",
+    });
+
+    assert.throws(() => normalizeDepositPaymentDetails({
+        deposit_id: 22,
+        amount: 25000,
+    }), /rekvizitlarini/);
+});
+
+test("premium deposit bank registry contains primary and other banks", () => {
+    const keys = [
+        "click", "payme", "uzum", "anorbank", "kapitalbank", "hamkorbank",
+        "aloqabank", "agrobank", "asakabank", "ipakyuli", "nbu", "xalq",
+        "turonbank", "ofb", "tbc", "davrbank", "ziraat", "infinbank",
+        "trastbank", "universalbank", "octobank",
+    ];
+    for (const key of keys) {
+        const bank = depositBankByKey(key);
+        assert.equal(bank.key, key);
+        assert.match(bank.scheme, /^[a-z][a-z0-9]+:\/\//);
+    }
+    assert.equal(depositBankByKey("unknown"), null);
+});
+
+test("deposit copy row escapes backend values and renders animated copy control", () => {
+    const html = depositCopyRow("Karta", "<script>", "86001234");
+    assert.equal(html.includes("<script>"), false);
+    assert.match(html, /&lt;script&gt;/);
+    assert.match(html, /data-copy-value="86001234"/);
+    assert.match(html, /copyDepositValue\(this\)/);
+});
+
+test("deposit UX gates production evidence upload behind payment confirmation", () => {
+    const walletSource = fs.readFileSync(
+        path.join(__dirname, "../miniapp/pages/wallet.js"),
+        "utf8",
+    );
+    const apiSource = fs.readFileSync(
+        path.join(__dirname, "../miniapp/api.js"),
+        "utf8",
+    );
+
+    assert.match(walletSource, /openDepositPaymentDetails\(result\)/);
+    assert.match(
+        walletSource,
+        /onclick="openDepositEvidence\(\$\{details\.depositId\}\)"/,
+    );
+    assert.match(walletSource, /Men to‘lov qildim/);
+    assert.match(apiSource, /\/deposit\/\$\{id\}\/evidence/);
+    assert.match(apiSource, /"X-Telegram-Init-Data": initData/);
+    assert.match(apiSource, /formData\.append\("file", file/);
 });
