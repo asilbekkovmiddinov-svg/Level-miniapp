@@ -16,9 +16,30 @@ async function updateUserSeen() {
 }
 
 async function getWallet() {
-    if (!TELEGRAM_ID) return null;
+    const initData = window.Telegram?.WebApp?.initData || tg?.initData || "";
+    if (!initData) {
+        throw new Error("Telegram tasdiqlash ma’lumoti topilmadi.");
+    }
 
-    return await api(`/wallet/${TELEGRAM_ID}`);
+    const response = await fetch(`${API_URL}/wallet`, {
+        method: "GET",
+        headers: {
+            "X-Telegram-Init-Data": initData,
+        },
+    });
+
+    let payload;
+    try {
+        payload = await response.json();
+    } catch (_error) {
+        throw new Error("Wallet serveridan noto‘g‘ri javob olindi.");
+    }
+
+    if (!response.ok) {
+        throw new Error("Hamyonni yuklab bo‘lmadi.");
+    }
+
+    return payload;
 }
 
 async function createDeposit(amount) {

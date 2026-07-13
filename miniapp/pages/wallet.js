@@ -1,5 +1,29 @@
 let walletData = null;
 
+function normalizeWalletData(result) {
+    const data = result?.data || result;
+    const requiredFields = [
+        "telegram_id",
+        "efc_balance",
+        "uzs_balance",
+        "locked_efc",
+        "locked_uzs",
+    ];
+
+    if (!data || requiredFields.some((field) => !(field in data))) {
+        throw new Error("Wallet javobi noto‘g‘ri formatda.");
+    }
+
+    return data;
+}
+
+function renderWalletUnavailable() {
+    const efcTarget = document.getElementById("efcBalance");
+    const uzsTarget = document.getElementById("uzsBalance");
+    if (efcTarget) efcTarget.textContent = "—";
+    if (uzsTarget) uzsTarget.textContent = "—";
+}
+
 async function loadWalletPage() {
     try {
         const result = await getWallet();
@@ -9,11 +33,13 @@ async function loadWalletPage() {
             return;
         }
 
-        walletData = result.data || result;
+        walletData = normalizeWalletData(result);
 
         renderWalletPage();
     } catch (error) {
         console.error(error);
+        walletData = null;
+        renderWalletUnavailable();
         Modal.error("Hamyonni yuklashda xatolik.");
     }
 }
@@ -21,8 +47,8 @@ async function loadWalletPage() {
 function renderWalletPage() {
     const page = document.getElementById("homePage");
 
-    const efc = Number(walletData?.efc_balance || 0).toLocaleString("uz-UZ");
-    const uzs = Number(walletData?.uzs_balance || 0).toLocaleString("uz-UZ");
+    const efc = Number(walletData.efc_balance).toLocaleString("uz-UZ");
+    const uzs = Number(walletData.uzs_balance).toLocaleString("uz-UZ");
 
     document.getElementById("efcBalance").textContent = efc;
     document.getElementById("uzsBalance").textContent = uzs;
@@ -52,4 +78,8 @@ async function openWithdraw() {
             { type: "ok", text: "Tushunarli" }
         ]
     });
+}
+
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = { normalizeWalletData };
 }
