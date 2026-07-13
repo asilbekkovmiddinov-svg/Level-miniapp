@@ -11,6 +11,8 @@ const {
     arenaCountdown,
     renderArenaRoomPanel,
     copyArenaRoomCode,
+    renderArenaEvidencePanel,
+    openArenaEvidenceBot,
 } = require("../miniapp/pages/arena.js");
 
 function response(payload, status = 200) {
@@ -413,4 +415,73 @@ test("room code validation and documented errors stay safe without POST retry", 
         });
         assert.equal(calls, 1);
     }
+});
+
+test("evidence progress normalizes backend participant flags", () => {
+    const match = normalizeMatch({
+        ...rawMatch,
+        status: "PLAYING",
+        my_screenshot_uploaded: true,
+        my_video_uploaded: false,
+    });
+    assert.equal(match.myScreenshotUploaded, true);
+    assert.equal(match.myVideoUploaded, false);
+    assert.equal(normalizeMatch({ ...rawMatch }).myScreenshotUploaded, false);
+});
+
+test("evidence panel renders deterministic 0/2, 1/2 and 2/2 states", () => {
+    const empty = normalizeMatch({ ...rawMatch, status: "PLAYING" });
+    const one = normalizeMatch({ ...rawMatch, status: "PLAYING", my_screenshot_uploaded: true });
+    const complete = normalizeMatch({
+        ...rawMatch,
+        status: "PLAYING",
+        my_screenshot_uploaded: true,
+        my_video_uploaded: true,
+    });
+
+    assert.match(renderArenaEvidencePanel(empty), /0 \/ 2/);
+    assert.match(renderArenaEvidencePanel(empty), /Screenshot va video majburiy/);
+    assert.match(renderArenaEvidencePanel(one), /1 \/ 2/);
+    assert.match(renderArenaEvidencePanel(one), /Screenshot[\s\S]*Yuborildi/);
+    assert.match(renderArenaEvidencePanel(one), /Yana bitta evidence qoldi/);
+    assert.match(renderArenaEvidencePanel(complete), /2 \/ 2/);
+    assert.match(renderArenaEvidencePanel(complete), /Evidence to‘liq topshirildi/);
+    assert.match(renderArenaEvidencePanel(complete), /Admin tekshiradi/);
+    assert.doesNotMatch(renderArenaEvidencePanel(complete), /Botga yuborish/);
+});
+
+test("polling response updates screenshot and video progress without media data", () => {
+    const firstPoll = normalizeMatch({
+        ...rawMatch,
+        status: "PLAYING",
+        my_screenshot_uploaded: false,
+        my_video_uploaded: false,
+    });
+    const secondPoll = normalizeMatch({
+        ...rawMatch,
+        status: "PLAYING",
+        my_screenshot_uploaded: true,
+        my_video_uploaded: true,
+    });
+    assert.match(renderArenaEvidencePanel(firstPoll), /0 \/ 2/);
+    assert.match(renderArenaEvidencePanel(secondPoll), /2 \/ 2/);
+    assert.equal("screenshot_file_id" in secondPoll, false);
+    assert.equal("video_file_id" in secondPoll, false);
+    assert.equal(renderArenaEvidencePanel(normalizeMatch({ ...rawMatch, status: "WAITING_ADMIN" })), "");
+});
+
+test("evidence Bot action returns to the Telegram chat without sending media", () => {
+    let closed = 0;
+    let haptic = 0;
+    global.Telegram = {
+        WebApp: {
+            close: () => { closed += 1; },
+            HapticFeedback: { impactOccurred: () => { haptic += 1; } },
+        },
+    };
+    assert.equal(openArenaEvidenceBot(42, "screenshot"), true);
+    assert.equal(openArenaEvidenceBot(42, "video"), true);
+    assert.equal(closed, 2);
+    assert.equal(haptic, 2);
+    delete global.Telegram;
 });

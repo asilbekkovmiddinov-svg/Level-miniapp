@@ -190,6 +190,8 @@ function normalizeMatch(value) {
         readyDeadlineAt: value.ready_deadline_at || null,
         creatorReady: Boolean(value.creator_ready),
         opponentReady: Boolean(value.opponent_ready),
+        myScreenshotUploaded: Boolean(value.my_screenshot_uploaded),
+        myVideoUploaded: Boolean(value.my_video_uploaded),
         roomCode: value.room_code || null,
         resultType: value.result_type || null,
     };
@@ -525,6 +527,7 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
     const bothReady = match.creatorReady && match.opponentReady;
     const readyTarget = match.readyDeadlineAt || match.scheduledAt;
     const roomPanel = renderArenaRoomPanel(match);
+    const evidencePanel = renderArenaEvidencePanel(match);
     content.innerHTML = `<article class="arena-v2-detail arena-v2-live"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
         <small>MATCH #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
         <div><span>Status</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
@@ -544,9 +547,52 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
                 : `<button class="arena-v2-ready-button" ${readyPending ? "disabled" : ""} onclick="submitArenaReady(${match.id})">${readyPending ? "Saqlanmoqda..." : "✓ TAYYORMAN"}</button>`}
         </section>` : ""}
         ${roomPanel}
+        ${evidencePanel}
+        ${match.status === "WAITING_ADMIN" ? `<section class="arena-v2-admin-wait">
+            <span>✓</span><div><b>Evidence qabul qilindi</b><p>Admin natijani tekshirmoqda.</p></div>
+        </section>` : ""}
         ${notice ? `<p class="arena-v2-live-notice">${arenaEscape(notice)}</p>` : ""}
     </article>`;
     updateArenaCountdown();
+}
+
+function renderArenaEvidencePanel(match) {
+    if (match.status !== "PLAYING") return "";
+    const completed = Number(match.myScreenshotUploaded) + Number(match.myVideoUploaded);
+    const done = completed === 2;
+    return `<section class="arena-v2-evidence-panel ${done ? "is-complete" : ""}">
+        <header><div><small>EVIDENCE PROGRESS</small><h4>${done ? "Evidence to‘liq topshirildi" : "Dalillarni Botga yuboring"}</h4></div>
+            <strong>${completed} / 2</strong></header>
+        <div class="arena-v2-progress"><i style="width:${completed * 50}%"></i></div>
+        <article><span>📷</span><div><b>Screenshot</b><small>${match.myScreenshotUploaded ? "Yuborildi" : "Kutilyapti"}</small></div>
+            ${match.myScreenshotUploaded ? '<em class="is-done">✓</em>' : `<button onclick="openArenaEvidenceBot(${match.id}, 'screenshot')">Botga yuborish</button>`}</article>
+        <article><span>🎥</span><div><b>Video</b><small>${match.myVideoUploaded ? "Yuborildi" : "Kutilyapti"}</small></div>
+            ${match.myVideoUploaded ? '<em class="is-done">✓</em>' : `<button onclick="openArenaEvidenceBot(${match.id}, 'video')">Botga yuborish</button>`}</article>
+        <p>${done ? "Admin tekshiradi." : completed === 1 ? "Yana bitta evidence qoldi." : "Screenshot va video majburiy."}</p>
+    </section>`;
+}
+
+function openArenaEvidenceBot(matchId, evidenceType) {
+    const webApp = globalThis.Telegram?.WebApp;
+    try {
+        webApp?.HapticFeedback?.impactOccurred?.("light");
+        if (typeof webApp?.close === "function") {
+            webApp.close();
+            return true;
+        }
+    } catch (_) {
+        // Fall through to the safe browser-preview message.
+    }
+    const content = typeof document !== "undefined" ? document.getElementById("arenaV2Content") : null;
+    const typeLabel = evidenceType === "video" ? "videoni" : "screenshotni";
+    if (content) {
+        const notice = document.createElement("p");
+        notice.className = "arena-v2-live-notice";
+        notice.textContent = `Telegram Bot chatiga qaytib, Match #${Number(matchId)} uchun ${typeLabel} yuboring.`;
+        content.querySelector(".arena-v2-live-notice")?.remove();
+        content.appendChild(notice);
+    }
+    return false;
 }
 
 function renderArenaRoomPanel(match, { pending = false } = {}) {
@@ -682,6 +728,7 @@ Object.assign(globalThis, {
     showArenaJoinConfirm, confirmArenaJoin,
     submitArenaReady, updateArenaCountdown,
     submitArenaRoomCode, copyArenaRoomCode,
+    openArenaEvidenceBot,
 });
 
 if (typeof module !== "undefined") {
@@ -698,5 +745,7 @@ if (typeof module !== "undefined") {
         updateArenaCountdown,
         renderArenaRoomPanel,
         copyArenaRoomCode,
+        renderArenaEvidencePanel,
+        openArenaEvidenceBot,
     };
 }
