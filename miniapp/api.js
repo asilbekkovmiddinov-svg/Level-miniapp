@@ -73,6 +73,45 @@ async function createDeposit(amount) {
     });
 }
 
+async function uploadDepositEvidence(depositId, file) {
+    const id = Number(depositId);
+    if (!Number.isInteger(id) || id <= 0) {
+        throw new Error("Deposit ID noto‘g‘ri.");
+    }
+    if (!(file instanceof Blob) || !String(file.type || "").startsWith("image/")) {
+        throw new Error("To‘lov cheki rasm formatida bo‘lishi kerak.");
+    }
+
+    const initData = telegramInitData();
+    if (!initData) {
+        throw new Error("Telegram tasdiqlash ma’lumoti topilmadi.");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file, file.name || `deposit-${id}-receipt.jpg`);
+
+    const response = await fetch(`${API_URL}/deposit/${id}/evidence`, {
+        method: "POST",
+        headers: {
+            "X-Telegram-Init-Data": initData,
+        },
+        body: formData,
+    });
+
+    let payload;
+    try {
+        payload = await response.json();
+    } catch (_error) {
+        throw new Error("Evidence serveridan noto‘g‘ri javob olindi.");
+    }
+
+    if (!response.ok) {
+        throw new Error(walletHttpMessage(response.status));
+    }
+
+    return payload;
+}
+
 async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
     return await walletRequest("/withdraw/create", {
         method: "POST",
