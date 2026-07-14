@@ -114,7 +114,41 @@ test("wallet actions use authenticated Backend V2 contracts", async () => {
         assert.equal(call.options.headers["Content-Type"], "application/json");
         assert.equal("telegram_id" in JSON.parse(call.options.body), false);
         assert.equal("INTERNAL_API_KEY" in call.options.headers, false);
+        assert.match(call.options.headers["Idempotency-Key"], /^(deposit|withdraw)-/);
     }
+});
+
+test("register and seen use authenticated contracts and reject non-2xx", async () => {
+    const calls = [];
+    const context = {
+        window: { Telegram: { WebApp: { initData: "verified-init-data" } } },
+        tg: { initData: "verified-init-data" }, API_URL: "https://backend.example",
+        TELEGRAM_ID: 42, FIRST_NAME: "Ali", USERNAME: "ali",
+        fetch: async (url, options) => {
+            calls.push({ url, options });
+            return { ok: !url.endsWith("/user/seen"), status: 500, json: async () => ({ detail: "failed" }) };
+        },
+    };
+    vm.createContext(context);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "../miniapp/api.js"), "utf8"), context);
+    await context.registerUser();
+    await assert.rejects(() => context.updateUserSeen(), /Serverda vaqtinchalik/);
+    assert.equal(calls[0].url, "https://backend.example/user/register");
+    assert.equal(calls[1].url, "https://backend.example/user/seen");
+    assert.equal(calls[0].options.headers["X-Telegram-Init-Data"], "verified-init-data");
+});
+
+test("failed receipt notification is surfaced to the user", async () => {
+    const context = {
+        window: { Telegram: { WebApp: { initData: "verified-init-data" } } },
+        tg: { initData: "verified-init-data" }, API_URL: "https://backend.example",
+        TELEGRAM_ID: 42, FIRST_NAME: "Ali", USERNAME: "ali", Blob, FormData,
+        fetch: async () => ({ ok: true, json: async () => ({ notification_status: "FAILED" }) }),
+    };
+    vm.createContext(context);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "../miniapp/api.js"), "utf8"), context);
+    const file = new Blob(["x"], { type: "image/jpeg" });
+    await assert.rejects(() => context.uploadDepositEvidence(7, file), /Admin notification yuborilmadi/);
 });
 
 test("wallet action validation enforces backend-compatible input", () => {
