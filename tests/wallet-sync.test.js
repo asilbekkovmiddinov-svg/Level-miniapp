@@ -151,6 +151,18 @@ test("failed receipt notification is surfaced to the user", async () => {
     await assert.rejects(() => context.uploadDepositEvidence(7, file), /Admin notification yuborilmadi/);
 });
 
+test("dedicated wallet renders locked balances, history, status and pagination", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wallet.js"), "utf8");
+    assert.match(source, /loadDedicatedWalletPage/);
+    assert.match(source, /locked_efc/);
+    assert.match(source, /locked_uzs/);
+    assert.match(source, /Transaction History/);
+    assert.match(source, /walletStatusBadge/);
+    assert.match(source, /wallet-history-skeleton/);
+    assert.match(source, /wallet-empty/);
+    assert.match(source, /history\?\.has_more/);
+});
+
 test("wallet action validation enforces backend-compatible input", () => {
     assert.equal(validateDepositAmount("15 000").amount, 15000);
     assert.equal(validateDepositAmount("14 999").valid, false);

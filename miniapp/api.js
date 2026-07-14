@@ -61,6 +61,10 @@ async function getWallet() {
     return await walletRequest("/wallet");
 }
 
+async function getWalletTransactions({ limit = 10, offset = 0 } = {}) {
+    return await walletRequest(`/transactions?limit=${limit}&offset=${offset}`);
+}
+
 async function createDeposit(amount) {
     return await walletRequest("/deposit/create", {
         method: "POST",

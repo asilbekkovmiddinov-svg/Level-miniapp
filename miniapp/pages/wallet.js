@@ -1,6 +1,8 @@
 let walletData = null;
 const WALLET_MIN_AMOUNT = 15000;
 let walletActionPending = false;
+let walletHistoryOffset = 0;
+const WALLET_HISTORY_LIMIT = 10;
 
 function normalizeWalletData(result) {
     const data = result?.data || result;
@@ -60,6 +62,46 @@ function renderWalletPage() {
 
 async function refreshWallet() {
     await loadWalletPage();
+}
+
+function walletStatusBadge(status) {
+    const value = String(status || "PENDING").toUpperCase();
+    const labels = { PENDING: "Kutilmoqda", CLAIMED: "Tekshiruvda", APPROVED: "Tasdiqlandi", REJECTED: "Rad etildi", COMPLETED: "Bajarildi" };
+    return `<span class="wallet-status wallet-status-${value.toLowerCase()}">${labels[value] || walletEscape(value)}</span>`;
+}
+
+function walletHistorySkeleton() {
+    return `<div class="wallet-history-skeleton">${Array.from({ length: 4 }, () => "<i></i>").join("")}</div>`;
+}
+
+function walletTransactionRow(item) {
+    const credit = item.direction === "CREDIT";
+    const type = String(item.transaction_type || "");
+    const kind = type.includes("DEPOSIT") ? "Deposit" : type.includes("WITHDRAW") ? "Withdraw" : "Tranzaksiya";
+    return `<article class="wallet-history-row"><div><b>${walletEscape(kind)}</b><small>${walletEscape(item.description || type)}</small></div><div><strong class="${credit ? "credit" : "debit"}">${credit ? "+" : "−"}${Number(item.amount).toLocaleString("uz-UZ")} ${walletEscape(item.currency)}</strong>${walletStatusBadge(item.status)}</div></article>`;
+}
+
+async function loadDedicatedWalletPage(offset = 0) {
+    Navbar.setActive("wallet"); showPage("walletPage", "Hamyon"); walletHistoryOffset = offset;
+    const page = document.getElementById("walletPage");
+    page.innerHTML = `<section class="wallet-v2-page">${walletHistorySkeleton()}</section>`;
+    try {
+        const [walletResult, history] = await Promise.all([getWallet(), getWalletTransactions({ limit: WALLET_HISTORY_LIMIT, offset })]);
+        walletData = normalizeWalletData(walletResult);
+        const items = Array.isArray(history?.items) ? history.items : [];
+        page.innerHTML = `<section class="wallet-v2-page">
+            <header><small>SECURE WALLET</small><h2>Hamyon</h2></header>
+            <div class="wallet-v2-balances">
+                <article><small>EFC balans</small><strong>${Number(walletData.efc_balance).toLocaleString("uz-UZ")}</strong><span>🔒 ${Number(walletData.locked_efc).toLocaleString("uz-UZ")} locked</span></article>
+                <article><small>UZS balans</small><strong>${Number(walletData.uzs_balance).toLocaleString("uz-UZ")}</strong><span>🔒 ${Number(walletData.locked_uzs).toLocaleString("uz-UZ")} locked</span></article>
+            </div><div class="wallet-v2-actions"><button onclick="openDeposit()">＋ Deposit</button><button onclick="openWithdraw()">↗ Withdraw</button></div>
+            <div class="wallet-v2-title"><h3>Transaction History</h3><button onclick="loadDedicatedWalletPage(${offset})">↻</button></div>
+            <div class="wallet-history">${items.length ? items.map(walletTransactionRow).join("") : `<div class="wallet-empty"><b>Tranzaksiyalar yo‘q</b><span>Deposit va withdraw tarixi shu yerda chiqadi.</span></div>`}</div>
+            <nav class="wallet-pagination"><button ${offset <= 0 ? "disabled" : ""} onclick="loadDedicatedWalletPage(${Math.max(0, offset - WALLET_HISTORY_LIMIT)})">← Oldingi</button><span>${Math.floor(offset / WALLET_HISTORY_LIMIT) + 1}</span><button ${history?.has_more ? "" : "disabled"} onclick="loadDedicatedWalletPage(${offset + WALLET_HISTORY_LIMIT})">Keyingi →</button></nav>
+        </section>`;
+    } catch (error) {
+        page.innerHTML = `<div class="wallet-empty"><b>Hamyon yuklanmadi</b><span>${walletEscape(error.message)}</span><button onclick="loadDedicatedWalletPage(${offset})">Qayta urinish</button></div>`;
+    }
 }
 
 function walletAmount(value) {
