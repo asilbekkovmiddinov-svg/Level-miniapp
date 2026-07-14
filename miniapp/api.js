@@ -1,18 +1,12 @@
 async function registerUser() {
     if (!TELEGRAM_ID) return null;
-
-    return await api("/user/register", "POST", {
-        telegram_id: TELEGRAM_ID,
-        first_name: FIRST_NAME || "User",
-        username: USERNAME || null,
-        language: "uz",
-    });
+    return await walletRequest("/user/register", { method: "POST" });
 }
 
 async function updateUserSeen() {
     if (!TELEGRAM_ID) return null;
 
-    return await api(`/user/${TELEGRAM_ID}/seen`, "POST");
+    return await walletRequest("/user/seen", { method: "POST" });
 }
 
 function telegramInitData() {
@@ -33,7 +27,7 @@ function walletHttpMessage(status) {
         : messages[status] || "So‘rovni bajarib bo‘lmadi.";
 }
 
-async function walletRequest(path, { method = "GET", body = null } = {}) {
+async function walletRequest(path, { method = "GET", body = null, idempotencyKey = null } = {}) {
     const initData = telegramInitData();
     if (!initData) {
         throw new Error("Telegram tasdiqlash ma’lumoti topilmadi.");
@@ -43,6 +37,7 @@ async function walletRequest(path, { method = "GET", body = null } = {}) {
         method,
         headers: {
             "X-Telegram-Init-Data": initData,
+            ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
             ...(body ? { "Content-Type": "application/json" } : {}),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -70,6 +65,7 @@ async function createDeposit(amount) {
     return await walletRequest("/deposit/create", {
         method: "POST",
         body: { amount },
+        idempotencyKey: walletIdempotencyKey("deposit"),
     });
 }
 
@@ -109,6 +105,9 @@ async function uploadDepositEvidence(depositId, file) {
         throw new Error(walletHttpMessage(response.status));
     }
 
+    if (payload.notification_status === "FAILED") {
+        throw new Error("Admin notification yuborilmadi. Qayta urinib ko‘ring.");
+    }
     return payload;
 }
 
@@ -121,7 +120,14 @@ async function createWithdraw(amount, cardNumber, cardHolder, bankName) {
             card_holder: cardHolder,
             bank_name: bankName,
         },
+        idempotencyKey: walletIdempotencyKey("withdraw"),
     });
+}
+
+function walletIdempotencyKey(scope) {
+    const randomPart = globalThis.crypto?.randomUUID?.()
+        || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return `${scope}-${randomPart}`;
 }
 
 async function getProducts(category = "") {
