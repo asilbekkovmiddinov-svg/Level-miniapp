@@ -81,6 +81,9 @@ async function openPage(page) {
         case "profile":
             await loadProfilePage();
             break;
+        case "wallet":
+            await loadDedicatedWalletPage();
+            break;
         default:
             await loadHome();
     }
