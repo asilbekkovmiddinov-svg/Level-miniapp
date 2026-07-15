@@ -8,6 +8,7 @@ const {
     WHEEL_DEMO_REWARDS,
     wheelStatusValue,
     wheelStatusFlag,
+    wheelHasStatusField,
     wheelTimestamp,
     wheelCooldownState,
     formatWheelCountdown,
@@ -71,6 +72,54 @@ test("backend readiness fields restore free spin and remove cooldown", () => {
     assert.equal(readyByCount.freeSpins, 1);
     assert.equal(unavailable.freeReady, false);
     assert.equal(unavailable.freeCooldown, false);
+});
+
+test("production legacy contract maps to READY free/ad availability", () => {
+    const legacy = wheelCooldownState({
+        success: true,
+        free_spin_used: false,
+        ad_spin_count: 0,
+        bonus_spin_count: 0,
+        max_ad_spins: 10,
+        next_ad_spin_at: null,
+    });
+    assert.equal(wheelHasStatusField({ free_spin_used: false }, ["free_spin_used"]), true);
+    assert.equal(legacy.freeSpins, 1);
+    assert.equal(legacy.freeReady, true);
+    assert.equal(legacy.adSpins, 10);
+    assert.equal(legacy.adReady, true);
+    assert.equal(legacy.canSpin, true);
+});
+
+test("legacy used/cooldown state remains unavailable until backend deadline", () => {
+    const now = Date.parse("2030-01-02T12:00:00Z");
+    const legacy = wheelCooldownState({
+        free_spin_used: true,
+        ad_spin_count: 1,
+        max_ad_spins: 10,
+        next_ad_spin_at: "2030-01-02T12:30:00Z",
+    }, now);
+    assert.equal(legacy.freeSpins, 0);
+    assert.equal(legacy.freeReady, false);
+    assert.equal(legacy.adSpins, 9);
+    assert.equal(legacy.adReady, false);
+    assert.equal(legacy.adCooldown, true);
+    assert.equal(legacy.canSpin, false);
+});
+
+test("new contract remains authoritative when legacy fields are also present", () => {
+    const mixed = wheelCooldownState({
+        free_spin_available: false,
+        remaining_free_spins: 0,
+        ad_spin_available: false,
+        remaining_ad_spins: 0,
+        free_spin_used: false,
+        ad_spin_count: 0,
+        max_ad_spins: 10,
+    });
+    assert.equal(mixed.freeReady, false);
+    assert.equal(mixed.adReady, false);
+    assert.equal(mixed.canSpin, false);
 });
 
 test("countdown cards and disabled button always show unambiguous timer copy", () => {
