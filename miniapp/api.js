@@ -240,6 +240,10 @@ async function getWheelStatus() {
     return await api(`/wheel/status/${TELEGRAM_ID}`);
 }
 
+async function getLiveWheelWinners() {
+    return await walletRequest("/wheel/winners");
+}
+
 // =========================
 // 1vs1 ARENA
 // =========================

@@ -93,6 +93,7 @@ async function loadHome() {
     Navbar.setActive("home");
     showPage("homePage", "LEVEL_GROUP");
     await loadWalletPage();
+    startLiveWinners();
 }
 
 async function refreshCurrentPage() {
