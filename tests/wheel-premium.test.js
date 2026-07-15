@@ -17,6 +17,8 @@ const {
     wheelFinalRotationForSector,
     wheelSectorIndexFromRotation,
     wheelTransformValue,
+    wheelTestSector,
+    wheelTestResultForSector,
     wheelTargetRotation,
     normalizeWheelReward,
     wheelSectorIndexForReward,
@@ -82,6 +84,33 @@ test("spin completion waits for transform transition and snaps before modal", ()
         source.indexOf("wheelRotation = wheelFinalRotationForSector(resultIndex)") < source.indexOf("openWheelResult(backendResult)"),
         "modal final visual snapdan oldin ochilmoqda",
     );
+});
+
+test("development wheel test mode deterministically covers sectors 0 through 9", () => {
+    WHEEL_PRIZES.forEach((prize, index) => {
+        const search = `?wheel_test=1&sector=${index}`;
+        const requested = wheelTestSector(search);
+        const result = wheelTestResultForSector(requested);
+        const calculated = wheelSectorIndexForReward(result);
+        const rotation = wheelFinalRotationForSector(calculated);
+        const pointerSector = wheelSectorIndexFromRotation(rotation);
+
+        assert.equal(requested, index, `${prize.label}: requested sector noto‘g‘ri`);
+        assert.equal(calculated, index, `${prize.label}: calculated sector noto‘g‘ri`);
+        assert.equal(pointerSector, index, `${prize.label}: pointer sektori noto‘g‘ri`);
+        assert.equal(WHEEL_PRIZES[pointerSector].label, prize.label, `${prize.label}: label mos emas`);
+    });
+});
+
+test("wheel test mode is disabled unless explicitly requested", () => {
+    assert.equal(wheelTestSector(""), null);
+    assert.equal(wheelTestSector("?sector=4"), null);
+    assert.equal(wheelTestSector("?wheel_test=0&sector=4"), null);
+    assert.equal(wheelTestSector("?wheel_test=1&sector=invalid"), 0);
+    assert.equal(wheelTestSector("?wheel_test=1&sector=10"), 0);
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.match(source, /backendResult = await spinProductionWheel\(spinType\)/);
+    assert.match(source, /if \(requestedTestSector !== null\)/);
 });
 
 test("daily and ad timers use backend deadlines with 24h/1h timestamp fallbacks", () => {
