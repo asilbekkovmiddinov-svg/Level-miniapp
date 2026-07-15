@@ -33,6 +33,8 @@ let wheelCoinWizard = null;
 let wheelCoinSubmitting = false;
 let wheelCountdownTimer = null;
 let wheelCooldownSnapshot = null;
+let wheelStateRefreshing = false;
+let wheelLastExpiryRefreshKey = null;
 
 const WHEEL_COIN_REGIONS = ["Global", "Japan"];
 const WHEEL_COIN_PLATFORMS = ["Android", "iOS"];
@@ -42,6 +44,11 @@ function wheelStatusValue(source, keys, fallback = 0) {
         if (source?.[key] !== undefined && source?.[key] !== null) return source[key];
     }
     return fallback;
+}
+
+function wheelStatusFlag(source, keys) {
+    const value = wheelStatusValue(source, keys, null);
+    return value === true || value === 1 || ["true", "1", "yes"].includes(String(value).toLowerCase());
 }
 
 function wheelTimestamp(source, deadlineKeys, lastKeys, cooldownMs) {
@@ -57,8 +64,8 @@ function wheelTimestamp(source, deadlineKeys, lastKeys, cooldownMs) {
 }
 
 function wheelCooldownState(source, now = Date.now()) {
-    const freeSpins = Number(wheelStatusValue(source, ["free_spins", "daily_free_spins"]));
-    const adSpins = Number(wheelStatusValue(source, ["ad_spins", "rewarded_spins"]));
+    const freeSpins = Number(wheelStatusValue(source, ["remaining_free_spins", "free_spins", "daily_free_spins"]));
+    const adSpins = Number(wheelStatusValue(source, ["remaining_ad_spins", "ad_spins", "rewarded_spins"]));
     const remaining = Number(wheelStatusValue(source, ["remaining_spins", "spins_left"], freeSpins + adSpins));
     const freeAt = wheelTimestamp(
         source,
@@ -72,8 +79,12 @@ function wheelCooldownState(source, now = Date.now()) {
         ["last_ad_spin_at", "ad_spin_used_at", "ad_viewed_at"],
         60 * 60 * 1000,
     );
-    const freeReady = freeSpins > 0 || (freeAt !== null && freeAt <= now);
-    const adReady = adSpins > 0 || (adAt !== null && adAt <= now);
+    const freeReady = wheelStatusFlag(source, ["free_spin_available", "free_spin_ready"])
+        || freeSpins > 0 || (freeAt !== null && freeAt <= now);
+    const adReady = wheelStatusFlag(source, ["ad_spin_available", "ad_spin_ready"])
+        || adSpins > 0 || (adAt !== null && adAt <= now);
+    const freeCooldown = !freeReady && freeAt !== null && freeAt > now;
+    const adCooldown = !adReady && adAt !== null && adAt > now;
     const deadlines = [freeReady ? null : freeAt, adReady ? null : adAt].filter((value) => value && value > now);
 
     return {
@@ -84,6 +95,8 @@ function wheelCooldownState(source, now = Date.now()) {
         adAt,
         freeReady,
         adReady,
+        freeCooldown,
+        adCooldown,
         canSpin: remaining > 0 || freeReady || adReady,
         nextReadyAt: deadlines.length ? Math.min(...deadlines) : null,
     };
@@ -254,13 +267,15 @@ function bindWheelEvents() {
     });
 }
 
-async function loadWheelStatus() {
+async function loadWheelStatus({ silent = false } = {}) {
     const region = document.getElementById("wheelStatusRegion");
     const button = document.getElementById("wheelSpinButton");
     if (!region || !button) return;
 
-    region.innerHTML = wheelSkeletonMarkup();
-    button.disabled = true;
+    if (!silent) {
+        region.innerHTML = wheelSkeletonMarkup();
+        button.disabled = true;
+    }
 
     try {
         const result = await getWheelStatus();
@@ -269,6 +284,7 @@ async function loadWheelStatus() {
         renderWheelInfo();
     } catch (error) {
         console.error(error);
+        if (silent) return;
         region.innerHTML = `<div class="wheel-state-card wheel-error-state">
             <span>!</span><strong>Wheel ma’lumotlari yuklanmadi</strong>
             <small>Internet aloqasini tekshirib, qayta urinib ko‘ring.</small>
@@ -276,6 +292,16 @@ async function loadWheelStatus() {
         </div>`;
         button.disabled = true;
         document.getElementById("wheelSpinHint").textContent = "Hozircha mavjud emas";
+    }
+}
+
+async function refreshWheelState() {
+    if (wheelStateRefreshing) return;
+    wheelStateRefreshing = true;
+    try {
+        await loadWheelStatus({ silent: true });
+    } finally {
+        wheelStateRefreshing = false;
     }
 }
 
@@ -288,8 +314,8 @@ function renderWheelInfo() {
     const lastPrize = normalizeWheelLastWin(wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], null));
 
     region.innerHTML = `<div class="wheel-stats">
-        <article id="wheelFreeCard" class="wheel-timer-card ${cooldown.freeReady ? "is-ready" : "is-cooldown"}"><i>☀️</i><span>Bugungi bepul spin</span><b id="wheelFreeCountdown">${formatWheelCountdown(cooldown.freeAt)}</b><em id="wheelFreeBadge">${cooldown.freeReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
-        <article id="wheelAdCard" class="wheel-timer-card ${cooldown.adReady ? "is-ready" : "is-cooldown"}"><i>▶️</i><span>Reklama orqali</span><b id="wheelAdCountdown">${formatWheelCountdown(cooldown.adAt)}</b><em id="wheelAdBadge">${cooldown.adReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
+        <article id="wheelFreeCard" class="wheel-timer-card ${cooldown.freeReady ? "is-ready" : cooldown.freeCooldown ? "is-cooldown" : ""}"><i>☀️</i><span>Bugungi bepul spin</span><b id="wheelFreeCountdown" ${cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeCooldown ? formatWheelCountdown(cooldown.freeAt) : ""}</b><em id="wheelFreeBadge" ${cooldown.freeReady || cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
+        <article id="wheelAdCard" class="wheel-timer-card ${cooldown.adReady ? "is-ready" : cooldown.adCooldown ? "is-cooldown" : ""}"><i>▶️</i><span>Reklama orqali</span><b id="wheelAdCountdown" ${cooldown.adCooldown ? "" : "hidden"}>${cooldown.adCooldown ? formatWheelCountdown(cooldown.adAt) : ""}</b><em id="wheelAdBadge" ${cooldown.adReady || cooldown.adCooldown ? "" : "hidden"}>${cooldown.adReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
         <article class="wheel-remaining-card"><i>✨</i><span>Qolgan spinlar</span><b>${cooldown.remaining}</b></article>
         <article class="wheel-last-win"><i>${lastPrize.icon}</i><span>Oxirgi yutuq</span><b>${escapeWheelText(lastPrize.label)}</b><small>${escapeWheelText(lastPrize.time)}</small><em>LAST WIN</em></article>
     </div>`;
@@ -307,33 +333,51 @@ function updateWheelCountdowns(now = Date.now()) {
     }
     const previous = wheelCooldownSnapshot;
     const current = wheelCooldownState(wheelData, now);
-    updateWheelTimerCard("Free", current.freeReady, current.freeAt, now);
-    updateWheelTimerCard("Ad", current.adReady, current.adAt, now);
+    updateWheelTimerCard("Free", current.freeReady, current.freeCooldown, current.freeAt, now);
+    updateWheelTimerCard("Ad", current.adReady, current.adCooldown, current.adAt, now);
     const button = document.getElementById("wheelSpinButton");
     const hint = document.getElementById("wheelSpinHint");
     if (button) {
         button.disabled = wheelSpinning || !current.canSpin;
         button.classList.toggle("is-ready", current.canSpin && !wheelSpinning);
+        if (!wheelSpinning && current.canSpin) button.querySelector("b").textContent = "Aylantirish";
     }
     if (hint) hint.textContent = wheelNextSpinHint(current, now);
     if (previous && ((!previous.freeReady && current.freeReady) || (!previous.adReady && current.adReady))) {
         button?.classList.add("just-ready");
         setTimeout(() => button?.classList.remove("just-ready"), 1400);
     }
+    maybeRefreshWheelAtExpiry(current, now);
     wheelCooldownSnapshot = current;
 }
 
-function updateWheelTimerCard(kind, ready, deadline, now) {
+function updateWheelTimerCard(kind, ready, cooldown, deadline, now) {
     const card = document.getElementById(`wheel${kind}Card`);
     const countdown = document.getElementById(`wheel${kind}Countdown`);
     const badge = document.getElementById(`wheel${kind}Badge`);
     if (!card || !countdown || !badge) return;
     const wasReady = card.classList.contains("is-ready");
     card.classList.toggle("is-ready", ready);
-    card.classList.toggle("is-cooldown", !ready);
+    card.classList.toggle("is-cooldown", cooldown);
     if (ready && !wasReady) card.classList.add("just-ready");
-    countdown.textContent = formatWheelCountdown(deadline, now);
-    badge.textContent = ready ? "🟢 READY" : "🟡 COOLDOWN";
+    countdown.hidden = !cooldown;
+    countdown.textContent = cooldown ? formatWheelCountdown(deadline, now) : "";
+    badge.hidden = !ready && !cooldown;
+    badge.textContent = ready ? "🟢 READY" : cooldown ? "🟡 COOLDOWN" : "";
+}
+
+function wheelExpiredRefreshKey(state, now = Date.now()) {
+    return [
+        state.freeAt && state.freeAt <= now && state.freeSpins <= 0 ? `free:${state.freeAt}` : null,
+        state.adAt && state.adAt <= now && state.adSpins <= 0 ? `ad:${state.adAt}` : null,
+    ].filter(Boolean).join("|") || null;
+}
+
+function maybeRefreshWheelAtExpiry(state, now = Date.now()) {
+    const key = wheelExpiredRefreshKey(state, now);
+    if (!key || key === wheelLastExpiryRefreshKey) return;
+    wheelLastExpiryRefreshKey = key;
+    refreshWheelState();
 }
 
 function wheelNextSpinHint(state, now = Date.now()) {
@@ -660,10 +704,12 @@ if (typeof module !== "undefined") {
         WHEEL_PRIZES,
         WHEEL_DEMO_REWARDS,
         wheelStatusValue,
+        wheelStatusFlag,
         wheelTimestamp,
         wheelCooldownState,
         formatWheelCountdown,
         wheelNextSpinHint,
+        wheelExpiredRefreshKey,
         wheelTargetRotation,
         normalizeWheelReward,
         normalizeWheelLastWin,
