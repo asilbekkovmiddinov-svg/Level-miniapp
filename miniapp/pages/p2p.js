@@ -1,4 +1,19 @@
 let p2pOrders = [];
+const p2pAvatarHelpers = typeof module !== "undefined" && module.exports
+    ? require("../components/user-avatar.js")
+    : null;
+
+function p2pBackendUser(source, prefix) {
+    return p2pAvatarHelpers
+        ? p2pAvatarHelpers.normalizeBackendUser(source, prefix)
+        : normalizeBackendUser(source, prefix);
+}
+
+function p2pAvatar(user, options) {
+    return p2pAvatarHelpers
+        ? p2pAvatarHelpers.userAvatarComponent(user, options)
+        : userAvatarComponent(user, options);
+}
 let currentP2PType = "SELL";
 let p2pCreatePending = false;
 let p2pTradePending = false;
@@ -69,20 +84,11 @@ function renderP2POrders() {
     }
 
     list.innerHTML = p2pOrders.map((order) => {
+        const owner = p2pBackendUser(order, "owner");
         return `
             <div class="list-card">
-                <div class="profile-hero" style="margin-bottom:12px;">
-                    <div class="avatar">LG</div>
-                    <div>
-                        <h3>Order #${order.id}</h3>
-                        <p class="${order.owner_is_online ? "green" : "gray"}">
-                            ${order.owner_online_text || "⚪ Offline"}
-                        </p>
-                        <small class="gray">
-                            ${order.owner_last_seen_text || "Noma’lum"}
-                        </small>
-                    </div>
-                </div>
+                <div class="p2p-order-owner">${p2pAvatar(owner, { size: "lg", showInfo: true })}
+                    <span class="p2p-order-id">Order #${Number(order.id)}</span></div>
 
                 <p>📌 Tur: <b>${order.order_type}</b></p>
                 <p>🪙 Qolgan EFC: <b>${formatNumber(order.remaining_efc)}</b></p>
@@ -309,16 +315,28 @@ function p2pTradeCounterparty(trade, role = p2pTradeRole(trade)) {
         : trade.owner_display_name || trade.owner_username || `User ${trade.owner_id || "—"}`;
 }
 
+function p2pTradeParticipants(trade) {
+    const buyerPrefix = String(trade?.order_type).toUpperCase() === "BUY" ? "owner" : "requester";
+    const sellerPrefix = buyerPrefix === "owner" ? "requester" : "owner";
+    return {
+        buyer: p2pBackendUser(trade, buyerPrefix),
+        seller: p2pBackendUser(trade, sellerPrefix),
+    };
+}
+
 function renderP2PTradeDetails(trade) {
     p2pTradeDetail = trade;
     const page = document.getElementById("p2pPage");
     const status = p2pTradeStatus(trade);
     const actions = p2pTradeLifecycleActions(trade);
     const deadline = p2pTradeDeadline(trade);
+    const participants = p2pTradeParticipants(trade);
     page.innerHTML = `<section class="p2p-detail-v2">
         <header><button type="button" onclick="closeP2PTradeDetails()">←</button><div><small>TRADE #${Number(trade.id || trade.trade_id)}</small>
             <h2>P2P Trade Details</h2></div><button type="button" onclick="refreshP2PTradeDetails()">↻</button></header>
         <div class="p2p-detail-status"><span>${status}</span><b id="p2pTradeCountdown">${deadline ? "—:—" : "Deadline yo‘q"}</b></div>
+        <div class="p2p-trade-participants"><article><small>BUYER</small>${p2pAvatar(participants.buyer, { size: "lg", showInfo: true })}</article>
+            <i>⇄</i><article><small>SELLER</small>${p2pAvatar(participants.seller, { size: "lg", showInfo: true })}</article></div>
         <div class="p2p-detail-grid"><span>Tur</span><b>${String(trade.order_type || "—").toUpperCase()}</b>
             <span>EFC miqdori</span><b>${formatNumber(trade.efc_amount)} EFC</b>
             <span>UZS summa</span><b>${formatNumber(trade.total_uzs)} UZS</b>
@@ -592,5 +610,6 @@ if (typeof module !== "undefined" && module.exports) {
         p2pTradeDeadline,
         p2pTradeLifecycleActions,
         p2pTradeStage,
+        p2pTradeParticipants,
     };
 }
