@@ -1,12 +1,14 @@
 const WHEEL_PRIZES = [
-    { label: "5 EFC", tone: "#7c3aed" },
-    { label: "10 EFC", tone: "#db2777" },
-    { label: "20 EFC", tone: "#dc2626" },
-    { label: "Yana spin", tone: "#ea580c" },
-    { label: "50 EFC", tone: "#ca8a04" },
-    { label: "Omad", tone: "#059669" },
-    { label: "100 EFC", tone: "#0284c7" },
-    { label: "25 EFC", tone: "#4f46e5" },
+    { label: "Omad kelmadi", icon: "✦", tone: "#34313b" },
+    { label: "50 EFC", icon: "💰", tone: "#991b1b" },
+    { label: "100 EFC", icon: "💰", tone: "#4c1d95" },
+    { label: "500 UZS", icon: "💵", tone: "#166534" },
+    { label: "250 EFC", icon: "💎", tone: "#9f1239" },
+    { label: "500 EFC", icon: "💎", tone: "#4338ca" },
+    { label: "1000 UZS", icon: "💵", tone: "#047857" },
+    { label: "5000 UZS", icon: "💵", tone: "#0f766e" },
+    { label: "130 Coin", icon: "🪙", tone: "#b45309" },
+    { label: "2000 Coin", icon: "👑", tone: "#7e22ce" },
 ];
 
 const WHEEL_DEMO_REWARDS = [
@@ -83,7 +85,7 @@ function normalizeWheelReward(payload) {
 function wheelPrizeMarkup() {
     return WHEEL_PRIZES.map((prize, index) => {
         const angle = index * (360 / WHEEL_PRIZES.length) + 360 / WHEEL_PRIZES.length / 2;
-        return `<span class="wheel-prize" style="--prize-angle:${angle}deg"><b>${prize.label}</b></span>`;
+        return `<span class="wheel-prize" style="--prize-angle:${angle}deg"><em>${prize.icon}</em><b>${prize.label}</b></span>`;
     }).join("");
 }
 
@@ -95,7 +97,8 @@ function wheelPageMarkup() {
     }).join(",");
 
     return `
-        <div class="premium-wheel" style="--wheel-gradient:conic-gradient(from -22.5deg,${gradient})">
+        <div class="premium-wheel premium-wheel-visual" style="--wheel-gradient:conic-gradient(from -18deg,${gradient})">
+            <div class="wheel-premium-bg" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
             <header class="wheel-hero">
                 <span class="wheel-kicker">LEVEL BONUS</span>
                 <h2>Omad g‘ildiragi</h2>
@@ -103,11 +106,13 @@ function wheelPageMarkup() {
             </header>
 
             <section class="wheel-stage" aria-label="Omad g‘ildiragi">
+                <div class="wheel-light-rays" aria-hidden="true"></div>
                 <div class="wheel-aura"></div>
-                <div class="wheel-pointer" aria-hidden="true"><i></i></div>
+                <div id="wheelPointer" class="wheel-pointer" aria-hidden="true"><i></i></div>
                 <div id="premiumWheelDisc" class="premium-wheel-disc">
-                    <div class="wheel-sectors">${wheelPrizeMarkup()}</div>
-                    <div class="wheel-hub"><span>LG</span><small>WHEEL</small></div>
+                    <div class="wheel-metal-ring" aria-hidden="true"></div>
+                    <div class="wheel-sectors">${wheelPrizeMarkup()}<i class="wheel-glass-reflection"></i></div>
+                    <div class="wheel-hub"><i></i><span>LG</span><small>PREMIUM</small></div>
                 </div>
             </section>
 
@@ -116,6 +121,7 @@ function wheelPageMarkup() {
             </div>
 
             <button id="wheelSpinButton" class="wheel-spin-button" type="button" disabled>
+                <i class="wheel-button-ripple" aria-hidden="true"></i>
                 <span class="wheel-spin-icon">✦</span>
                 <b>Aylantirish</b>
                 <small id="wheelSpinHint">Ma’lumot yuklanmoqda</small>
@@ -128,6 +134,10 @@ function wheelPageMarkup() {
             <div id="wheelConfetti" class="wheel-confetti" aria-hidden="true">
                 ${Array.from({ length: 16 }, (_, index) => `<i style="--confetti-index:${index}"></i>`).join("")}
             </div>
+            <div class="wheel-reward-particles" aria-hidden="true">
+                ${Array.from({ length: 12 }, (_, index) => `<i style="--particle-index:${index}"></i>`).join("")}
+            </div>
+            <div class="wheel-reward-flash" aria-hidden="true"></div>
             <section id="wheelResultCard" class="wheel-result-card" role="dialog" aria-modal="true" aria-labelledby="wheelResultTitle">
                 <div id="wheelResultIcon" class="wheel-result-burst">🎉</div>
                 <span id="wheelResultKicker">OMAD SIZ TOMONDA</span>
@@ -220,17 +230,45 @@ function renderWheelInfo() {
     const freeSpins = Number(wheelStatusValue(wheelData, ["free_spins", "daily_free_spins"]));
     const adSpins = Number(wheelStatusValue(wheelData, ["ad_spins", "rewarded_spins"]));
     const remaining = Number(wheelStatusValue(wheelData, ["remaining_spins", "spins_left"], freeSpins + adSpins));
-    const lastPrize = wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], "Hali yo‘q");
+    const lastPrize = normalizeWheelLastWin(wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], null));
 
     region.innerHTML = `<div class="wheel-stats">
         <article><i>☀</i><span>Bugungi bepul spin</span><b>${freeSpins}</b></article>
         <article><i>▶</i><span>Reklama orqali</span><b>${adSpins}</b></article>
         <article><i>✦</i><span>Qolgan spinlar</span><b>${remaining}</b></article>
-        <article><i>🏆</i><span>Oxirgi yutuq</span><b>${String(lastPrize)}</b></article>
+        <article class="wheel-last-win"><i>${lastPrize.icon}</i><span>Oxirgi yutuq</span><b>${escapeWheelText(lastPrize.label)}</b><small>${escapeWheelText(lastPrize.time)}</small><em>LAST WIN</em></article>
     </div>`;
 
     button.disabled = wheelSpinning;
-    document.getElementById("wheelSpinHint").textContent = "Demo spin";
+    document.getElementById("wheelSpinHint").textContent = "Omadingizni sinang";
+}
+
+function normalizeWheelLastWin(value) {
+    if (!value) return { icon: "✦", label: "Hali yo‘q", time: "—" };
+    if (typeof value === "string" || typeof value === "number") {
+        return { icon: "🏆", label: String(value), time: "Yaqinda" };
+    }
+    const reward = normalizeWheelReward(value);
+    return {
+        icon: reward.icon,
+        label: reward.label,
+        time: wheelRelativeTime(value.won_at || value.created_at || value.timestamp),
+    };
+}
+
+function wheelRelativeTime(value, now = Date.now()) {
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp)) return "Yaqinda";
+    const minutes = Math.max(0, Math.floor((now - timestamp) / 60000));
+    if (minutes < 1) return "Hozirgina";
+    if (minutes < 60) return `${minutes} daqiqa oldin`;
+    const hours = Math.floor(minutes / 60);
+    return hours < 24 ? `${hours} soat oldin` : `${Math.floor(hours / 24)} kun oldin`;
+}
+
+function wheelSoundCue(type, detail = {}) {
+    if (!["spin", "tick", "reward", "jackpot"].includes(type)) return;
+    globalThis.dispatchEvent?.(new CustomEvent("levelgroup:wheel-sound", { detail: { type, ...detail } }));
 }
 
 async function spinFreeWheel() {
@@ -244,6 +282,8 @@ async function spinFreeWheel() {
     button.classList.add("is-loading");
     button.querySelector("b").textContent = "Aylanmoqda";
     document.getElementById("wheelSpinHint").textContent = "Natija aniqlanmoqda";
+    document.getElementById("wheelPointer")?.classList.remove("did-land");
+    wheelSoundCue("spin");
 
     const resultIndex = Math.floor(Math.random() * WHEEL_PRIZES.length);
     const turns = 4 + Math.floor(Math.random() * 5);
@@ -264,13 +304,20 @@ function finishWheelSpin(resultIndex, backendResult) {
     const button = document.getElementById("wheelSpinButton");
     wheelSpinning = false;
     disc?.classList.remove("is-spinning");
+    disc?.classList.add("did-land");
+    const pointer = document.getElementById("wheelPointer");
+    pointer?.classList.add("did-land");
+    setTimeout(() => {
+        pointer?.classList.remove("did-land");
+        disc?.classList.remove("did-land");
+    }, 720);
     if (button) {
         button.disabled = false;
         button.classList.remove("is-loading");
         button.querySelector("b").textContent = "Yana aylantirish";
     }
     const hint = document.getElementById("wheelSpinHint");
-    if (hint) hint.textContent = "Demo spin";
+    if (hint) hint.textContent = "Yana bir imkoniyat";
     openWheelResult(backendResult || { type: "EFC", amount: Number.parseFloat(WHEEL_PRIZES[resultIndex]?.label) || 0 });
 }
 
@@ -288,6 +335,7 @@ function openWheelResult(backendResult) {
 
     modal.classList.toggle("is-large-reward", reward.isLarge);
     modal.classList.toggle("is-empty-reward", reward.empty);
+    modal.classList.toggle("is-coin-reward", reward.isCoin);
     card?.classList.toggle("is-coin-reward", reward.isCoin);
     document.getElementById("wheelResultIcon").textContent = reward.icon;
     document.getElementById("wheelResultKicker").textContent = reward.empty ? "KEYINGI SAFAR OMAD" : "SOVRIN QO‘LGA KIRITILDI";
@@ -298,6 +346,7 @@ function openWheelResult(backendResult) {
     credit.hidden = !reward.credited;
     coinButton.hidden = !reward.isCoin;
     modal.hidden = false;
+    wheelSoundCue(reward.isLarge ? "jackpot" : "reward", { rewardType: reward.type });
     requestAnimationFrame(() => modal.classList.add("is-open"));
 }
 
@@ -509,6 +558,9 @@ if (typeof module !== "undefined") {
         wheelStatusValue,
         wheelTargetRotation,
         normalizeWheelReward,
+        normalizeWheelLastWin,
+        wheelRelativeTime,
+        wheelSoundCue,
         createWheelWizardState,
         validateWheelWizardStep,
         wheelWizardStepMarkup,
