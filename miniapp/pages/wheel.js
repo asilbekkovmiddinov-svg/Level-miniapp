@@ -503,6 +503,32 @@ function wheelSpinType(state, source = {}) {
     throw new Error("Spin mavjud emas.");
 }
 
+function wheelVisualDebugTrace(disc, backendResult, expectedIndex, targetRotation) {
+    const computedTransform = disc ? getComputedStyle(disc).transform : "none";
+    const matrix = computedTransform === "none" ? null : new DOMMatrixReadOnly(computedTransform);
+    const computedRotation = matrix
+        ? (Math.atan2(matrix.b, matrix.a) * 180 / Math.PI + 360) % 360
+        : ((Number(targetRotation) % 360) + 360) % 360;
+    const sectorAngle = 360 / WHEEL_PRIZES.length;
+    const pointerSectorIndex = Math.round(((360 - computedRotation) % 360) / sectorAngle) % WHEEL_PRIZES.length;
+    const source = backendResult?.data?.reward || backendResult?.reward || backendResult?.data || backendResult || {};
+
+    console.log("[WHEEL_VISUAL_DEBUG]", {
+        backend_reward_type: source.reward_type ?? source.type ?? source.currency ?? null,
+        backend_reward_amount: source.reward_amount ?? source.amount ?? source.value ?? null,
+        reward_code: source.reward_code ?? backendResult?.reward_code ?? null,
+        wheelSectorIndexForReward: expectedIndex,
+        targetRotation,
+        finalRotation: computedRotation,
+        wheelStyleTransform: disc?.style.transform || "",
+        wheelRotationProperty: disc?.style.getPropertyValue("--wheel-rotation") || "",
+        computedTransform,
+        pointerSectorIndex,
+        pointerSectorLabel: WHEEL_PRIZES[pointerSectorIndex]?.label ?? null,
+        modalRewardLabel: normalizeWheelReward(backendResult).label,
+    });
+}
+
 function finishWheelSpin(resultIndex, backendResult) {
     const disc = document.getElementById("premiumWheelDisc");
     const button = document.getElementById("wheelSpinButton");
@@ -511,6 +537,7 @@ function finishWheelSpin(resultIndex, backendResult) {
     disc?.classList.add("did-land");
     const pointer = document.getElementById("wheelPointer");
     pointer?.classList.add("did-land");
+    wheelVisualDebugTrace(disc, backendResult, resultIndex, wheelRotation);
     setTimeout(() => {
         pointer?.classList.remove("did-land");
         disc?.classList.remove("did-land");
