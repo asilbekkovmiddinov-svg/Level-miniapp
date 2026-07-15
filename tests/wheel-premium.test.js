@@ -16,7 +16,6 @@ const {
     normalizeWheelDegrees,
     wheelFinalRotationForSector,
     wheelSectorIndexFromRotation,
-    wheelTransformValue,
     wheelTargetRotation,
     normalizeWheelReward,
     wheelSectorIndexForReward,
@@ -26,6 +25,8 @@ const {
     createWheelWizardState,
     validateWheelWizardStep,
     wheelWizardStepMarkup,
+    wheelSectorSvgMarkup,
+    wheelDiscMarkup,
     wheelPageMarkup,
 } = require("../miniapp/pages/wheel.js");
 
@@ -40,48 +41,68 @@ test("premium wheel exposes production sectors and backend-ready target rotation
     assert.equal((rotation % 360 + 360) % 360, 252);
 });
 
-test("all 10 rewards land at the pointer center", () => {
-    const sectorAngle = 360 / WHEEL_PRIZES.length;
-    const markup = wheelPageMarkup();
-    const labelAngles = [...markup.matchAll(/--prize-angle:([\d.]+)deg/g)].map((match) => Number(match[1]));
-
-    assert.equal(labelAngles.length, 10);
+test("SVG renders exactly one centered wedge and label per reward", () => {
+    const svg = wheelSectorSvgMarkup();
+    const groups = [...svg.matchAll(/data-sector-index="(\d+)" transform="rotate\(([\d.]+) 100 100\)"/g)];
+    assert.equal(groups.length, 10);
     WHEEL_PRIZES.forEach((prize, index) => {
-        const expectedCenter = index * sectorAngle;
-        const rotation = wheelTargetRotation(index, 0, 6);
-        const landedCenter = (expectedCenter + rotation) % 360;
-        assert.equal(labelAngles[index], expectedCenter, `${prize.label} label markazda emas`);
-        assert.equal(landedCenter, 0, `${prize.label} pointer markaziga tushmadi`);
+        assert.equal(Number(groups[index][1]), index);
+        assert.equal(Number(groups[index][2]), index * 36);
+        assert.ok(svg.includes(prize.label));
     });
+    assert.match(wheelDiscMarkup(), /viewBox="0 0 200 200"/);
 });
 
-test("all 10 final transforms normalize to the backend reward sector", () => {
-    WHEEL_PRIZES.forEach((prize, index) => {
-        const animated = wheelTargetRotation(index, 317.25, 8);
-        const finalRotation = wheelFinalRotationForSector(index);
-        const transform = wheelTransformValue(finalRotation);
+test("SVG pointer tip and sector center share the exact same coordinate", () => {
+    const markup = wheelDiscMarkup();
+    assert.match(markup, /viewBox="0 0 200 200"/);
+    assert.match(markup, /id="premiumWheelDisc" class="wheel-v2-rotor"/);
+    assert.match(markup, /id="wheelPointer" class="wheel-v2-pointer"/);
+    assert.match(markup, /M91 0 H109 L100 10 Z/);
+    assert.match(wheelSectorSvgMarkup(), /M100 100 L72\.188 14\.405 A90 90 0 0 1 127\.812 14\.405 Z/);
+    assert.doesNotMatch(markup, /calc\(|wheel-light-rays|wheel-premium-bg|wheel-aura/);
 
-        assert.ok(animated > 317.25, `${prize.label} animation oldinga yurmayapti`);
-        assert.ok(finalRotation >= 0 && finalRotation < 360, `${prize.label} final rotation normalize qilinmagan`);
-        assert.equal(wheelSectorIndexFromRotation(finalRotation), index, `${prize.label} pointer sektori modalga mos emas`);
-        assert.equal(wheelSectorIndexFromRotation(finalRotation + 1e-10), index, `${prize.label} positive float drift bilan almashdi`);
-        assert.equal(wheelSectorIndexFromRotation(finalRotation - 1e-10), index, `${prize.label} negative float drift bilan almashdi`);
-        assert.equal(transform, `translateZ(0) rotate(${finalRotation}deg)`);
+    const centerX = 100;
+    const centerY = 100;
+    const radius = 90;
+    const sectorCenter = [centerX, centerY - radius];
+    const pointerTip = [100, 10];
+    assert.deepEqual(pointerTip, sectorCenter);
+});
+
+test("responsive wheel scales one SVG without pointer offsets", () => {
+    const css = fs.readFileSync(path.join(__dirname, "../miniapp/style.css"), "utf8");
+    const rewriteCss = css.slice(css.indexOf("/* Wheel V2 visual rewrite:"));
+    [340, 380, 410, 450].forEach((breakpoint) => assert.match(rewriteCss, new RegExp(String(breakpoint))));
+    assert.doesNotMatch(rewriteCss, /top:|left:|calc\(|translateX|position:absolute/);
+    assert.doesNotMatch(css, /wheel-light-rays|repeating-conic-gradient|wheel-premium-bg|wheel-aura/);
+});
+
+test("all 10 backend rewards share one sector, rotation and pointer value", () => {
+    WHEEL_PRIZES.forEach((prize, index) => {
+        const payload = { reward_type: prize.type, reward_amount: prize.amount };
+        const sectorIndex = wheelSectorIndexForReward(payload);
+        const animatedRotation = wheelTargetRotation(sectorIndex, 317.25, 8);
+        const finalRotation = wheelFinalRotationForSector(sectorIndex);
+        assert.equal(sectorIndex, index, `${prize.label}: reward mapping`);
+        assert.ok(animatedRotation > 317.25, `${prize.label}: forward animation`);
+        assert.equal(wheelSectorIndexFromRotation(finalRotation), index, `${prize.label}: pointer sector`);
+        assert.equal(wheelSectorIndexFromRotation(finalRotation + 1e-10), index, `${prize.label}: positive drift`);
+        assert.equal(wheelSectorIndexFromRotation(finalRotation - 1e-10), index, `${prize.label}: negative drift`);
     });
     assert.equal(normalizeWheelDegrees(360), 0);
     assert.equal(normalizeWheelDegrees(-36), 324);
 });
 
-test("spin completion waits for transform transition and snaps before modal", () => {
+test("transitionend is the only spin finish event and modal opens after settle", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
-    assert.match(source, /addEventListener\("transitionend", handleTransitionEnd\)/);
-    assert.match(source, /event\.propertyName === "transform"/);
-    assert.match(source, /wheelRotation = wheelFinalRotationForSector\(resultIndex\)/);
-    assert.match(source, /disc\.style\.transform = wheelTransformValue\(wheelRotation\)/);
-    assert.ok(
-        source.indexOf("wheelRotation = wheelFinalRotationForSector(resultIndex)") < source.indexOf("openWheelResult(backendResult)"),
-        "modal final visual snapdan oldin ochilmoqda",
-    );
+    const spinStart = source.indexOf("async function spinFreeWheel()");
+    const spinEnd = source.indexOf("function wheelSpinType", spinStart);
+    const spinSource = source.slice(spinStart, spinEnd);
+    assert.match(spinSource, /addEventListener\("transitionend", finishWheelSpin, \{ once: true \}\)/);
+    assert.doesNotMatch(spinSource, /setTimeout|wheelResultTimer/);
+    assert.match(source, /event\.propertyName !== "transform"/);
+    assert.ok(source.indexOf("settleWheelVisualSpin(disc)") < source.indexOf("openWheelResult(backendResult)"));
 });
 
 test("daily and ad timers use backend deadlines with 24h/1h timestamp fallbacks", () => {
@@ -266,16 +287,19 @@ test("wheel animation is transform-only and supports reduced motion", () => {
     assert.match(css, /wheel-confetti-fall/);
     assert.doesNotMatch(source, /Math\.random|WHEEL_DEMO_REWARDS/);
     assert.match(source, /spinProductionWheel\(spinType\)/);
-    assert.match(source, /wheelSpinning/);
+    assert.match(source, /wheelSpinState\.spinning/);
+    assert.doesNotMatch(source, /wheelResultTimer|wheelTransformValue|--wheel-rotation/);
 });
 
 test("visual release includes metal, glass, pointer landing and reward effects", () => {
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/style.css"), "utf8");
     const markup = wheelPageMarkup();
-    assert.match(markup, /wheel-metal-ring/);
-    assert.match(markup, /wheel-glass-reflection/);
+    assert.match(markup, /wheel-v2-disc/);
+    assert.match(markup, /wheel-v2-svg/);
+    assert.match(markup, /wheel-v2-pointer/);
+    assert.doesNotMatch(markup, /wheel-metal-ring|wheel-glass-reflection|wheel-sectors/);
     assert.match(markup, /wheel-reward-particles/);
-    assert.match(css, /wheel-pointer-bounce/);
+    assert.match(css, /wheel-v2-pointer-land/);
     assert.match(css, /wheel-gold-flash/);
     assert.match(css, /wheel-sparkle/);
 });

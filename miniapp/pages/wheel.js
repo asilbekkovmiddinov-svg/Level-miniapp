@@ -12,9 +12,12 @@ const WHEEL_PRIZES = [
 ];
 
 let wheelData = null;
-let wheelRotation = 0;
-let wheelSpinning = false;
-let wheelResultTimer = null;
+let wheelSpinState = {
+    rotation: 0,
+    sectorIndex: null,
+    backendResult: null,
+    spinning: false,
+};
 let wheelActiveReward = null;
 let wheelCoinWizard = null;
 let wheelCoinSubmitting = false;
@@ -136,22 +139,41 @@ function wheelFinalRotationForSector(index, sectors = WHEEL_PRIZES.length) {
 }
 
 function wheelSectorIndexFromRotation(rotation, sectors = WHEEL_PRIZES.length) {
-    const sectorAngle = 360 / sectors;
-    const centerIndex = normalizeWheelDegrees(360 - normalizeWheelDegrees(rotation)) / sectorAngle;
-    return Math.round(centerIndex + Number.EPSILON * sectors) % sectors;
-}
-
-function wheelTransformValue(rotation) {
-    return `translateZ(0) rotate(${Number(rotation)}deg)`;
+    return Math.round(normalizeWheelDegrees(360 - normalizeWheelDegrees(rotation)) / (360 / sectors)) % sectors;
 }
 
 function wheelTargetRotation(index, currentRotation = 0, turns = 6, sectors = WHEEL_PRIZES.length) {
-    const targetAtPointer = wheelFinalRotationForSector(index, sectors);
     const current = Number.isFinite(Number(currentRotation)) ? Number(currentRotation) : 0;
-    const completedTurns = Math.floor(current / 360) * 360;
-    let target = completedTurns + Math.max(0, Number(turns) || 0) * 360 + targetAtPointer;
+    const targetAtPointer = wheelFinalRotationForSector(index, sectors);
+    let target = Math.floor(current / 360) * 360 + Math.max(1, Number(turns) || 1) * 360 + targetAtPointer;
     while (target <= current) target += 360;
     return target;
+}
+
+function setWheelRotation(disc, rotation) {
+    wheelSpinState.rotation = Number(rotation);
+    disc.dataset.rotation = String(wheelSpinState.rotation);
+    disc.style.transform = `rotate(${wheelSpinState.rotation}deg)`;
+}
+
+function beginWheelVisualSpin(disc, sectorIndex, backendResult, turns) {
+    wheelSpinState = {
+        rotation: wheelTargetRotation(sectorIndex, wheelSpinState.rotation, turns),
+        sectorIndex,
+        backendResult,
+        spinning: true,
+    };
+    disc.classList.add("is-spinning");
+    void disc.offsetWidth;
+    setWheelRotation(disc, wheelSpinState.rotation);
+}
+
+function settleWheelVisualSpin(disc) {
+    disc.classList.remove("is-spinning");
+    setWheelRotation(disc, wheelFinalRotationForSector(wheelSpinState.sectorIndex));
+    void disc.offsetWidth;
+    wheelSpinState.spinning = false;
+    return wheelSectorIndexFromRotation(wheelSpinState.rotation);
 }
 
 function normalizeWheelReward(payload) {
@@ -195,35 +217,42 @@ function wheelSectorIndexForReward(payload) {
 }
 
 function applyWheelBackendSector(payload) {
-    const reward = normalizeWheelReward(payload);
-    const index = wheelSectorIndexForReward(payload);
-    const sector = document.querySelectorAll("#premiumWheelDisc .wheel-prize")[index];
-    if (sector) {
-        const icon = sector.querySelector("em");
-        const label = sector.querySelector("b");
-        if (icon) icon.textContent = reward.icon;
-        if (label) label.textContent = reward.label;
-    }
-    return index;
+    return wheelSectorIndexForReward(payload);
 }
 
-function wheelPrizeMarkup() {
+function wheelSectorSvgMarkup() {
+    const sectorPath = "M100 100 L72.188 14.405 A90 90 0 0 1 127.812 14.405 Z";
     return WHEEL_PRIZES.map((prize, index) => {
         const angle = index * (360 / WHEEL_PRIZES.length);
-        return `<span class="wheel-prize" style="--prize-angle:${angle}deg"><em>${prize.icon}</em><b>${prize.label}</b></span>`;
+        return `<g class="wheel-v2-sector" data-sector-index="${index}" transform="rotate(${angle} 100 100)">
+            <path d="${sectorPath}" fill="${prize.tone}"></path>
+            <text class="wheel-v2-icon" x="100" y="29" text-anchor="middle">${prize.icon}</text>
+            <text class="wheel-v2-label" x="100" y="42" text-anchor="middle">${escapeWheelText(prize.label)}</text>
+        </g>`;
     }).join("");
 }
 
-function wheelPageMarkup() {
-    const gradient = WHEEL_PRIZES.map((prize, index) => {
-        const start = index * (360 / WHEEL_PRIZES.length);
-        const end = (index + 1) * (360 / WHEEL_PRIZES.length);
-        return `${prize.tone} ${start}deg ${end}deg`;
-    }).join(",");
+function wheelDiscMarkup() {
+    return `<div class="wheel-v2-disc">
+        <svg class="wheel-v2-svg" viewBox="0 0 200 200" role="img" aria-label="Omad g‘ildiragi">
+            <g id="premiumWheelDisc" class="wheel-v2-rotor" data-rotation="0">
+                <circle cx="100" cy="100" r="96" class="wheel-v2-rim"></circle>
+                <g class="wheel-v2-sectors">${wheelSectorSvgMarkup()}</g>
+                <circle cx="100" cy="100" r="24" class="wheel-v2-hub-ring"></circle>
+                <circle cx="100" cy="100" r="18" class="wheel-v2-hub"></circle>
+                <text x="100" y="104" text-anchor="middle" class="wheel-v2-logo">LG</text>
+            </g>
+            <g id="wheelPointer" class="wheel-v2-pointer" aria-hidden="true">
+                <path d="M91 0 H109 L100 10 Z"></path>
+                <circle cx="100" cy="3.5" r="3"></circle>
+            </g>
+        </svg>
+    </div>`;
+}
 
+function wheelPageMarkup() {
     return `
-        <div class="premium-wheel premium-wheel-visual" style="--wheel-gradient:conic-gradient(from -18deg,${gradient})">
-            <div class="wheel-premium-bg" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="premium-wheel premium-wheel-visual wheel-v2">
             <header class="wheel-hero">
                 <span class="wheel-kicker">LEVEL BONUS</span>
                 <h2>Omad g‘ildiragi</h2>
@@ -231,14 +260,7 @@ function wheelPageMarkup() {
             </header>
 
             <section class="wheel-stage" aria-label="Omad g‘ildiragi">
-                <div class="wheel-light-rays" aria-hidden="true"></div>
-                <div class="wheel-aura"></div>
-                <div id="wheelPointer" class="wheel-pointer" aria-hidden="true"><i></i></div>
-                <div id="premiumWheelDisc" class="premium-wheel-disc">
-                    <div class="wheel-metal-ring" aria-hidden="true"></div>
-                    <div class="wheel-sectors">${wheelPrizeMarkup()}<i class="wheel-glass-reflection"></i></div>
-                    <div class="wheel-hub"><i></i><span>LG</span><small>PREMIUM</small></div>
-                </div>
+                ${wheelDiscMarkup()}
             </section>
 
             <div id="wheelStatusRegion" class="wheel-status-region" aria-live="polite">
@@ -398,9 +420,9 @@ function updateWheelCountdowns(now = Date.now()) {
     const button = document.getElementById("wheelSpinButton");
     const hint = document.getElementById("wheelSpinHint");
     if (button) {
-        button.disabled = wheelSpinning || !current.canSpin;
-        button.classList.toggle("is-ready", current.canSpin && !wheelSpinning);
-        if (!wheelSpinning && current.canSpin) button.querySelector("b").textContent = "Aylantirish";
+        button.disabled = wheelSpinState.spinning || !current.canSpin;
+        button.classList.toggle("is-ready", current.canSpin && !wheelSpinState.spinning);
+        if (!wheelSpinState.spinning && current.canSpin) button.querySelector("b").textContent = "Aylantirish";
     }
     if (hint) hint.textContent = wheelNextSpinHint(current, now);
     if (previous && ((!previous.freeReady && current.freeReady) || (!previous.adReady && current.adReady))) {
@@ -480,12 +502,12 @@ function wheelSoundCue(type, detail = {}) {
 }
 
 async function spinFreeWheel() {
-    if (wheelSpinning) return;
+    if (wheelSpinState.spinning) return;
     const disc = document.getElementById("premiumWheelDisc");
     const button = document.getElementById("wheelSpinButton");
     if (!disc || !button) return;
 
-    wheelSpinning = true;
+    wheelSpinState.spinning = true;
     button.disabled = true;
     button.classList.add("is-loading");
     button.querySelector("b").textContent = "Aylanmoqda";
@@ -500,28 +522,10 @@ async function spinFreeWheel() {
         wheelLastBackendResult = backendResult;
         const resultIndex = applyWheelBackendSector(backendResult);
         const turns = 6 + (Math.abs(Number(backendResult.global_spin_number) || 0) % 3);
-        wheelRotation = wheelTargetRotation(resultIndex, wheelRotation, turns);
-        disc.classList.add("is-spinning");
-        void disc.offsetWidth;
-        disc.style.setProperty("--wheel-rotation", `${wheelRotation}deg`);
-        disc.style.transform = wheelTransformValue(wheelRotation);
-
-        let finished = false;
-        const finishOnce = () => {
-            if (finished) return;
-            finished = true;
-            clearTimeout(wheelResultTimer);
-            disc.removeEventListener("transitionend", handleTransitionEnd);
-            finishWheelSpin(resultIndex, backendResult);
-        };
-        const handleTransitionEnd = (event) => {
-            if (event.target === disc && event.propertyName === "transform") finishOnce();
-        };
-        disc.addEventListener("transitionend", handleTransitionEnd);
-        clearTimeout(wheelResultTimer);
-        wheelResultTimer = setTimeout(finishOnce, 5200);
+        beginWheelVisualSpin(disc, resultIndex, backendResult, turns);
+        disc.addEventListener("transitionend", finishWheelSpin, { once: true });
     } catch (error) {
-        wheelSpinning = false;
+        wheelSpinState.spinning = false;
         button.disabled = false;
         button.classList.remove("is-loading");
         button.querySelector("b").textContent = "Qayta urinish";
@@ -537,24 +541,24 @@ function wheelSpinType(state, source = {}) {
     throw new Error("Spin mavjud emas.");
 }
 
-function finishWheelSpin(resultIndex, backendResult) {
-    const disc = document.getElementById("premiumWheelDisc");
-    const button = document.getElementById("wheelSpinButton");
-    wheelSpinning = false;
-    if (disc) {
-        disc.classList.remove("is-spinning");
-        wheelRotation = wheelFinalRotationForSector(resultIndex);
-        disc.style.setProperty("--wheel-rotation", `${wheelRotation}deg`);
-        disc.style.transform = wheelTransformValue(wheelRotation);
-        void disc.offsetWidth;
-        disc.classList.add("did-land");
+function finishWheelSpin(event) {
+    const disc = event.currentTarget;
+    if (event.propertyName !== "transform") {
+        disc.addEventListener("transitionend", finishWheelSpin, { once: true });
+        return;
     }
+    const resultIndex = wheelSpinState.sectorIndex;
+    const backendResult = wheelSpinState.backendResult;
+    if (settleWheelVisualSpin(disc) !== resultIndex) return;
+
+    disc.classList.add("did-land");
     const pointer = document.getElementById("wheelPointer");
     pointer?.classList.add("did-land");
     setTimeout(() => {
         pointer?.classList.remove("did-land");
-        disc?.classList.remove("did-land");
+        disc.classList.remove("did-land");
     }, 720);
+    const button = document.getElementById("wheelSpinButton");
     if (button) {
         button.disabled = false;
         button.classList.remove("is-loading");
@@ -818,8 +822,10 @@ if (typeof module !== "undefined") {
         normalizeWheelDegrees,
         wheelFinalRotationForSector,
         wheelSectorIndexFromRotation,
-        wheelTransformValue,
         wheelTargetRotation,
+        setWheelRotation,
+        beginWheelVisualSpin,
+        settleWheelVisualSpin,
         normalizeWheelReward,
         wheelSectorIndexForReward,
         wheelSpinType,
@@ -829,6 +835,8 @@ if (typeof module !== "undefined") {
         createWheelWizardState,
         validateWheelWizardStep,
         wheelWizardStepMarkup,
+        wheelSectorSvgMarkup,
+        wheelDiscMarkup,
         wheelPageMarkup,
     };
 }
