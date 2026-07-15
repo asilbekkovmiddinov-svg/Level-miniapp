@@ -9,6 +9,9 @@ const {
     wheelStatusValue,
     wheelTargetRotation,
     normalizeWheelReward,
+    createWheelWizardState,
+    validateWheelWizardStep,
+    wheelWizardStepMarkup,
     wheelPageMarkup,
 } = require("../miniapp/pages/wheel.js");
 
@@ -17,6 +20,30 @@ test("premium wheel exposes eight sectors and backend-ready target rotation", ()
     const rotation = wheelTargetRotation(3, 0, 4);
     assert.ok(rotation >= 4 * 360);
     assert.equal((rotation % 360 + 360) % 360, 202.5);
+});
+
+test("Coin wizard is restricted to four validated steps", () => {
+    const state = createWheelWizardState(normalizeWheelReward({ type: "COIN", amount: 130 }));
+    assert.equal(state.step, 1);
+    assert.match(validateWheelWizardStep(state, ""), /email/i);
+    assert.match(validateWheelWizardStep(state, "invalid"), /format/i);
+    assert.equal(validateWheelWizardStep(state, "player@example.com"), "");
+    state.email = "player@example.com";
+    state.step = 2;
+    assert.match(validateWheelWizardStep(state, ""), /parol/i);
+    assert.equal(validateWheelWizardStep(state, "secret"), "");
+    state.step = 4;
+    state.password = "secret";
+    assert.match(wheelWizardStepMarkup(state), /Reward/);
+    assert.match(wheelWizardStepMarkup(state), /Tasdiqlash|Platformani tanlang/);
+});
+
+test("Coin wizard markup never persists credentials", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.doesNotMatch(source, /localStorage|sessionStorage/);
+    assert.match(source, /state\.password = ""/);
+    assert.match(source, /type="password"/);
+    assert.match(source, /1\/4/);
 });
 
 test("reward flow supports every requested reward type", () => {

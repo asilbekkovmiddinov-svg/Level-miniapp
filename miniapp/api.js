@@ -150,6 +150,24 @@ async function createOrder(productId, region = null) {
     });
 }
 
+async function createCoinRewardOrder({ productId, email, password, region, platform }) {
+    const id = Number(productId);
+    if (!Number.isInteger(id) || id <= 0) {
+        throw new Error("Coin mahsuloti topilmadi.");
+    }
+    return await walletRequest("/orders/create", {
+        method: "POST",
+        body: {
+            telegram_id: TELEGRAM_ID,
+            product_id: id,
+            region,
+            login: email,
+            password,
+            platform,
+        },
+    });
+}
+
 async function getUserOrders() {
     return await api(`/orders/user/${TELEGRAM_ID}`);
 }

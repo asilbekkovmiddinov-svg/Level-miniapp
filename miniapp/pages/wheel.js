@@ -26,6 +26,12 @@ let wheelData = null;
 let wheelRotation = 0;
 let wheelSpinning = false;
 let wheelResultTimer = null;
+let wheelActiveReward = null;
+let wheelCoinWizard = null;
+let wheelCoinSubmitting = false;
+
+const WHEEL_COIN_REGIONS = ["Global", "Japan"];
+const WHEEL_COIN_PLATFORMS = ["Android", "iOS"];
 
 function wheelStatusValue(source, keys, fallback = 0) {
     for (const key of keys) {
@@ -131,6 +137,24 @@ function wheelPageMarkup() {
                 <button id="wheelCoinOrderButton" class="wheel-coin-order" type="button" hidden>🏆 Coin buyurtmasini rasmiylashtirish</button>
                 <button class="wheel-result-continue" type="button" data-wheel-close>Davom etish</button>
             </section>
+        </div>
+
+        <div id="wheelCoinWizard" class="wheel-wizard-modal" hidden>
+            <div class="wheel-result-backdrop" data-wheel-wizard-close></div>
+            <section class="wheel-wizard-card" role="dialog" aria-modal="true" aria-labelledby="wheelWizardTitle">
+                <header>
+                    <button class="wheel-wizard-back" type="button" data-wheel-wizard-back aria-label="Ortga">‹</button>
+                    <div><span>COIN REWARD</span><h3 id="wheelWizardTitle">Buyurtmani rasmiylashtirish</h3></div>
+                    <button class="wheel-wizard-close" type="button" data-wheel-wizard-close aria-label="Yopish">×</button>
+                </header>
+                <div class="wheel-wizard-progress"><i id="wheelWizardProgress"></i></div>
+                <small id="wheelWizardStepLabel" class="wheel-wizard-step">1/4</small>
+                <form id="wheelWizardForm" novalidate>
+                    <div id="wheelWizardBody"></div>
+                    <p id="wheelWizardError" class="wheel-wizard-error" role="alert"></p>
+                    <button id="wheelWizardNext" class="wheel-wizard-next" type="submit">Davom etish</button>
+                </form>
+            </section>
         </div>`;
 }
 
@@ -156,6 +180,11 @@ function bindWheelEvents() {
         button.addEventListener("click", closeWheelResult);
     });
     document.getElementById("wheelCoinOrderButton")?.addEventListener("click", showWheelCoinOrderPreview);
+    document.getElementById("wheelWizardForm")?.addEventListener("submit", submitWheelWizardStep);
+    document.querySelector("[data-wheel-wizard-back]")?.addEventListener("click", previousWheelWizardStep);
+    document.querySelectorAll("[data-wheel-wizard-close]").forEach((button) => {
+        button.addEventListener("click", closeWheelCoinWizard);
+    });
 }
 
 async function loadWheelStatus() {
@@ -250,6 +279,7 @@ function openWheelResult(backendResult) {
     const prizeNode = document.getElementById("wheelResultPrize");
     if (!modal || !prizeNode) return;
     const reward = normalizeWheelReward(backendResult);
+    wheelActiveReward = reward;
     const card = document.getElementById("wheelResultCard");
     const coinButton = document.getElementById("wheelCoinOrderButton");
     const credit = document.getElementById("wheelRewardCredit");
@@ -272,11 +302,189 @@ function openWheelResult(backendResult) {
 }
 
 function showWheelCoinOrderPreview() {
-    tg.showPopup({
-        title: "Coin buyurtmasi",
-        message: "Coin buyurtmasini rasmiylashtirish keyingi sprintda ishga tushadi.",
-        buttons: [{ type: "ok", text: "Tushunarli" }],
-    });
+    if (!wheelActiveReward?.isCoin) return;
+    closeWheelResult();
+    setTimeout(() => openWheelCoinWizard(wheelActiveReward), 230);
+}
+
+function createWheelWizardState(reward) {
+    return {
+        step: 1,
+        reward,
+        email: "",
+        password: "",
+        region: WHEEL_COIN_REGIONS[0],
+        platform: WHEEL_COIN_PLATFORMS[0],
+    };
+}
+
+function openWheelCoinWizard(reward) {
+    wheelCoinWizard = createWheelWizardState(reward);
+    const modal = document.getElementById("wheelCoinWizard");
+    if (!modal) return;
+    modal.hidden = false;
+    renderWheelWizardStep();
+    requestAnimationFrame(() => modal.classList.add("is-open"));
+}
+
+function wheelWizardStepMarkup(state) {
+    if (state.step === 1) return `<label class="wheel-wizard-field">
+        <span>MyKonami Login</span><small>Coin tushiriladigan akkaunt emailingiz</small>
+        <input id="wheelCoinEmail" type="email" inputmode="email" autocomplete="username" placeholder="name@example.com" value="${escapeWheelAttribute(state.email)}">
+    </label>`;
+    if (state.step === 2) return `<label class="wheel-wizard-field">
+        <span>MyKonami Password</span><small>Faqat buyurtmani yuborishda ishlatiladi</small>
+        <div class="wheel-password-wrap"><input id="wheelCoinPassword" type="password" autocomplete="current-password" placeholder="Parolingiz"><button type="button" onclick="toggleWheelPassword()">Ko‘rsatish</button></div>
+    </label>`;
+    if (state.step === 3) return `<fieldset class="wheel-wizard-options"><legend>Regionni tanlang</legend>
+        ${WHEEL_COIN_REGIONS.map((region) => `<button type="button" class="${state.region === region ? "is-selected" : ""}" onclick="selectWheelWizardOption('region','${region}')"><i>${region === "Japan" ? "🇯🇵" : "🌍"}</i><b>${region}</b><small>${region === "Japan" ? "Japan akkauntlari" : "Xalqaro akkauntlar"}</small></button>`).join("")}
+    </fieldset>`;
+    return `<fieldset class="wheel-wizard-options"><legend>Platformani tanlang</legend>
+        ${WHEEL_COIN_PLATFORMS.map((platform) => `<button type="button" class="${state.platform === platform ? "is-selected" : ""}" onclick="selectWheelWizardOption('platform','${platform}')"><i>${platform === "iOS" ? "" : "◉"}</i><b>${platform}</b><small>${platform === "iOS" ? "iPhone va iPad" : "Android qurilmalar"}</small></button>`).join("")}
+        <div class="wheel-wizard-review"><span>🎁 Reward <b>${state.reward.label}</b></span><span>Email <b>${escapeWheelText(state.email)}</b></span><span>Region <b>${state.region}</b></span><span>Platform <b>${state.platform}</b></span></div>
+    </fieldset>`;
+}
+
+function renderWheelWizardStep() {
+    if (!wheelCoinWizard) return;
+    const { step } = wheelCoinWizard;
+    document.getElementById("wheelWizardBody").innerHTML = wheelWizardStepMarkup(wheelCoinWizard);
+    document.getElementById("wheelWizardStepLabel").textContent = `${step}/4`;
+    document.getElementById("wheelWizardProgress").style.width = `${step * 25}%`;
+    document.getElementById("wheelWizardError").textContent = "";
+    const next = document.getElementById("wheelWizardNext");
+    next.textContent = step === 4 ? "Tasdiqlash" : "Davom etish";
+    next.disabled = false;
+    document.querySelector("[data-wheel-wizard-back]").disabled = step === 1;
+    setTimeout(() => document.querySelector("#wheelWizardBody input")?.focus(), 80);
+}
+
+function validateWheelWizardStep(state, value = "") {
+    if (state.step === 1) {
+        const email = String(value).trim();
+        if (!email) return "MyKonami emailingizni kiriting.";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Email formatini tekshiring.";
+    }
+    if (state.step === 2 && !String(value)) return "MyKonami parolingizni kiriting.";
+    if (state.step === 3 && !WHEEL_COIN_REGIONS.includes(state.region)) return "Regionni tanlang.";
+    if (state.step === 4 && !state.password) return "Parolni qayta kiriting.";
+    if (state.step === 4 && !WHEEL_COIN_PLATFORMS.includes(state.platform)) return "Platformani tanlang.";
+    return "";
+}
+
+async function submitWheelWizardStep(event) {
+    event.preventDefault();
+    if (!wheelCoinWizard || wheelCoinSubmitting) return;
+    const value = wheelCoinWizard.step === 1
+        ? document.getElementById("wheelCoinEmail")?.value
+        : wheelCoinWizard.step === 2 ? document.getElementById("wheelCoinPassword")?.value : "";
+    const error = validateWheelWizardStep(wheelCoinWizard, value);
+    if (error) {
+        document.getElementById("wheelWizardError").textContent = error;
+        return;
+    }
+    if (wheelCoinWizard.step === 1) wheelCoinWizard.email = String(value).trim();
+    if (wheelCoinWizard.step === 2) wheelCoinWizard.password = String(value);
+    if (wheelCoinWizard.step < 4) {
+        wheelCoinWizard.step += 1;
+        renderWheelWizardStep();
+        return;
+    }
+    await submitWheelCoinOrder();
+}
+
+function previousWheelWizardStep() {
+    if (!wheelCoinWizard || wheelCoinSubmitting || wheelCoinWizard.step <= 1) return;
+    const passwordWasSet = Boolean(wheelCoinWizard.password);
+    wheelCoinWizard.password = "";
+    wheelCoinWizard.step = passwordWasSet ? Math.min(wheelCoinWizard.step - 1, 2) : wheelCoinWizard.step - 1;
+    renderWheelWizardStep();
+}
+
+function selectWheelWizardOption(field, value) {
+    if (!wheelCoinWizard || wheelCoinSubmitting) return;
+    if (field === "region" && WHEEL_COIN_REGIONS.includes(value)) wheelCoinWizard.region = value;
+    if (field === "platform" && WHEEL_COIN_PLATFORMS.includes(value)) wheelCoinWizard.platform = value;
+    renderWheelWizardStep();
+}
+
+function toggleWheelPassword() {
+    const input = document.getElementById("wheelCoinPassword");
+    if (!input) return;
+    input.type = input.type === "password" ? "text" : "password";
+    input.nextElementSibling.textContent = input.type === "password" ? "Ko‘rsatish" : "Yashirish";
+}
+
+async function findWheelCoinProduct(amount) {
+    const result = await getProducts();
+    const list = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+    return list.find((product) => Number(product.coin_amount) === Number(amount)) || null;
+}
+
+async function submitWheelCoinOrder() {
+    const state = wheelCoinWizard;
+    if (!state || wheelCoinSubmitting) return;
+    const button = document.getElementById("wheelWizardNext");
+    const errorNode = document.getElementById("wheelWizardError");
+    wheelCoinSubmitting = true;
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.textContent = "Yuborilmoqda…";
+
+    try {
+        const product = await findWheelCoinProduct(state.reward.amount);
+        if (!product) throw new Error(`${state.reward.label} mahsuloti hozir mavjud emas.`);
+        const password = state.password;
+        state.password = "";
+        const result = await createCoinRewardOrder({
+            productId: product.id,
+            email: state.email,
+            password,
+            region: state.region,
+            platform: state.platform,
+        });
+        if (!result || result.success === false) throw new Error(result?.message || "Coin buyurtmasi yaratilmadi.");
+        renderWheelCoinSuccess(result.data || result);
+    } catch (error) {
+        state.password = "";
+        state.step = 2;
+        renderWheelWizardStep();
+        document.getElementById("wheelWizardError").textContent = error?.message || "Buyurtmani yaratib bo‘lmadi. Parolni qayta kiritib, yana urinib ko‘ring.";
+    } finally {
+        wheelCoinSubmitting = false;
+    }
+}
+
+function renderWheelCoinSuccess(order) {
+    const body = document.getElementById("wheelWizardBody");
+    document.getElementById("wheelWizardStepLabel").textContent = "TAYYOR";
+    document.getElementById("wheelWizardProgress").style.width = "100%";
+    document.getElementById("wheelWizardError").textContent = "";
+    body.innerHTML = `<div class="wheel-wizard-success"><i>🎉</i><h4>Coin buyurtmangiz yaratildi.</h4><p>Status: <b>${escapeWheelText(order.status || "PENDING")}</b></p><small>Orders bo‘limidan kuzatishingiz mumkin.</small></div>`;
+    const button = document.getElementById("wheelWizardNext");
+    button.classList.remove("is-loading");
+    button.disabled = false;
+    button.type = "button";
+    button.textContent = "Yopish";
+    button.onclick = closeWheelCoinWizard;
+    wheelCoinWizard.password = "";
+}
+
+function closeWheelCoinWizard() {
+    const modal = document.getElementById("wheelCoinWizard");
+    if (!modal || wheelCoinSubmitting) return;
+    if (wheelCoinWizard) wheelCoinWizard.password = "";
+    wheelCoinWizard = null;
+    modal.classList.remove("is-open");
+    setTimeout(() => { modal.hidden = true; }, 220);
+}
+
+function escapeWheelText(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+}
+
+function escapeWheelAttribute(value) {
+    return escapeWheelText(value);
 }
 
 function closeWheelResult() {
@@ -301,6 +509,9 @@ if (typeof module !== "undefined") {
         wheelStatusValue,
         wheelTargetRotation,
         normalizeWheelReward,
+        createWheelWizardState,
+        validateWheelWizardStep,
+        wheelWizardStepMarkup,
         wheelPageMarkup,
     };
 }
