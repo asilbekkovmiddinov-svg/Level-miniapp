@@ -150,6 +150,10 @@ async function createOrder(productId, region = null) {
     });
 }
 
+async function getUserOrders() {
+    return await api(`/orders/user/${TELEGRAM_ID}`);
+}
+
 async function getOpenP2POrders(orderType = "") {
     const query = orderType
         ? `?order_type=${orderType}`
