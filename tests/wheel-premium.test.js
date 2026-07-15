@@ -7,6 +7,9 @@ const {
     WHEEL_PRIZES,
     WHEEL_DEMO_REWARDS,
     wheelStatusValue,
+    wheelTimestamp,
+    wheelCooldownState,
+    formatWheelCountdown,
     wheelTargetRotation,
     normalizeWheelReward,
     normalizeWheelLastWin,
@@ -26,6 +29,31 @@ test("premium wheel exposes production sectors and backend-ready target rotation
     const rotation = wheelTargetRotation(3, 0, 4);
     assert.ok(rotation >= 4 * 360);
     assert.equal((rotation % 360 + 360) % 360, 234);
+});
+
+test("daily and ad timers use backend deadlines with 24h/1h timestamp fallbacks", () => {
+    const now = Date.parse("2030-01-02T12:00:00Z");
+    const status = {
+        free_spins: 0,
+        ad_spins: 0,
+        last_free_spin_at: "2030-01-02T00:00:00Z",
+        last_ad_spin_at: "2030-01-02T11:30:00Z",
+    };
+    const state = wheelCooldownState(status, now);
+    assert.equal(state.freeAt, Date.parse("2030-01-03T00:00:00Z"));
+    assert.equal(state.adAt, Date.parse("2030-01-02T12:30:00Z"));
+    assert.equal(state.canSpin, false);
+    assert.equal(formatWheelCountdown(state.freeAt, now), "12:00:00");
+    assert.equal(formatWheelCountdown(state.adAt, now), "00:30:00");
+    assert.equal(wheelTimestamp({ next_free_spin_at: "2030-01-02T13:00:00Z" }, ["next_free_spin_at"], [], 86400000), Date.parse("2030-01-02T13:00:00Z"));
+});
+
+test("countdown unlocks automatically at backend availability time", () => {
+    const deadline = Date.parse("2030-01-02T12:00:01Z");
+    const status = { free_spins: 0, ad_spins: 0, next_free_spin_at: new Date(deadline).toISOString() };
+    assert.equal(wheelCooldownState(status, deadline - 1).freeReady, false);
+    assert.equal(wheelCooldownState(status, deadline).freeReady, true);
+    assert.equal(formatWheelCountdown(deadline, deadline), "00:00:00");
 });
 
 test("Coin wizard is restricted to four validated steps", () => {
@@ -123,4 +151,5 @@ test("last win supports reward icon, relative time and sound-ready cues", () => 
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
     assert.match(source, /levelgroup:wheel-sound/);
     assert.doesNotMatch(source, /Demo spin/);
+    assert.match(source, /setInterval\(updateWheelCountdowns, 1000\)/);
 });
