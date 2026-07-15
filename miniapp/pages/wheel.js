@@ -145,6 +145,25 @@ function wheelTransformValue(rotation) {
     return `translateZ(0) rotate(${Number(rotation)}deg)`;
 }
 
+function wheelTestSector(search = globalThis.location?.search || "") {
+    const params = new URLSearchParams(search);
+    if (params.get("wheel_test") !== "1") return null;
+    const sector = Number(params.get("sector"));
+    return Number.isInteger(sector) && sector >= 0 && sector < WHEEL_PRIZES.length ? sector : 0;
+}
+
+function wheelTestResultForSector(index) {
+    const prize = WHEEL_PRIZES[index];
+    return {
+        success: true,
+        reward_type: prize.type,
+        reward_amount: prize.amount,
+        reward_code: `WHEEL_TEST_SECTOR_${index}`,
+        global_spin_number: index,
+        _wheel_test_sector: index,
+    };
+}
+
 function wheelTargetRotation(index, currentRotation = 0, turns = 6, sectors = WHEEL_PRIZES.length) {
     const targetAtPointer = wheelFinalRotationForSector(index, sectors);
     const current = Number.isFinite(Number(currentRotation)) ? Number(currentRotation) : 0;
@@ -307,6 +326,18 @@ async function loadWheelPage() {
     clearInterval(wheelCountdownTimer);
     page.innerHTML = wheelPageMarkup();
     bindWheelEvents();
+    const testSector = wheelTestSector();
+    if (testSector !== null) {
+        const region = document.getElementById("wheelStatusRegion");
+        const button = document.getElementById("wheelSpinButton");
+        if (region) region.innerHTML = `<div class="wheel-state-card"><span>TEST</span><strong>Deterministic sector ${testSector}</strong><small>Backend spin chaqirilmaydi.</small></div>`;
+        if (button) {
+            button.disabled = false;
+            button.querySelector("b").textContent = `Sektor ${testSector} ni aylantirish`;
+            document.getElementById("wheelSpinHint").textContent = WHEEL_PRIZES[testSector].label;
+        }
+        return;
+    }
     await loadWheelStatus();
 }
 
@@ -494,12 +525,22 @@ async function spinFreeWheel() {
     wheelSoundCue("spin");
 
     try {
-        const spinType = wheelSpinType(wheelCooldownSnapshot, wheelData);
-        const backendResult = await spinProductionWheel(spinType);
-        if (!backendResult || backendResult.success === false) throw new Error(backendResult?.message || "Wheel aylantirilmadi.");
-        wheelLastBackendResult = backendResult;
-        const resultIndex = applyWheelBackendSector(backendResult);
-        const turns = 6 + (Math.abs(Number(backendResult.global_spin_number) || 0) % 3);
+        const requestedTestSector = wheelTestSector();
+        let backendResult;
+        let resultIndex;
+        let turns;
+        if (requestedTestSector !== null) {
+            backendResult = wheelTestResultForSector(requestedTestSector);
+            resultIndex = requestedTestSector;
+            turns = 6;
+        } else {
+            const spinType = wheelSpinType(wheelCooldownSnapshot, wheelData);
+            backendResult = await spinProductionWheel(spinType);
+            if (!backendResult || backendResult.success === false) throw new Error(backendResult?.message || "Wheel aylantirilmadi.");
+            wheelLastBackendResult = backendResult;
+            resultIndex = applyWheelBackendSector(backendResult);
+            turns = 6 + (Math.abs(Number(backendResult.global_spin_number) || 0) % 3);
+        }
         wheelRotation = wheelTargetRotation(resultIndex, wheelRotation, turns);
         disc.classList.add("is-spinning");
         void disc.offsetWidth;
@@ -526,7 +567,7 @@ async function spinFreeWheel() {
         button.classList.remove("is-loading");
         button.querySelector("b").textContent = "Qayta urinish";
         document.getElementById("wheelSpinHint").textContent = error?.message || "Wheel aylantirilmadi";
-        await refreshWheelState();
+        if (wheelTestSector() === null) await refreshWheelState();
     }
 }
 
@@ -535,6 +576,35 @@ function wheelSpinType(state, source = {}) {
     if (state?.adReady) return "AD";
     if (Number(source?.bonus_spin_count || source?.remaining_bonus_spins || 0) > 0) return "BONUS";
     throw new Error("Spin mavjud emas.");
+}
+
+function showWheelSectorTestPanel(requestedSector, calculatedSector, rotation, disc) {
+    const pointerSector = wheelSectorIndexFromRotation(rotation);
+    const rows = [
+        ["Sector requested", requestedSector],
+        ["Sector calculated", calculatedSector],
+        ["Rotation", rotation],
+        ["Final transform", disc ? getComputedStyle(disc).transform : "none"],
+        ["Pointer sector", pointerSector],
+        ["Sector label", WHEEL_PRIZES[pointerSector]?.label || "—"],
+    ];
+    document.getElementById("wheelSectorTestPanel")?.remove();
+    const panel = document.createElement("section");
+    panel.id = "wheelSectorTestPanel";
+    panel.style.cssText = "position:fixed;z-index:99999;left:10px;right:10px;bottom:10px;padding:12px;border:1px solid #38bdf8;border-radius:12px;background:rgba(3,7,18,.97);color:#f8fafc;font:12px/1.5 monospace;box-shadow:0 12px 40px rgba(0,0,0,.65)";
+    const title = document.createElement("strong");
+    title.textContent = "WHEEL SECTOR TEST";
+    title.style.cssText = "display:block;margin:0 55px 8px 0;color:#7dd3fc;font-size:13px";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "Yopish";
+    close.style.cssText = "position:absolute;top:8px;right:8px;padding:5px 8px;border:0;border-radius:7px;background:#334155;color:#fff";
+    close.addEventListener("click", () => panel.remove());
+    const output = document.createElement("pre");
+    output.style.cssText = "margin:0;white-space:pre-wrap;word-break:break-word";
+    output.textContent = rows.map(([label, value]) => `${label}: ${String(value)}`).join("\n");
+    panel.append(title, close, output);
+    document.body.appendChild(panel);
 }
 
 function finishWheelSpin(resultIndex, backendResult) {
@@ -563,7 +633,11 @@ function finishWheelSpin(resultIndex, backendResult) {
     const hint = document.getElementById("wheelSpinHint");
     if (hint) hint.textContent = "Yana bir imkoniyat";
     openWheelResult(backendResult);
-    refreshWheelAfterSpin();
+    if (backendResult?._wheel_test_sector !== undefined) {
+        showWheelSectorTestPanel(backendResult._wheel_test_sector, resultIndex, wheelRotation, disc);
+    } else {
+        refreshWheelAfterSpin();
+    }
 }
 
 async function refreshWheelAfterSpin() {
@@ -819,6 +893,8 @@ if (typeof module !== "undefined") {
         wheelFinalRotationForSector,
         wheelSectorIndexFromRotation,
         wheelTransformValue,
+        wheelTestSector,
+        wheelTestResultForSector,
         wheelTargetRotation,
         normalizeWheelReward,
         wheelSectorIndexForReward,
