@@ -13,6 +13,10 @@ const {
     formatWheelCountdown,
     wheelNextSpinHint,
     wheelExpiredRefreshKey,
+    normalizeWheelDegrees,
+    wheelFinalRotationForSector,
+    wheelSectorIndexFromRotation,
+    wheelTransformValue,
     wheelTargetRotation,
     normalizeWheelReward,
     wheelSectorIndexForReward,
@@ -49,6 +53,35 @@ test("all 10 rewards land at the pointer center", () => {
         assert.equal(labelAngles[index], expectedCenter, `${prize.label} label markazda emas`);
         assert.equal(landedCenter, 0, `${prize.label} pointer markaziga tushmadi`);
     });
+});
+
+test("all 10 final transforms normalize to the backend reward sector", () => {
+    WHEEL_PRIZES.forEach((prize, index) => {
+        const animated = wheelTargetRotation(index, 317.25, 8);
+        const finalRotation = wheelFinalRotationForSector(index);
+        const transform = wheelTransformValue(finalRotation);
+
+        assert.ok(animated > 317.25, `${prize.label} animation oldinga yurmayapti`);
+        assert.ok(finalRotation >= 0 && finalRotation < 360, `${prize.label} final rotation normalize qilinmagan`);
+        assert.equal(wheelSectorIndexFromRotation(finalRotation), index, `${prize.label} pointer sektori modalga mos emas`);
+        assert.equal(wheelSectorIndexFromRotation(finalRotation + 1e-10), index, `${prize.label} positive float drift bilan almashdi`);
+        assert.equal(wheelSectorIndexFromRotation(finalRotation - 1e-10), index, `${prize.label} negative float drift bilan almashdi`);
+        assert.equal(transform, `translateZ(0) rotate(${finalRotation}deg)`);
+    });
+    assert.equal(normalizeWheelDegrees(360), 0);
+    assert.equal(normalizeWheelDegrees(-36), 324);
+});
+
+test("spin completion waits for transform transition and snaps before modal", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.match(source, /addEventListener\("transitionend", handleTransitionEnd\)/);
+    assert.match(source, /event\.propertyName === "transform"/);
+    assert.match(source, /wheelRotation = wheelFinalRotationForSector\(resultIndex\)/);
+    assert.match(source, /disc\.style\.transform = wheelTransformValue\(wheelRotation\)/);
+    assert.ok(
+        source.indexOf("wheelRotation = wheelFinalRotationForSector(resultIndex)") < source.indexOf("openWheelResult(backendResult)"),
+        "modal final visual snapdan oldin ochilmoqda",
+    );
 });
 
 test("daily and ad timers use backend deadlines with 24h/1h timestamp fallbacks", () => {
