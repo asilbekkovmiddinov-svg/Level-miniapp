@@ -5,6 +5,8 @@ const path = require("node:path");
 
 const {
     WHEEL_PRIZES,
+    wheelNow,
+    syncWheelServerTime,
     wheelStatusValue,
     wheelStatusFlag,
     wheelHasStatusField,
@@ -103,6 +105,45 @@ test("transitionend is the only spin finish event and modal opens after settle",
     assert.doesNotMatch(spinSource, /setTimeout|wheelResultTimer/);
     assert.match(source, /event\.propertyName !== "transform"/);
     assert.ok(source.indexOf("settleWheelVisualSpin(disc)") < source.indexOf("openWheelResult(backendResult)"));
+});
+
+test("new Wheel status contract drives 24h Free and 1h Ad countdowns", () => {
+    const serverNow = Date.parse("2030-01-02T12:00:00Z");
+    const clientNow = Date.parse("2030-01-02T11:58:00Z");
+    syncWheelServerTime({ server_time: "2030-01-02T12:00:00Z" }, clientNow);
+    assert.equal(wheelNow(clientNow), serverNow);
+
+    const status = {
+        server_time: "2030-01-02T12:00:00Z",
+        free_spin_available: false,
+        next_free_spin_at: "2030-01-03T12:00:00Z",
+        remaining_free_spins: 0,
+        ad_spin_available: false,
+        next_ad_spin_at: "2030-01-02T13:00:00Z",
+        remaining_ad_spins: 0,
+    };
+    const cooldown = wheelCooldownState(status, serverNow);
+    assert.equal(cooldown.freeReady, false);
+    assert.equal(cooldown.adReady, false);
+    assert.equal(formatWheelCountdown(cooldown.freeAt, serverNow), "24:00:00");
+    assert.equal(formatWheelCountdown(cooldown.adAt, serverNow), "01:00:00");
+});
+
+test("countdown expiry triggers automatic status refresh key", () => {
+    const deadline = Date.parse("2030-01-02T13:00:00Z");
+    const status = {
+        free_spin_available: false,
+        next_free_spin_at: "2030-01-03T12:00:00Z",
+        remaining_free_spins: 0,
+        ad_spin_available: false,
+        next_ad_spin_at: "2030-01-02T13:00:00Z",
+        remaining_ad_spins: 0,
+    };
+    const before = wheelCooldownState(status, deadline - 1);
+    const expired = wheelCooldownState(status, deadline);
+    assert.equal(formatWheelCountdown(deadline, deadline - 1), "00:00:01");
+    assert.equal(wheelExpiredRefreshKey(before, deadline - 1), null);
+    assert.equal(wheelExpiredRefreshKey(expired, deadline), `ad:${deadline}`);
 });
 
 test("daily and ad timers use backend deadlines with 24h/1h timestamp fallbacks", () => {
