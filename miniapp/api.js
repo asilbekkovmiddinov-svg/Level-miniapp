@@ -150,6 +150,24 @@ async function createOrder(productId, region = null) {
     });
 }
 
+async function createCoinRewardOrder({ productId, email, password, region, platform }) {
+    const id = Number(productId);
+    if (!Number.isInteger(id) || id <= 0) {
+        throw new Error("Coin mahsuloti topilmadi.");
+    }
+    return await walletRequest("/orders/create", {
+        method: "POST",
+        body: {
+            telegram_id: TELEGRAM_ID,
+            product_id: id,
+            region,
+            login: email,
+            password,
+            platform,
+        },
+    });
+}
+
 async function getUserOrders() {
     return await api(`/orders/user/${TELEGRAM_ID}`);
 }
@@ -220,6 +238,10 @@ async function p2pTradeAction(tradeId, action) {
 
 async function getWheelStatus() {
     return await api(`/wheel/status/${TELEGRAM_ID}`);
+}
+
+async function getLiveWheelWinners() {
+    return await walletRequest("/wheel/winners");
 }
 
 // =========================
