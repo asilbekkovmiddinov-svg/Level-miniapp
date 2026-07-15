@@ -26,9 +26,21 @@ let wheelCooldownSnapshot = null;
 let wheelStateRefreshing = false;
 let wheelLastExpiryRefreshKey = null;
 let wheelLastBackendResult = null;
+let wheelServerOffsetMs = 0;
 
 const WHEEL_COIN_REGIONS = ["Global", "Japan"];
 const WHEEL_COIN_PLATFORMS = ["Android", "iOS"];
+
+function wheelNow(clientNow = Date.now()) {
+    return clientNow + wheelServerOffsetMs;
+}
+
+function syncWheelServerTime(source, clientNow = Date.now()) {
+    const serverTime = new Date(source?.server_time).getTime();
+    if (!Number.isFinite(serverTime)) return wheelServerOffsetMs;
+    wheelServerOffsetMs = serverTime - clientNow;
+    return wheelServerOffsetMs;
+}
 
 function wheelStatusValue(source, keys, fallback = 0) {
     for (const key of keys) {
@@ -58,7 +70,7 @@ function wheelTimestamp(source, deadlineKeys, lastKeys, cooldownMs) {
     return Number.isFinite(value) ? value + cooldownMs : null;
 }
 
-function wheelCooldownState(source, now = Date.now()) {
+function wheelCooldownState(source, now = wheelNow()) {
     const hasNewFreeCount = wheelHasStatusField(source, ["remaining_free_spins"]);
     const hasNewFreeFlag = wheelHasStatusField(source, ["free_spin_available", "free_spin_ready"]);
     const hasLegacyFree = wheelHasStatusField(source, ["free_spin_used"]);
@@ -117,7 +129,7 @@ function wheelCooldownState(source, now = Date.now()) {
     };
 }
 
-function formatWheelCountdown(deadline, now = Date.now()) {
+function formatWheelCountdown(deadline, now = wheelNow()) {
     if (!deadline || deadline <= now) return "00:00:00";
     const seconds = Math.max(0, Math.ceil((deadline - now) / 1000));
     const hours = Math.floor(seconds / 3600);
@@ -359,6 +371,7 @@ async function loadWheelStatus({ silent = false } = {}) {
         const result = await getWheelStatus();
         if (!result || result.success === false) throw new Error("Wheel status unavailable");
         wheelData = result.data || result;
+        syncWheelServerTime(wheelData);
         if (wheelLastBackendResult
             && !wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], null)) {
             wheelData = { ...wheelData, last_win: wheelLastBackendResult };
@@ -408,7 +421,7 @@ function renderWheelInfo() {
     wheelCountdownTimer = setInterval(updateWheelCountdowns, 1000);
 }
 
-function updateWheelCountdowns(now = Date.now()) {
+function updateWheelCountdowns(now = wheelNow()) {
     if (!wheelData || !document.getElementById("wheelPage")?.classList.contains("active-page")) {
         clearInterval(wheelCountdownTimer);
         return;
@@ -448,21 +461,21 @@ function updateWheelTimerCard(kind, ready, cooldown, deadline, now) {
     badge.textContent = ready ? "🟢 READY" : cooldown ? "🟡 COOLDOWN" : "";
 }
 
-function wheelExpiredRefreshKey(state, now = Date.now()) {
+function wheelExpiredRefreshKey(state, now = wheelNow()) {
     return [
         state.freeAt && state.freeAt <= now && state.freeSpins <= 0 ? `free:${state.freeAt}` : null,
         state.adAt && state.adAt <= now && state.adSpins <= 0 ? `ad:${state.adAt}` : null,
     ].filter(Boolean).join("|") || null;
 }
 
-function maybeRefreshWheelAtExpiry(state, now = Date.now()) {
+function maybeRefreshWheelAtExpiry(state, now = wheelNow()) {
     const key = wheelExpiredRefreshKey(state, now);
     if (!key || key === wheelLastExpiryRefreshKey) return;
     wheelLastExpiryRefreshKey = key;
     refreshWheelState();
 }
 
-function wheelNextSpinHint(state, now = Date.now()) {
+function wheelNextSpinHint(state, now = wheelNow()) {
     if (state.canSpin) return "Spin tayyor";
     const options = [
         !state.freeReady && state.freeAt ? { label: "Keyingi bepul spin", at: state.freeAt } : null,
@@ -811,6 +824,8 @@ async function refreshWheel() {
 if (typeof module !== "undefined") {
     module.exports = {
         WHEEL_PRIZES,
+        wheelNow,
+        syncWheelServerTime,
         wheelStatusValue,
         wheelStatusFlag,
         wheelHasStatusField,
