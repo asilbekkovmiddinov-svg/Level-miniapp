@@ -345,15 +345,24 @@ test("visual release includes metal, glass, pointer landing and reward effects",
     assert.match(css, /wheel-sparkle/);
 });
 
-test("last win supports reward icon, relative time and sound-ready cues", () => {
-    const win = normalizeWheelLastWin({ type: "COIN", amount: 2000, won_at: "2030-01-01T10:00:00Z" });
+test("last win renders only the persistent status.last_win contract", () => {
+    const win = normalizeWheelLastWin({
+        reward_type: "COIN_ORDER",
+        reward_amount: 2000,
+        reward_code: "coin_2000_jackpot",
+        created_at: "2030-01-01T10:00:00Z",
+    });
     assert.equal(win.icon, "👑");
     assert.equal(win.label, "2 000 Coin");
+    assert.deepEqual(normalizeWheelLastWin(null), { icon: "✦", label: "Hali yutuq yo‘q", time: "—" });
     assert.equal(wheelRelativeTime("2030-01-01T10:00:00Z", Date.parse("2030-01-01T12:00:00Z")), "2 soat oldin");
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.doesNotMatch(source, /wheelLastBackendResult|last_prize|last_reward/);
+    assert.match(source, /normalizeWheelLastWin\(wheelData\?\.last_win\)/);
     assert.match(source, /levelgroup:wheel-sound/);
     assert.doesNotMatch(source, /Demo spin/);
     assert.match(source, /refreshWheelAfterSpin\(\)/);
+    assert.match(source, /refreshWheelAfterSpin[\s\S]*refreshWheelState\(\)/);
     assert.match(source, /setInterval\(updateWheelCountdowns, 1000\)/);
     assert.match(source, /refreshWheelState\(\)/);
 });
