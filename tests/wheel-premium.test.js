@@ -53,6 +53,31 @@ test("SVG renders exactly one centered wedge and label per reward", () => {
     assert.match(wheelDiscMarkup(), /viewBox="0 0 200 200"/);
 });
 
+test("SVG pointer tip and sector center share the exact same coordinate", () => {
+    const markup = wheelDiscMarkup();
+    assert.match(markup, /viewBox="0 0 200 200"/);
+    assert.match(markup, /id="premiumWheelDisc" class="wheel-v2-rotor"/);
+    assert.match(markup, /id="wheelPointer" class="wheel-v2-pointer"/);
+    assert.match(markup, /M91 0 H109 L100 10 Z/);
+    assert.match(wheelSectorSvgMarkup(), /M100 100 L72\.188 14\.405 A90 90 0 0 1 127\.812 14\.405 Z/);
+    assert.doesNotMatch(markup, /calc\(|wheel-light-rays|wheel-premium-bg|wheel-aura/);
+
+    const centerX = 100;
+    const centerY = 100;
+    const radius = 90;
+    const sectorCenter = [centerX, centerY - radius];
+    const pointerTip = [100, 10];
+    assert.deepEqual(pointerTip, sectorCenter);
+});
+
+test("responsive wheel scales one SVG without pointer offsets", () => {
+    const css = fs.readFileSync(path.join(__dirname, "../miniapp/style.css"), "utf8");
+    const rewriteCss = css.slice(css.indexOf("/* Wheel V2 visual rewrite:"));
+    [340, 380, 410, 450].forEach((breakpoint) => assert.match(rewriteCss, new RegExp(String(breakpoint))));
+    assert.doesNotMatch(rewriteCss, /top:|left:|calc\(|translateX|position:absolute/);
+    assert.doesNotMatch(css, /wheel-light-rays|repeating-conic-gradient|wheel-premium-bg|wheel-aura/);
+});
+
 test("all 10 backend rewards share one sector, rotation and pointer value", () => {
     WHEEL_PRIZES.forEach((prize, index) => {
         const payload = { reward_type: prize.type, reward_amount: prize.amount };
@@ -274,7 +299,7 @@ test("visual release includes metal, glass, pointer landing and reward effects",
     assert.match(markup, /wheel-v2-pointer/);
     assert.doesNotMatch(markup, /wheel-metal-ring|wheel-glass-reflection|wheel-sectors/);
     assert.match(markup, /wheel-reward-particles/);
-    assert.match(css, /wheel-pointer-bounce/);
+    assert.match(css, /wheel-v2-pointer-land/);
     assert.match(css, /wheel-gold-flash/);
     assert.match(css, /wheel-sparkle/);
 });
