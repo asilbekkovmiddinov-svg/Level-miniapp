@@ -176,6 +176,20 @@ async function createP2POrder({ orderType, efcAmount, priceUzs, minTradeEfc, res
     });
 }
 
+async function createP2PTrade(orderId, efcAmount) {
+    const id = Number(orderId);
+    if (!Number.isInteger(id) || id <= 0) {
+        throw new Error("P2P order ID noto‘g‘ri.");
+    }
+    return await walletRequest(`/p2p/${id}/trade`, {
+        method: "POST",
+        body: {
+            telegram_id: TELEGRAM_ID,
+            efc_amount: efcAmount,
+        },
+    });
+}
+
 async function getMyP2POrders() {
     return await api(`/p2p/my/${TELEGRAM_ID}`);
 }
