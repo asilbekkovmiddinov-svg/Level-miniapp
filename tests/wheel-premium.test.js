@@ -9,17 +9,23 @@ const {
     wheelStatusValue,
     wheelTargetRotation,
     normalizeWheelReward,
+    normalizeWheelLastWin,
+    wheelRelativeTime,
     createWheelWizardState,
     validateWheelWizardStep,
     wheelWizardStepMarkup,
     wheelPageMarkup,
 } = require("../miniapp/pages/wheel.js");
 
-test("premium wheel exposes eight sectors and backend-ready target rotation", () => {
-    assert.equal(WHEEL_PRIZES.length, 8);
+test("premium wheel exposes production sectors and backend-ready target rotation", () => {
+    assert.equal(WHEEL_PRIZES.length, 10);
+    assert.deepEqual(WHEEL_PRIZES.map((prize) => prize.label), [
+        "Omad kelmadi", "50 EFC", "100 EFC", "500 UZS", "250 EFC",
+        "500 EFC", "1000 UZS", "5000 UZS", "130 Coin", "2000 Coin",
+    ]);
     const rotation = wheelTargetRotation(3, 0, 4);
     assert.ok(rotation >= 4 * 360);
-    assert.equal((rotation % 360 + 360) % 360, 202.5);
+    assert.equal((rotation % 360 + 360) % 360, 234);
 });
 
 test("Coin wizard is restricted to four validated steps", () => {
@@ -91,9 +97,30 @@ test("premium wheel markup contains loading, stats, spin and result UX", () => {
 test("wheel animation is transform-only and supports reduced motion", () => {
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/style.css"), "utf8");
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
-    assert.match(css, /cubic-bezier\(\.12,\.64,\.08,1\)/);
+    assert.match(css, /cubic-bezier\(\.18,\.72,\.08,1\)/);
     assert.match(css, /prefers-reduced-motion:reduce/);
     assert.match(css, /wheel-confetti-fall/);
     assert.match(source, /4 \+ Math\.floor\(Math\.random\(\) \* 5\)/);
     assert.match(source, /wheelSpinning/);
+});
+
+test("visual release includes metal, glass, pointer landing and reward effects", () => {
+    const css = fs.readFileSync(path.join(__dirname, "../miniapp/style.css"), "utf8");
+    const markup = wheelPageMarkup();
+    assert.match(markup, /wheel-metal-ring/);
+    assert.match(markup, /wheel-glass-reflection/);
+    assert.match(markup, /wheel-reward-particles/);
+    assert.match(css, /wheel-pointer-bounce/);
+    assert.match(css, /wheel-gold-flash/);
+    assert.match(css, /wheel-sparkle/);
+});
+
+test("last win supports reward icon, relative time and sound-ready cues", () => {
+    const win = normalizeWheelLastWin({ type: "COIN", amount: 2000, won_at: "2030-01-01T10:00:00Z" });
+    assert.equal(win.icon, "👑");
+    assert.equal(win.label, "2 000 Coin");
+    assert.equal(wheelRelativeTime("2030-01-01T10:00:00Z", Date.parse("2030-01-01T12:00:00Z")), "2 soat oldin");
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.match(source, /levelgroup:wheel-sound/);
+    assert.doesNotMatch(source, /Demo spin/);
 });
