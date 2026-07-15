@@ -195,7 +195,7 @@ async function getMyP2POrders() {
 }
 
 async function getMyP2PTrades() {
-    return await api(`/p2p/trades/my/${TELEGRAM_ID}`);
+    return await walletRequest(`/p2p/trades/my/${TELEGRAM_ID}`);
 }
 
 async function getP2PHistory(status = "") {
@@ -203,7 +203,19 @@ async function getP2PHistory(status = "") {
         ? `?status=${status}`
         : "";
 
-    return await api(`/p2p/history/${TELEGRAM_ID}${query}`);
+    return await walletRequest(`/p2p/history/${TELEGRAM_ID}${query}`);
+}
+
+async function p2pTradeAction(tradeId, action) {
+    const id = Number(tradeId);
+    const allowed = new Set(["approve", "reject", "confirm"]);
+    if (!Number.isInteger(id) || id <= 0 || !allowed.has(action)) {
+        throw new Error("P2P trade amali noto‘g‘ri.");
+    }
+    return await walletRequest(`/p2p/trade/${id}/${action}`, {
+        method: "POST",
+        body: { telegram_id: TELEGRAM_ID },
+    });
 }
 
 async function getWheelStatus() {
