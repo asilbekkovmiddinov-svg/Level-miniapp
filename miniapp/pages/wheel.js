@@ -504,6 +504,9 @@ function wheelSpinType(state, source = {}) {
 }
 
 function wheelVisualDebugTrace(disc, backendResult, expectedIndex, targetRotation) {
+    const debugEnabled = new URLSearchParams(globalThis.location?.search || "").get("wheel_debug") === "1";
+    if (!debugEnabled) return;
+
     const computedTransform = disc ? getComputedStyle(disc).transform : "none";
     const matrix = computedTransform === "none" ? null : new DOMMatrixReadOnly(computedTransform);
     const computedRotation = matrix
@@ -512,21 +515,36 @@ function wheelVisualDebugTrace(disc, backendResult, expectedIndex, targetRotatio
     const sectorAngle = 360 / WHEEL_PRIZES.length;
     const pointerSectorIndex = Math.round(((360 - computedRotation) % 360) / sectorAngle) % WHEEL_PRIZES.length;
     const source = backendResult?.data?.reward || backendResult?.reward || backendResult?.data || backendResult || {};
+    const values = [
+        ["Backend reward_type", source.reward_type ?? source.type ?? source.currency ?? null],
+        ["Backend reward_amount", source.reward_amount ?? source.amount ?? source.value ?? null],
+        ["Backend reward_code", source.reward_code ?? backendResult?.reward_code ?? null],
+        ["Frontend sectorIndex", expectedIndex],
+        ["Frontend targetRotation", targetRotation],
+        ["Frontend finalRotation", computedRotation],
+        ["Frontend wheel.style.transform", disc?.style.transform || "(empty)"],
+        ["Frontend pointerSectorIndex", pointerSectorIndex],
+    ];
 
-    console.log("[WHEEL_VISUAL_DEBUG]", {
-        backend_reward_type: source.reward_type ?? source.type ?? source.currency ?? null,
-        backend_reward_amount: source.reward_amount ?? source.amount ?? source.value ?? null,
-        reward_code: source.reward_code ?? backendResult?.reward_code ?? null,
-        wheelSectorIndexForReward: expectedIndex,
-        targetRotation,
-        finalRotation: computedRotation,
-        wheelStyleTransform: disc?.style.transform || "",
-        wheelRotationProperty: disc?.style.getPropertyValue("--wheel-rotation") || "",
-        computedTransform,
-        pointerSectorIndex,
-        pointerSectorLabel: WHEEL_PRIZES[pointerSectorIndex]?.label ?? null,
-        modalRewardLabel: normalizeWheelReward(backendResult).label,
-    });
+    document.getElementById("wheelVisualDebugOverlay")?.remove();
+    const panel = document.createElement("section");
+    panel.id = "wheelVisualDebugOverlay";
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", "Wheel visual debug");
+    panel.style.cssText = "position:fixed;z-index:99999;left:10px;right:10px;bottom:10px;max-height:52vh;overflow:auto;padding:12px;border:1px solid #f59e0b;border-radius:12px;background:rgba(8,10,15,.97);color:#f8fafc;font:12px/1.45 monospace;box-shadow:0 12px 40px rgba(0,0,0,.65)";
+    const title = document.createElement("strong");
+    title.textContent = "WHEEL VISUAL DEBUG";
+    title.style.cssText = "display:block;margin:0 38px 8px 0;color:#fbbf24;font-size:13px";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "Yopish";
+    close.style.cssText = "position:absolute;top:8px;right:8px;padding:5px 8px;border:0;border-radius:7px;background:#374151;color:#fff;font:11px sans-serif";
+    close.addEventListener("click", () => panel.remove());
+    const output = document.createElement("pre");
+    output.style.cssText = "margin:0;white-space:pre-wrap;word-break:break-word";
+    output.textContent = values.map(([label, value]) => `${label}: ${String(value)}`).join("\n");
+    panel.append(title, close, output);
+    document.body.appendChild(panel);
 }
 
 function finishWheelSpin(resultIndex, backendResult) {
