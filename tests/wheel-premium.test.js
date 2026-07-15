@@ -5,7 +5,6 @@ const path = require("node:path");
 
 const {
     WHEEL_PRIZES,
-    WHEEL_DEMO_REWARDS,
     wheelStatusValue,
     wheelStatusFlag,
     wheelHasStatusField,
@@ -16,6 +15,8 @@ const {
     wheelExpiredRefreshKey,
     wheelTargetRotation,
     normalizeWheelReward,
+    wheelSectorIndexForReward,
+    wheelSpinType,
     normalizeWheelLastWin,
     wheelRelativeTime,
     createWheelWizardState,
@@ -160,12 +161,18 @@ test("Coin wizard markup never persists credentials", () => {
     assert.match(source, /1\/4/);
 });
 
-test("reward flow supports every requested reward type", () => {
-    assert.equal(WHEEL_DEMO_REWARDS.length, 10);
-    assert.deepEqual(
-        WHEEL_DEMO_REWARDS.map(normalizeWheelReward).map((reward) => reward.label),
-        ["Omad kelmadi", "50 EFC", "100 EFC", "500 UZS", "250 EFC", "500 EFC", "1 000 UZS", "5 000 UZS", "130 Coin", "2 000 Coin"],
-    );
+test("production backend reward selects its exact sector", () => {
+    assert.equal(wheelSectorIndexForReward({ reward_type: "NONE", reward_amount: 0, reward_code: "lose" }), 0);
+    assert.equal(wheelSectorIndexForReward({ reward_type: "EFC", reward_amount: 100 }), 2);
+    assert.equal(wheelSectorIndexForReward({ reward_type: "COIN_ORDER", reward_amount: 130 }), 8);
+    assert.equal(normalizeWheelReward({ reward_type: "COIN_ORDER", reward_amount: 2000 }).label, "2 000 Coin");
+});
+
+test("production spin type follows backend-ready state", () => {
+    assert.equal(wheelSpinType({ freeReady: true, adReady: false }), "FREE");
+    assert.equal(wheelSpinType({ freeReady: false, adReady: true }), "AD");
+    assert.equal(wheelSpinType({ freeReady: false, adReady: false }, { bonus_spin_count: 1 }), "BONUS");
+    assert.throws(() => wheelSpinType({ freeReady: false, adReady: false }, {}), /Spin mavjud emas/);
 });
 
 test("balance and Coin rewards expose the correct premium actions", () => {
@@ -209,7 +216,8 @@ test("wheel animation is transform-only and supports reduced motion", () => {
     assert.match(css, /cubic-bezier\(\.18,\.72,\.08,1\)/);
     assert.match(css, /prefers-reduced-motion:reduce/);
     assert.match(css, /wheel-confetti-fall/);
-    assert.match(source, /4 \+ Math\.floor\(Math\.random\(\) \* 5\)/);
+    assert.doesNotMatch(source, /Math\.random|WHEEL_DEMO_REWARDS/);
+    assert.match(source, /spinProductionWheel\(spinType\)/);
     assert.match(source, /wheelSpinning/);
 });
 
@@ -232,6 +240,7 @@ test("last win supports reward icon, relative time and sound-ready cues", () => 
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
     assert.match(source, /levelgroup:wheel-sound/);
     assert.doesNotMatch(source, /Demo spin/);
+    assert.match(source, /refreshWheelAfterSpin\(\)/);
     assert.match(source, /setInterval\(updateWheelCountdowns, 1000\)/);
     assert.match(source, /refreshWheelState\(\)/);
 });

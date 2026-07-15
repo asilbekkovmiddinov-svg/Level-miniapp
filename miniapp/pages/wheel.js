@@ -1,27 +1,14 @@
 const WHEEL_PRIZES = [
-    { label: "Omad kelmadi", icon: "✦", tone: "#34313b" },
-    { label: "50 EFC", icon: "💰", tone: "#991b1b" },
-    { label: "100 EFC", icon: "💰", tone: "#4c1d95" },
-    { label: "500 UZS", icon: "💵", tone: "#166534" },
-    { label: "250 EFC", icon: "💎", tone: "#9f1239" },
-    { label: "500 EFC", icon: "💎", tone: "#4338ca" },
-    { label: "1000 UZS", icon: "💵", tone: "#047857" },
-    { label: "5000 UZS", icon: "💵", tone: "#0f766e" },
-    { label: "130 Coin", icon: "🪙", tone: "#b45309" },
-    { label: "2000 Coin", icon: "👑", tone: "#7e22ce" },
-];
-
-const WHEEL_DEMO_REWARDS = [
-    { type: "NONE", amount: 0 },
-    { type: "EFC", amount: 50 },
-    { type: "EFC", amount: 100 },
-    { type: "UZS", amount: 500 },
-    { type: "EFC", amount: 250 },
-    { type: "EFC", amount: 500 },
-    { type: "UZS", amount: 1000 },
-    { type: "UZS", amount: 5000 },
-    { type: "COIN", amount: 130 },
-    { type: "COIN", amount: 2000 },
+    { label: "Omad kelmadi", icon: "✦", tone: "#34313b", type: "NONE", amount: 0 },
+    { label: "50 EFC", icon: "💰", tone: "#991b1b", type: "EFC", amount: 50 },
+    { label: "100 EFC", icon: "💰", tone: "#4c1d95", type: "EFC", amount: 100 },
+    { label: "500 UZS", icon: "💵", tone: "#166534", type: "UZS", amount: 500 },
+    { label: "250 EFC", icon: "💎", tone: "#9f1239", type: "EFC", amount: 250 },
+    { label: "500 EFC", icon: "💎", tone: "#4338ca", type: "EFC", amount: 500 },
+    { label: "1000 UZS", icon: "💵", tone: "#047857", type: "UZS", amount: 1000 },
+    { label: "5000 UZS", icon: "💵", tone: "#0f766e", type: "UZS", amount: 5000 },
+    { label: "130 Coin", icon: "🪙", tone: "#b45309", type: "COIN", amount: 130 },
+    { label: "2000 Coin", icon: "👑", tone: "#7e22ce", type: "COIN", amount: 2000 },
 ];
 
 let wheelData = null;
@@ -35,6 +22,7 @@ let wheelCountdownTimer = null;
 let wheelCooldownSnapshot = null;
 let wheelStateRefreshing = false;
 let wheelLastExpiryRefreshKey = null;
+let wheelLastBackendResult = null;
 
 const WHEEL_COIN_REGIONS = ["Global", "Japan"];
 const WHEEL_COIN_PLATFORMS = ["Android", "iOS"];
@@ -148,7 +136,7 @@ function wheelTargetRotation(index, currentRotation = 0, turns = 6, sectors = WH
 function normalizeWheelReward(payload) {
     const source = payload?.data?.reward || payload?.reward || payload?.data || payload || {};
     const rawType = String(source.reward_type || source.currency || source.type || "NONE").toUpperCase();
-    const aliases = { EFC_BALANCE: "EFC", UZS_BALANCE: "UZS", COINS: "COIN" };
+    const aliases = { EFC_BALANCE: "EFC", UZS_BALANCE: "UZS", COINS: "COIN", COIN_ORDER: "COIN", BONUS_SPIN: "BONUS" };
     const type = aliases[rawType] || rawType;
     const amount = Math.max(0, Number(source.amount ?? source.reward_amount ?? source.value ?? 0) || 0);
     const empty = amount === 0 || ["NONE", "NO_REWARD", "LOSE", "EMPTY"].includes(type);
@@ -173,6 +161,29 @@ function normalizeWheelReward(payload) {
         credited: currency === "EFC" || currency === "UZS",
         empty,
     };
+}
+
+function wheelSectorIndexForReward(payload) {
+    const reward = normalizeWheelReward(payload);
+    const exact = WHEEL_PRIZES.findIndex((prize) => prize.type === reward.type && Number(prize.amount) === reward.amount);
+    if (exact >= 0) return exact;
+    const key = String(payload?.reward_code || `${reward.type}:${reward.amount}`);
+    let hash = 0;
+    for (let index = 0; index < key.length; index += 1) hash = ((hash * 31) + key.charCodeAt(index)) >>> 0;
+    return hash % WHEEL_PRIZES.length;
+}
+
+function applyWheelBackendSector(payload) {
+    const reward = normalizeWheelReward(payload);
+    const index = wheelSectorIndexForReward(payload);
+    const sector = document.querySelectorAll("#premiumWheelDisc .wheel-prize")[index];
+    if (sector) {
+        const icon = sector.querySelector("em");
+        const label = sector.querySelector("b");
+        if (icon) icon.textContent = reward.icon;
+        if (label) label.textContent = reward.label;
+    }
+    return index;
 }
 
 function wheelPrizeMarkup() {
@@ -305,6 +316,10 @@ async function loadWheelStatus({ silent = false } = {}) {
         const result = await getWheelStatus();
         if (!result || result.success === false) throw new Error("Wheel status unavailable");
         wheelData = result.data || result;
+        if (wheelLastBackendResult
+            && !wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], null)) {
+            wheelData = { ...wheelData, last_win: wheelLastBackendResult };
+        }
         renderWheelInfo();
     } catch (error) {
         console.error(error);
@@ -457,18 +472,35 @@ async function spinFreeWheel() {
     document.getElementById("wheelPointer")?.classList.remove("did-land");
     wheelSoundCue("spin");
 
-    const resultIndex = Math.floor(Math.random() * WHEEL_PRIZES.length);
-    const turns = 4 + Math.floor(Math.random() * 5);
-    wheelRotation = wheelTargetRotation(resultIndex, wheelRotation, turns);
-    disc.style.setProperty("--wheel-rotation", `${wheelRotation}deg`);
-    disc.classList.add("is-spinning");
+    try {
+        const spinType = wheelSpinType(wheelCooldownSnapshot, wheelData);
+        const backendResult = await spinProductionWheel(spinType);
+        if (!backendResult || backendResult.success === false) throw new Error(backendResult?.message || "Wheel aylantirilmadi.");
+        wheelLastBackendResult = backendResult;
+        const resultIndex = applyWheelBackendSector(backendResult);
+        const turns = 6 + (Math.abs(Number(backendResult.global_spin_number) || 0) % 3);
+        wheelRotation = wheelTargetRotation(resultIndex, wheelRotation, turns);
+        disc.style.setProperty("--wheel-rotation", `${wheelRotation}deg`);
+        disc.classList.add("is-spinning");
 
-    const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    clearTimeout(wheelResultTimer);
-    wheelResultTimer = setTimeout(() => {
-        const demoReward = WHEEL_DEMO_REWARDS[Math.floor(Math.random() * WHEEL_DEMO_REWARDS.length)];
-        finishWheelSpin(resultIndex, demoReward);
-    }, reducedMotion ? 120 : 4600);
+        const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        clearTimeout(wheelResultTimer);
+        wheelResultTimer = setTimeout(() => finishWheelSpin(resultIndex, backendResult), reducedMotion ? 120 : 4600);
+    } catch (error) {
+        wheelSpinning = false;
+        button.disabled = false;
+        button.classList.remove("is-loading");
+        button.querySelector("b").textContent = "Qayta urinish";
+        document.getElementById("wheelSpinHint").textContent = error?.message || "Wheel aylantirilmadi";
+        await refreshWheelState();
+    }
+}
+
+function wheelSpinType(state, source = {}) {
+    if (state?.freeReady) return "FREE";
+    if (state?.adReady) return "AD";
+    if (Number(source?.bonus_spin_count || source?.remaining_bonus_spins || 0) > 0) return "BONUS";
+    throw new Error("Spin mavjud emas.");
 }
 
 function finishWheelSpin(resultIndex, backendResult) {
@@ -490,7 +522,16 @@ function finishWheelSpin(resultIndex, backendResult) {
     }
     const hint = document.getElementById("wheelSpinHint");
     if (hint) hint.textContent = "Yana bir imkoniyat";
-    openWheelResult(backendResult || { type: "EFC", amount: Number.parseFloat(WHEEL_PRIZES[resultIndex]?.label) || 0 });
+    openWheelResult(backendResult);
+    refreshWheelAfterSpin();
+}
+
+async function refreshWheelAfterSpin() {
+    await Promise.allSettled([
+        refreshWheelState(),
+        typeof refreshWallet === "function" ? refreshWallet() : Promise.resolve(),
+        typeof loadLiveWinners === "function" ? loadLiveWinners({ silent: true, force: true }) : Promise.resolve(),
+    ]);
 }
 
 function openWheelResult(backendResult) {
@@ -726,7 +767,6 @@ async function refreshWheel() {
 if (typeof module !== "undefined") {
     module.exports = {
         WHEEL_PRIZES,
-        WHEEL_DEMO_REWARDS,
         wheelStatusValue,
         wheelStatusFlag,
         wheelHasStatusField,
@@ -737,6 +777,8 @@ if (typeof module !== "undefined") {
         wheelExpiredRefreshKey,
         wheelTargetRotation,
         normalizeWheelReward,
+        wheelSectorIndexForReward,
+        wheelSpinType,
         normalizeWheelLastWin,
         wheelRelativeTime,
         wheelSoundCue,
