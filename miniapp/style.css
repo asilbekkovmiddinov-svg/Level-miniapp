@@ -1511,3 +1511,28 @@ body {
     .deposit-copy-btn,.deposit-paid-btn { transition: none; }
     .deposit-copy-btn.is-copied { animation: none; }
 }
+
+
+/* Wheel V2 visual rewrite: one SVG coordinate system for sectors, disc and pointer. */
+.wheel-v2 .wheel-stage{width:min(92vw,420px);aspect-ratio:1;margin:14px auto 10px;contain:layout paint style}
+.wheel-v2-disc{position:relative;width:84%;aspect-ratio:1;border-radius:50%;transform:rotate(0deg);transform-origin:50% 50%;will-change:transform;backface-visibility:hidden;filter:drop-shadow(0 22px 28px rgba(0,0,0,.5))}
+.wheel-v2-disc.is-spinning{transition:transform 4.5s cubic-bezier(.18,.72,.08,1)}
+.wheel-v2-svg{display:block;width:100%;height:100%;overflow:visible}
+.wheel-v2-rim{fill:#55250a;stroke:#f8dc79;stroke-width:8}
+.wheel-v2-sector path{stroke:rgba(255,255,255,.5);stroke-width:.65;vector-effect:non-scaling-stroke}
+.wheel-v2-icon{font-size:9px;dominant-baseline:middle;paint-order:stroke;stroke:rgba(0,0,0,.42);stroke-width:1.4px}
+.wheel-v2-label{fill:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:6px;font-weight:900;letter-spacing:-.18px;paint-order:stroke;stroke:rgba(0,0,0,.65);stroke-width:1.5px;stroke-linejoin:round}
+.wheel-v2-hub-ring{fill:#6b2d07;stroke:#f9dc76;stroke-width:3}
+.wheel-v2-hub{fill:#e5a72f;stroke:#fff0a2;stroke-width:2}
+.wheel-v2-logo{fill:#3b1808;font-family:system-ui,-apple-system,sans-serif;font-size:12px;font-weight:1000;letter-spacing:-1px}
+.wheel-v2-pointer{position:absolute;z-index:8;top:calc(8% - 30px);left:50%;width:40px;height:32px;transform:translateX(-50%);transform-origin:50% 100%;filter:drop-shadow(0 7px 7px rgba(0,0,0,.55));pointer-events:none}
+.wheel-v2-pointer::before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,#fff8c8,#e5a52b 42%,#743006);clip-path:polygon(10% 0,90% 0,50% 100%)}
+.wheel-v2-pointer i{position:absolute;z-index:1;top:5px;left:50%;width:11px;height:11px;border-radius:50%;background:#fff1ac;box-shadow:inset 0 0 0 3px #ad560d;transform:translateX(-50%)}
+.wheel-v2-pointer.did-land{animation:wheel-pointer-bounce .62s cubic-bezier(.2,.8,.2,1)}
+.wheel-v2-disc.did-land{animation:wheel-land-glow .7s ease-out}
+@media(max-width:340px){.wheel-v2 .wheel-stage{width:min(94vw,320px)}.wheel-v2-disc{width:82%}.wheel-v2-label{font-size:5.5px}.wheel-v2-pointer{top:calc(9% - 29px);width:36px;height:29px}}
+@media(min-width:341px) and (max-width:380px){.wheel-v2 .wheel-stage{width:min(92vw,350px)}}
+@media(min-width:381px) and (max-width:410px){.wheel-v2 .wheel-stage{width:min(90vw,375px)}}
+@media(min-width:411px) and (max-width:450px){.wheel-v2 .wheel-stage{width:min(88vw,395px)}}
+@media(min-width:451px){.wheel-v2 .wheel-stage{width:min(86vw,420px)}}
+@media(prefers-reduced-motion:reduce){.wheel-v2-disc.is-spinning{transition-duration:.12s;transition-timing-function:linear}.wheel-v2-pointer.did-land,.wheel-v2-disc.did-land{animation:none!important}}
