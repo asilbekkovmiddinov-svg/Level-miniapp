@@ -123,13 +123,34 @@ function formatWheelCountdown(deadline, now = Date.now()) {
     return [hours, minutes, rest].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
-function wheelTargetRotation(index, currentRotation = 0, turns = 6, sectors = WHEEL_PRIZES.length) {
-    const safeIndex = Math.max(0, Math.min(sectors - 1, Number(index) || 0));
+function normalizeWheelDegrees(rotation) {
+    const value = Number(rotation);
+    if (!Number.isFinite(value)) return 0;
+    const normalized = ((value % 360) + 360) % 360;
+    return Math.abs(normalized - 360) < 1e-9 || Math.abs(normalized) < 1e-9 ? 0 : normalized;
+}
+
+function wheelFinalRotationForSector(index, sectors = WHEEL_PRIZES.length) {
+    const safeIndex = Math.max(0, Math.min(sectors - 1, Math.round(Number(index) || 0)));
+    return normalizeWheelDegrees(360 - safeIndex * (360 / sectors));
+}
+
+function wheelSectorIndexFromRotation(rotation, sectors = WHEEL_PRIZES.length) {
     const sectorAngle = 360 / sectors;
-    const targetAtPointer = (360 - safeIndex * sectorAngle) % 360;
-    const completedTurns = Math.floor(currentRotation / 360) * 360;
-    let target = completedTurns + turns * 360 + targetAtPointer;
-    while (target <= currentRotation) target += 360;
+    const centerIndex = normalizeWheelDegrees(360 - normalizeWheelDegrees(rotation)) / sectorAngle;
+    return Math.round(centerIndex + Number.EPSILON * sectors) % sectors;
+}
+
+function wheelTransformValue(rotation) {
+    return `translateZ(0) rotate(${Number(rotation)}deg)`;
+}
+
+function wheelTargetRotation(index, currentRotation = 0, turns = 6, sectors = WHEEL_PRIZES.length) {
+    const targetAtPointer = wheelFinalRotationForSector(index, sectors);
+    const current = Number.isFinite(Number(currentRotation)) ? Number(currentRotation) : 0;
+    const completedTurns = Math.floor(current / 360) * 360;
+    let target = completedTurns + Math.max(0, Number(turns) || 0) * 360 + targetAtPointer;
+    while (target <= current) target += 360;
     return target;
 }
 
@@ -480,12 +501,25 @@ async function spinFreeWheel() {
         const resultIndex = applyWheelBackendSector(backendResult);
         const turns = 6 + (Math.abs(Number(backendResult.global_spin_number) || 0) % 3);
         wheelRotation = wheelTargetRotation(resultIndex, wheelRotation, turns);
-        disc.style.setProperty("--wheel-rotation", `${wheelRotation}deg`);
         disc.classList.add("is-spinning");
+        void disc.offsetWidth;
+        disc.style.setProperty("--wheel-rotation", `${wheelRotation}deg`);
+        disc.style.transform = wheelTransformValue(wheelRotation);
 
-        const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        let finished = false;
+        const finishOnce = () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(wheelResultTimer);
+            disc.removeEventListener("transitionend", handleTransitionEnd);
+            finishWheelSpin(resultIndex, backendResult);
+        };
+        const handleTransitionEnd = (event) => {
+            if (event.target === disc && event.propertyName === "transform") finishOnce();
+        };
+        disc.addEventListener("transitionend", handleTransitionEnd);
         clearTimeout(wheelResultTimer);
-        wheelResultTimer = setTimeout(() => finishWheelSpin(resultIndex, backendResult), reducedMotion ? 120 : 4600);
+        wheelResultTimer = setTimeout(finishOnce, 5200);
     } catch (error) {
         wheelSpinning = false;
         button.disabled = false;
@@ -507,8 +541,14 @@ function finishWheelSpin(resultIndex, backendResult) {
     const disc = document.getElementById("premiumWheelDisc");
     const button = document.getElementById("wheelSpinButton");
     wheelSpinning = false;
-    disc?.classList.remove("is-spinning");
-    disc?.classList.add("did-land");
+    if (disc) {
+        disc.classList.remove("is-spinning");
+        wheelRotation = wheelFinalRotationForSector(resultIndex);
+        disc.style.setProperty("--wheel-rotation", `${wheelRotation}deg`);
+        disc.style.transform = wheelTransformValue(wheelRotation);
+        void disc.offsetWidth;
+        disc.classList.add("did-land");
+    }
     const pointer = document.getElementById("wheelPointer");
     pointer?.classList.add("did-land");
     setTimeout(() => {
@@ -775,6 +815,10 @@ if (typeof module !== "undefined") {
         formatWheelCountdown,
         wheelNextSpinHint,
         wheelExpiredRefreshKey,
+        normalizeWheelDegrees,
+        wheelFinalRotationForSector,
+        wheelSectorIndexFromRotation,
+        wheelTransformValue,
         wheelTargetRotation,
         normalizeWheelReward,
         wheelSectorIndexForReward,
