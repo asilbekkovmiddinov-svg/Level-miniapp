@@ -265,38 +265,6 @@ function normalizeDepositPaymentDetails(result) {
     return normalized;
 }
 
-const DEPOSIT_PRIMARY_BANKS = [
-    { key: "click", name: "Click", icon: "🟢", scheme: "clickuz://" },
-    { key: "payme", name: "Payme", icon: "🔵", scheme: "payme://" },
-    { key: "uzum", name: "Uzum Bank", icon: "🟣", scheme: "uzumbank://" },
-    { key: "anorbank", name: "Anorbank", icon: "🟠", scheme: "anorbank://" },
-    { key: "kapitalbank", name: "Kapitalbank", icon: "🔴", scheme: "kapitalbank://" },
-    { key: "hamkorbank", name: "Hamkorbank", icon: "🟡", scheme: "hamkorbank://" },
-];
-
-const DEPOSIT_OTHER_BANKS = [
-    ["aloqabank", "Aloqabank", "aloqabank://"],
-    ["agrobank", "Agrobank", "agrobank://"],
-    ["asakabank", "Asakabank", "asakabank://"],
-    ["ipakyuli", "Ipak Yo‘li Bank", "ipakyulibank://"],
-    ["nbu", "Milliy Bank (NBU)", "nbuuz://"],
-    ["xalq", "Xalq Banki", "xalqbank://"],
-    ["turonbank", "Turonbank", "turonbank://"],
-    ["ofb", "Orient Finans Bank", "ofbuz://"],
-    ["tbc", "TBC Bank Uzbekistan", "tbcbankuz://"],
-    ["davrbank", "Davr Bank", "davrbank://"],
-    ["ziraat", "Ziraat Bank Uzbekistan", "ziraatbankuz://"],
-    ["infinbank", "InfinBank", "infinbank://"],
-    ["trastbank", "Trastbank", "trastbank://"],
-    ["universalbank", "Universalbank", "universalbank://"],
-    ["octobank", "Octobank", "octobank://"],
-].map(([key, name, scheme]) => ({ key, name, icon: "🏦", scheme }));
-
-function depositBankByKey(bankKey) {
-    return [...DEPOSIT_PRIMARY_BANKS, ...DEPOSIT_OTHER_BANKS]
-        .find((bank) => bank.key === bankKey) || null;
-}
-
 function depositCopyRow(label, value, copyValue = value) {
     return `<article class="deposit-detail-row">
         <div><small>${walletEscape(label)}</small><strong>${walletEscape(value)}</strong></div>
@@ -307,16 +275,8 @@ function depositCopyRow(label, value, copyValue = value) {
     </article>`;
 }
 
-function depositBankButton(bank) {
-    return `<button class="deposit-bank-btn" type="button"
-        onclick="openDepositBank('${bank.key}')">
-        <span>${bank.icon}</span><b>${walletEscape(bank.name)}</b><i>↗</i>
-    </button>`;
-}
-
 function openDepositPaymentDetails(result) {
     const details = normalizeDepositPaymentDetails(result);
-    const formattedAmount = details.amount.toLocaleString("uz-UZ");
     showWalletAction(`
         <div class="deposit-premium">
             <header class="deposit-premium-header">
@@ -328,18 +288,10 @@ function openDepositPaymentDetails(result) {
                 ${depositCopyRow("Karta raqami", details.cardNumber)}
                 ${depositCopyRow("Karta egasi", details.cardHolder)}
                 ${depositCopyRow("Bank nomi", details.bankName)}
-                ${depositCopyRow("To‘lov summasi", `${formattedAmount} UZS`, String(details.amount))}
             </section>
-            <section class="deposit-banks-section">
-                <div class="deposit-section-title"><span>📱</span>
-                    <div><h4>Bank ilovasini ochish</h4><p>Asosiy banklar</p></div>
-                </div>
-                <div class="deposit-bank-grid">
-                    ${DEPOSIT_PRIMARY_BANKS.map(depositBankButton).join("")}
-                </div>
-                <button class="deposit-other-banks-btn" type="button"
-                    onclick="openDepositOtherBanks()">➕ Boshqa banklar</button>
-            </section>
+            <p class="deposit-payment-note">
+                To‘lovni ko‘rsatilgan rekvizitlarga amalga oshiring va chek rasmini saqlab qo‘ying.
+            </p>
             <div id="walletFormError" class="wallet-form-error"></div>
             <button class="deposit-paid-btn" type="button"
                 onclick="openDepositEvidence(${details.depositId})">
@@ -376,51 +328,6 @@ async function copyDepositValue(button) {
         button.classList.remove("is-copied");
         if (label) label.textContent = "Nusxalash";
     }, 1500);
-    return true;
-}
-
-function openDepositOtherBanks() {
-    closeDepositOtherBanks();
-    const modal = document.createElement("div");
-    modal.id = "depositBanksModal";
-    modal.className = "deposit-banks-modal";
-    modal.innerHTML = `<section>
-        <header><div><small>BARCHA BANKLAR</small><h3>Bankni tanlang</h3></div>
-            <button type="button" onclick="closeDepositOtherBanks()">×</button></header>
-        <div class="deposit-other-bank-list">
-            ${DEPOSIT_OTHER_BANKS.map(depositBankButton).join("")}
-        </div>
-    </section>`;
-    document.getElementById("walletActionOverlay")?.appendChild(modal);
-}
-
-function closeDepositOtherBanks() {
-    document.getElementById("depositBanksModal")?.remove();
-}
-
-function openDepositBank(bankKey) {
-    const bank = depositBankByKey(bankKey);
-    if (!bank) return false;
-    let appOpened = false;
-    const detectOpen = () => {
-        if (document.visibilityState === "hidden") appOpened = true;
-    };
-    document.addEventListener("visibilitychange", detectOpen);
-    tg?.HapticFeedback?.impactOccurred?.("light");
-    try {
-        window.location.href = bank.scheme;
-    } catch (_error) {
-        appOpened = false;
-    }
-    setTimeout(() => {
-        document.removeEventListener("visibilitychange", detectOpen);
-        if (!appOpened && document.visibilityState !== "hidden") {
-            Modal.alert(
-                "Bank ilovasi ochilmadi",
-                `${bank.name} ilovasi o‘rnatilmagan yoki bu qurilmada ochib bo‘lmadi.`,
-            );
-        }
-    }, 1400);
     return true;
 }
 
@@ -528,7 +435,6 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         normalizeWalletData,
         normalizeDepositPaymentDetails,
-        depositBankByKey,
         depositCopyRow,
         validateDepositAmount,
         validateWithdrawForm,
