@@ -103,9 +103,9 @@ function renderLiveWinners(payload) {
     liveWinnersLoaded = true;
 }
 
-async function loadLiveWinners({ silent = false } = {}) {
+async function loadLiveWinners({ silent = false, force = false } = {}) {
     const panel = document.getElementById("liveWinnersPanel");
-    if (!panel || !document.getElementById("homePage")?.classList.contains("active-page")) return;
+    if (!panel || (!force && !document.getElementById("homePage")?.classList.contains("active-page"))) return;
     if (!silent && !liveWinnersLoaded) panel.innerHTML = `<div class="live-winners-skeleton" aria-label="Yutuqlar yuklanmoqda"><i></i><i></i><i></i></div>`;
     try {
         renderLiveWinners(await getLiveWheelWinners());

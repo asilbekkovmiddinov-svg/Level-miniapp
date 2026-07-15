@@ -240,6 +240,15 @@ async function getWheelStatus() {
     return await api(`/wheel/status/${TELEGRAM_ID}`);
 }
 
+async function spinProductionWheel(spinType) {
+    const type = String(spinType || "").toUpperCase();
+    if (!["FREE", "AD", "BONUS"].includes(type)) throw new Error("Wheel spin turi noto‘g‘ri.");
+    return await walletRequest("/wheel/spin", {
+        method: "POST",
+        body: { telegram_id: TELEGRAM_ID, spin_type: type },
+    });
+}
+
 async function getLiveWheelWinners() {
     return await walletRequest("/wheel/winners");
 }
