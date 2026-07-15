@@ -126,7 +126,7 @@ function formatWheelCountdown(deadline, now = Date.now()) {
 function wheelTargetRotation(index, currentRotation = 0, turns = 6, sectors = WHEEL_PRIZES.length) {
     const safeIndex = Math.max(0, Math.min(sectors - 1, Number(index) || 0));
     const sectorAngle = 360 / sectors;
-    const targetAtPointer = 360 - (safeIndex * sectorAngle + sectorAngle / 2);
+    const targetAtPointer = (360 - safeIndex * sectorAngle) % 360;
     const completedTurns = Math.floor(currentRotation / 360) * 360;
     let target = completedTurns + turns * 360 + targetAtPointer;
     while (target <= currentRotation) target += 360;
@@ -188,7 +188,7 @@ function applyWheelBackendSector(payload) {
 
 function wheelPrizeMarkup() {
     return WHEEL_PRIZES.map((prize, index) => {
-        const angle = index * (360 / WHEEL_PRIZES.length) + 360 / WHEEL_PRIZES.length / 2;
+        const angle = index * (360 / WHEEL_PRIZES.length);
         return `<span class="wheel-prize" style="--prize-angle:${angle}deg"><em>${prize.icon}</em><b>${prize.label}</b></span>`;
     }).join("");
 }
