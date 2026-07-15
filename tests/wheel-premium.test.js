@@ -33,7 +33,22 @@ test("premium wheel exposes production sectors and backend-ready target rotation
     ]);
     const rotation = wheelTargetRotation(3, 0, 4);
     assert.ok(rotation >= 4 * 360);
-    assert.equal((rotation % 360 + 360) % 360, 234);
+    assert.equal((rotation % 360 + 360) % 360, 252);
+});
+
+test("all 10 rewards land at the pointer center", () => {
+    const sectorAngle = 360 / WHEEL_PRIZES.length;
+    const markup = wheelPageMarkup();
+    const labelAngles = [...markup.matchAll(/--prize-angle:([\d.]+)deg/g)].map((match) => Number(match[1]));
+
+    assert.equal(labelAngles.length, 10);
+    WHEEL_PRIZES.forEach((prize, index) => {
+        const expectedCenter = index * sectorAngle;
+        const rotation = wheelTargetRotation(index, 0, 6);
+        const landedCenter = (expectedCenter + rotation) % 360;
+        assert.equal(labelAngles[index], expectedCenter, `${prize.label} label markazda emas`);
+        assert.equal(landedCenter, 0, `${prize.label} pointer markaziga tushmadi`);
+    });
 });
 
 test("daily and ad timers use backend deadlines with 24h/1h timestamp fallbacks", () => {
