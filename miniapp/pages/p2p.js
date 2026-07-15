@@ -3,6 +3,11 @@ let currentP2PType = "SELL";
 let p2pCreatePending = false;
 let p2pTradePending = false;
 const P2P_RESPONSE_MINUTES = new Set([5, 10, 15, 30, 60]);
+let p2pTradeDetail = null;
+let p2pTradeDetailTimer = null;
+let p2pTradeCountdownTimer = null;
+let p2pLifecyclePending = false;
+const P2P_TERMINAL_STATUSES = new Set(["COMPLETED", "CANCELLED", "REJECTED", "TIMEOUT"]);
 
 async function loadP2PPage() {
     Navbar.setActive("p2p");
@@ -20,7 +25,8 @@ async function loadP2POrders(type = "SELL") {
         <section class="p2p-v2-head">
             <div><small>SECURE MARKET</small><h2>P2P e’lonlar</h2>
                 <p>EFC’ni xavfsiz sotib oling yoki soting.</p></div>
-            <button type="button" onclick="openP2PCreateOrder()"><span>＋</span>E’lon yaratish</button>
+            <div class="p2p-head-actions"><button type="button" onclick="openP2PTradesHistory()">Tarix</button>
+                <button type="button" onclick="openP2PCreateOrder()"><span>＋</span>E’lon yaratish</button></div>
         </section>
         <div class="tab-row">
             <button class="tab-btn ${type === "SELL" ? "active" : ""}" onclick="loadP2POrders('SELL')">
@@ -201,10 +207,229 @@ async function submitP2PTrade(event, orderId) {
         document.getElementById("p2pTradeOverlay")?.remove();
         await loadP2POrders(currentP2PType);
         tg?.HapticFeedback?.notificationOccurred?.("success");
-        Modal.success(`P2P Trade #${trade.id || trade.trade_id || "—"} yaratildi. Savdo holatini Buyurtmalar sahifasida kuzating.`);
+        const tradeId = trade.id || trade.trade_id;
+        if (tradeId) {
+            await openP2PTradeDetails(tradeId, trade);
+        } else {
+            Modal.success("P2P savdo yaratildi. Holatni Savdolar tarixida kuzating.");
+        }
     } catch (error) {
         setP2PTradePending(false);
         p2pTradeError(error.message || "Savdo yaratishda xatolik yuz berdi.");
+    }
+}
+
+function p2pTradesArray(payload) {
+    if (Array.isArray(payload)) return payload;
+    for (const key of ["data", "items", "trades"]) {
+        if (Array.isArray(payload?.[key])) return payload[key];
+    }
+    return [];
+}
+
+function p2pTradeStatus(trade) {
+    return String(trade?.status || "PENDING").toUpperCase();
+}
+
+function p2pTradeRole(trade, telegramId = typeof TELEGRAM_ID !== "undefined" ? TELEGRAM_ID : 0) {
+    if (Number(trade?.owner_id) === Number(telegramId)) return "owner";
+    if (Number(trade?.requester_id) === Number(telegramId)) return "requester";
+    return "viewer";
+}
+
+function p2pTradePayerRole(trade) {
+    return String(trade?.order_type).toUpperCase() === "BUY" ? "owner" : "requester";
+}
+
+function p2pTradeDeadline(trade, role = p2pTradeRole(trade)) {
+    if (role === "owner" && trade?.owner_expires_at) return trade.owner_expires_at;
+    if (role === "requester" && trade?.requester_expires_at) return trade.requester_expires_at;
+    return trade?.expires_at || trade?.owner_expires_at || trade?.requester_expires_at || null;
+}
+
+function p2pTradeLifecycleActions(trade, telegramId) {
+    const status = p2pTradeStatus(trade);
+    if (P2P_TERMINAL_STATUSES.has(status)) return [];
+    const role = p2pTradeRole(trade, telegramId);
+    if (role === "viewer") return [];
+    if (status === "PENDING") {
+        return role === "owner"
+            ? [{ action: "approve", label: "Tasdiqlash", primary: true }, { action: "reject", label: "Bekor qilish" }]
+            : [{ action: "reject", label: "Bekor qilish" }];
+    }
+    if (status === "OWNER_APPROVED") {
+        const payer = p2pTradePayerRole(trade);
+        const payerStatus = String(trade?.[`${payer}_status`] || "PENDING").toUpperCase();
+        const ownStatus = String(trade?.[`${role}_status`] || "PENDING").toUpperCase();
+        if (role === payer && ownStatus === "PENDING") {
+            return [{ action: "confirm", label: "To‘lov qildim", primary: true }, { action: "reject", label: "Bekor qilish" }];
+        }
+        if (role !== payer && payerStatus !== "PENDING" && ownStatus !== "COMPLETED") {
+            return [{ action: "confirm", label: "To‘lovni tasdiqlash", primary: true }, { action: "reject", label: "Bekor qilish" }];
+        }
+        return [{ action: "reject", label: "Bekor qilish" }];
+    }
+    return [{ action: "confirm", label: "To‘lovni tasdiqlash", primary: true }, { action: "reject", label: "Bekor qilish" }];
+}
+
+const P2P_TIMELINE = [
+    ["CREATED", "Trade Created"], ["PENDING", "Waiting Owner"],
+    ["PAYMENT", "Waiting Payment"], ["CONFIRMATION", "Waiting Confirmation"],
+    ["COMPLETED", "Completed"], ["CANCELLED", "Cancelled"], ["TIMEOUT", "Timeout"],
+];
+
+function p2pTradeStage(trade) {
+    const status = p2pTradeStatus(trade);
+    if (status === "COMPLETED") return "COMPLETED";
+    if (["CANCELLED", "REJECTED"].includes(status)) return "CANCELLED";
+    if (status === "TIMEOUT") return "TIMEOUT";
+    if (status === "PENDING") return "PENDING";
+    if (status === "OWNER_APPROVED") {
+        const payer = p2pTradePayerRole(trade);
+        return String(trade?.[`${payer}_status`] || "PENDING").toUpperCase() === "PENDING"
+            ? "PAYMENT" : "CONFIRMATION";
+    }
+    return "CONFIRMATION";
+}
+
+function p2pTradeTimeline(trade) {
+    const stage = p2pTradeStage(trade);
+    const activeIndex = P2P_TIMELINE.findIndex(([key]) => key === stage);
+    const completed = stage === "COMPLETED";
+    return `<ol class="p2p-lifecycle">${P2P_TIMELINE.map(([key, label], index) => {
+        const state = key === stage ? "is-active" : (completed && index < activeIndex)
+            || (!completed && index < activeIndex && index < 4) ? "is-done" : "";
+        return `<li class="${state}"><i>${state === "is-done" ? "✓" : ""}</i><span>${label}</span></li>`;
+    }).join("")}</ol>`;
+}
+
+function p2pTradeCounterparty(trade, role = p2pTradeRole(trade)) {
+    return role === "owner"
+        ? trade.requester_display_name || trade.requester_username || `User ${trade.requester_id || "—"}`
+        : trade.owner_display_name || trade.owner_username || `User ${trade.owner_id || "—"}`;
+}
+
+function renderP2PTradeDetails(trade) {
+    p2pTradeDetail = trade;
+    const page = document.getElementById("p2pPage");
+    const status = p2pTradeStatus(trade);
+    const actions = p2pTradeLifecycleActions(trade);
+    const deadline = p2pTradeDeadline(trade);
+    page.innerHTML = `<section class="p2p-detail-v2">
+        <header><button type="button" onclick="closeP2PTradeDetails()">←</button><div><small>TRADE #${Number(trade.id || trade.trade_id)}</small>
+            <h2>P2P Trade Details</h2></div><button type="button" onclick="refreshP2PTradeDetails()">↻</button></header>
+        <div class="p2p-detail-status"><span>${status}</span><b id="p2pTradeCountdown">${deadline ? "—:—" : "Deadline yo‘q"}</b></div>
+        <div class="p2p-detail-grid"><span>Tur</span><b>${String(trade.order_type || "—").toUpperCase()}</b>
+            <span>EFC miqdori</span><b>${formatNumber(trade.efc_amount)} EFC</b>
+            <span>UZS summa</span><b>${formatNumber(trade.total_uzs)} UZS</b>
+            <span>Narx</span><b>${formatNumber(trade.price_uzs)} UZS</b>
+            <span>Counterparty</span><b>${p2pTradeCounterparty(trade)}</b></div>
+        ${p2pTradeTimeline(trade)}
+        <div id="p2pLifecycleError" class="p2p-create-error"></div>
+        <div class="p2p-lifecycle-actions">${actions.map((item) => `<button type="button" class="${item.primary ? "is-primary" : ""}"
+            onclick="runP2PTradeAction('${item.action}')">${item.label}</button>`).join("")}</div>
+        ${status === "TIMEOUT" ? `<div class="p2p-timeout-state"><b>Trade vaqti tugadi</b><span>Balans holati backend tomonidan xavfsiz yakunlandi.</span></div>` : ""}
+    </section>`;
+    startP2PTradeLiveRefresh();
+}
+
+async function fetchP2PTrade(tradeId) {
+    const payload = await getMyP2PTrades();
+    return p2pTradesArray(payload).find((trade) => Number(trade.id || trade.trade_id) === Number(tradeId)) || null;
+}
+
+async function openP2PTradeDetails(tradeId, initialTrade = null) {
+    clearP2PTradeTimers();
+    showPage("p2pPage", "P2P Trade");
+    const page = document.getElementById("p2pPage");
+    page.innerHTML = `<div class="p2p-detail-loading"><i></i><b>Trade yuklanmoqda…</b></div>`;
+    try {
+        const trade = await fetchP2PTrade(tradeId) || initialTrade;
+        if (!trade) throw new Error("Trade topilmadi.");
+        renderP2PTradeDetails(trade);
+    } catch (error) {
+        page.innerHTML = `<div class="p2p-detail-empty"><b>Trade yuklanmadi</b><span>${error.message}</span>
+            <button onclick="openP2PTradeDetails(${Number(tradeId)})">Qayta urinish</button></div>`;
+    }
+}
+
+async function refreshP2PTradeDetails() {
+    if (!p2pTradeDetail || p2pLifecyclePending) return;
+    try {
+        const trade = await fetchP2PTrade(p2pTradeDetail.id || p2pTradeDetail.trade_id);
+        if (trade) renderP2PTradeDetails(trade);
+    } catch (error) {
+        const target = document.getElementById("p2pLifecycleError");
+        if (target) target.textContent = "Holat yangilanmadi. Qayta urinib ko‘ring.";
+    }
+}
+
+async function runP2PTradeAction(action) {
+    if (p2pLifecyclePending || !p2pTradeDetail) return;
+    p2pLifecyclePending = true;
+    document.querySelectorAll(".p2p-lifecycle-actions button").forEach((button) => { button.disabled = true; });
+    const errorTarget = document.getElementById("p2pLifecycleError");
+    if (errorTarget) errorTarget.textContent = "";
+    try {
+        const result = await p2pTradeAction(p2pTradeDetail.id || p2pTradeDetail.trade_id, action);
+        if (!result || result.success === false) throw new Error(result?.message || "Amal bajarilmadi.");
+        p2pLifecyclePending = false;
+        await refreshP2PTradeDetails();
+    } catch (error) {
+        p2pLifecyclePending = false;
+        if (errorTarget) errorTarget.textContent = error.message || "Amal bajarilmadi.";
+        document.querySelectorAll(".p2p-lifecycle-actions button").forEach((button) => { button.disabled = false; });
+    }
+}
+
+function updateP2PTradeCountdown() {
+    const target = document.getElementById("p2pTradeCountdown");
+    const deadline = p2pTradeDeadline(p2pTradeDetail || {});
+    if (!target || !deadline) return;
+    const seconds = Math.max(0, Math.ceil((Date.parse(deadline) - Date.now()) / 1000));
+    target.textContent = seconds > 0
+        ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
+        : "00:00";
+    if (seconds === 0 && !P2P_TERMINAL_STATUSES.has(p2pTradeStatus(p2pTradeDetail))) {
+        target.classList.add("is-expired");
+    }
+}
+
+function startP2PTradeLiveRefresh() {
+    clearP2PTradeTimers();
+    updateP2PTradeCountdown();
+    if (!P2P_TERMINAL_STATUSES.has(p2pTradeStatus(p2pTradeDetail))) {
+        p2pTradeCountdownTimer = setInterval(updateP2PTradeCountdown, 1000);
+        p2pTradeDetailTimer = setInterval(refreshP2PTradeDetails, 10000);
+    }
+}
+
+function clearP2PTradeTimers() {
+    clearInterval(p2pTradeDetailTimer); clearInterval(p2pTradeCountdownTimer);
+    p2pTradeDetailTimer = null; p2pTradeCountdownTimer = null;
+}
+
+async function closeP2PTradeDetails() {
+    clearP2PTradeTimers(); p2pTradeDetail = null;
+    await loadP2POrders(currentP2PType);
+}
+
+async function openP2PTradesHistory() {
+    clearP2PTradeTimers();
+    showPage("p2pPage", "P2P History");
+    const page = document.getElementById("p2pPage");
+    page.innerHTML = `<div class="p2p-detail-loading"><i></i><b>Tarix yuklanmoqda…</b></div>`;
+    try {
+        const trades = p2pTradesArray(await getP2PHistory());
+        page.innerHTML = `<section class="p2p-history-v2"><header><button onclick="loadP2POrders(currentP2PType)">←</button>
+            <div><small>HISTORY</small><h2>P2P savdolar</h2></div><button onclick="openP2PTradesHistory()">↻</button></header>
+            <div>${trades.length ? trades.map((trade) => `<button class="p2p-history-card" onclick="openP2PTradeDetails(${Number(trade.id || trade.trade_id)})">
+                <span><b>Trade #${Number(trade.id || trade.trade_id)}</b><small>${String(trade.order_type || "P2P")}</small></span>
+                <span><b>${formatNumber(trade.efc_amount)} EFC</b><small>${p2pTradeStatus(trade)}</small></span></button>`).join("")
+                : `<div class="p2p-detail-empty"><b>Tarix hali bo‘sh</b><span>Yakunlangan savdolar shu yerda ko‘rinadi.</span></div>`}</div></section>`;
+    } catch (error) {
+        page.innerHTML = `<div class="p2p-detail-empty"><b>Tarix yuklanmadi</b><span>${error.message}</span>
+            <button onclick="openP2PTradesHistory()">Qayta urinish</button></div>`;
     }
 }
 
@@ -361,5 +586,11 @@ if (typeof module !== "undefined" && module.exports) {
         p2pTradeActionLabel,
         validateP2PTradeAmount,
         p2pTradeResponse,
+        p2pTradesArray,
+        p2pTradeRole,
+        p2pTradePayerRole,
+        p2pTradeDeadline,
+        p2pTradeLifecycleActions,
+        p2pTradeStage,
     };
 }
