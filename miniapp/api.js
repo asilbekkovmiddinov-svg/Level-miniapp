@@ -162,6 +162,20 @@ async function getOpenP2POrders(orderType = "") {
     return await api(`/p2p/open${query}`);
 }
 
+async function createP2POrder({ orderType, efcAmount, priceUzs, minTradeEfc, responseMinutes }) {
+    return await walletRequest("/p2p/create", {
+        method: "POST",
+        body: {
+            telegram_id: TELEGRAM_ID,
+            order_type: orderType,
+            efc_amount: efcAmount,
+            price_uzs: priceUzs,
+            min_trade_efc: minTradeEfc,
+            response_minutes: responseMinutes,
+        },
+    });
+}
+
 async function getMyP2POrders() {
     return await api(`/p2p/my/${TELEGRAM_ID}`);
 }
