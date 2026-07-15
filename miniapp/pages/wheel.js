@@ -233,13 +233,19 @@ function wheelSectorSvgMarkup() {
 }
 
 function wheelDiscMarkup() {
-    return `<div id="premiumWheelDisc" class="wheel-v2-disc" data-rotation="0">
+    return `<div class="wheel-v2-disc">
         <svg class="wheel-v2-svg" viewBox="0 0 200 200" role="img" aria-label="Omad g‘ildiragi">
-            <circle cx="100" cy="100" r="96" class="wheel-v2-rim"></circle>
-            <g class="wheel-v2-sectors">${wheelSectorSvgMarkup()}</g>
-            <circle cx="100" cy="100" r="24" class="wheel-v2-hub-ring"></circle>
-            <circle cx="100" cy="100" r="18" class="wheel-v2-hub"></circle>
-            <text x="100" y="104" text-anchor="middle" class="wheel-v2-logo">LG</text>
+            <g id="premiumWheelDisc" class="wheel-v2-rotor" data-rotation="0">
+                <circle cx="100" cy="100" r="96" class="wheel-v2-rim"></circle>
+                <g class="wheel-v2-sectors">${wheelSectorSvgMarkup()}</g>
+                <circle cx="100" cy="100" r="24" class="wheel-v2-hub-ring"></circle>
+                <circle cx="100" cy="100" r="18" class="wheel-v2-hub"></circle>
+                <text x="100" y="104" text-anchor="middle" class="wheel-v2-logo">LG</text>
+            </g>
+            <g id="wheelPointer" class="wheel-v2-pointer" aria-hidden="true">
+                <path d="M91 0 H109 L100 10 Z"></path>
+                <circle cx="100" cy="3.5" r="3"></circle>
+            </g>
         </svg>
     </div>`;
 }
@@ -247,7 +253,6 @@ function wheelDiscMarkup() {
 function wheelPageMarkup() {
     return `
         <div class="premium-wheel premium-wheel-visual wheel-v2">
-            <div class="wheel-premium-bg" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
             <header class="wheel-hero">
                 <span class="wheel-kicker">LEVEL BONUS</span>
                 <h2>Omad g‘ildiragi</h2>
@@ -255,9 +260,6 @@ function wheelPageMarkup() {
             </header>
 
             <section class="wheel-stage" aria-label="Omad g‘ildiragi">
-                <div class="wheel-light-rays" aria-hidden="true"></div>
-                <div class="wheel-aura"></div>
-                <div id="wheelPointer" class="wheel-v2-pointer" aria-hidden="true"><i></i></div>
                 ${wheelDiscMarkup()}
             </section>
 
