@@ -9,6 +9,19 @@ const WHEEL_PRIZES = [
     { label: "25 EFC", tone: "#4f46e5" },
 ];
 
+const WHEEL_DEMO_REWARDS = [
+    { type: "NONE", amount: 0 },
+    { type: "EFC", amount: 50 },
+    { type: "EFC", amount: 100 },
+    { type: "UZS", amount: 500 },
+    { type: "EFC", amount: 250 },
+    { type: "EFC", amount: 500 },
+    { type: "UZS", amount: 1000 },
+    { type: "UZS", amount: 5000 },
+    { type: "COIN", amount: 130 },
+    { type: "COIN", amount: 2000 },
+];
+
 let wheelData = null;
 let wheelRotation = 0;
 let wheelSpinning = false;
@@ -29,6 +42,36 @@ function wheelTargetRotation(index, currentRotation = 0, turns = 6, sectors = WH
     let target = completedTurns + turns * 360 + targetAtPointer;
     while (target <= currentRotation) target += 360;
     return target;
+}
+
+function normalizeWheelReward(payload) {
+    const source = payload?.data?.reward || payload?.reward || payload?.data || payload || {};
+    const rawType = String(source.reward_type || source.currency || source.type || "NONE").toUpperCase();
+    const aliases = { EFC_BALANCE: "EFC", UZS_BALANCE: "UZS", COINS: "COIN" };
+    const type = aliases[rawType] || rawType;
+    const amount = Math.max(0, Number(source.amount ?? source.reward_amount ?? source.value ?? 0) || 0);
+    const empty = amount === 0 || ["NONE", "NO_REWARD", "LOSE", "EMPTY"].includes(type);
+    const currency = empty ? "NONE" : type;
+    const formattedAmount = (Number.isInteger(amount)
+        ? amount.toLocaleString("uz-UZ")
+        : amount.toLocaleString("uz-UZ", { maximumFractionDigits: 2 }))
+        .replace(/[\u00a0\u202f]/g, " ");
+    const label = empty ? "Omad kelmadi" : `${formattedAmount} ${currency === "COIN" ? "Coin" : currency}`;
+    const isCoin = currency === "COIN";
+    const isLarge = (currency === "EFC" && amount >= 250)
+        || (currency === "UZS" && amount >= 5000)
+        || (isCoin && amount >= 2000);
+
+    return {
+        type: currency,
+        amount,
+        label,
+        icon: empty ? "✦" : isCoin ? (amount >= 2000 ? "👑" : "🪙") : currency === "UZS" ? "💵" : amount >= 250 ? "💎" : "💰",
+        isCoin,
+        isLarge,
+        credited: currency === "EFC" || currency === "UZS",
+        empty,
+    };
 }
 
 function wheelPrizeMarkup() {
@@ -76,12 +119,17 @@ function wheelPageMarkup() {
 
         <div id="wheelResultModal" class="wheel-result-modal" hidden>
             <div class="wheel-result-backdrop" data-wheel-close></div>
-            <section class="wheel-result-card" role="dialog" aria-modal="true" aria-labelledby="wheelResultTitle">
-                <div class="wheel-result-burst">🎉</div>
-                <span>OMAD SIZ TOMONDA</span>
+            <div id="wheelConfetti" class="wheel-confetti" aria-hidden="true">
+                ${Array.from({ length: 16 }, (_, index) => `<i style="--confetti-index:${index}"></i>`).join("")}
+            </div>
+            <section id="wheelResultCard" class="wheel-result-card" role="dialog" aria-modal="true" aria-labelledby="wheelResultTitle">
+                <div id="wheelResultIcon" class="wheel-result-burst">🎉</div>
+                <span id="wheelResultKicker">OMAD SIZ TOMONDA</span>
                 <h3 id="wheelResultTitle">Tabriklaymiz!</h3>
-                <p>Siz <strong id="wheelResultPrize">—</strong> yutdingiz.</p>
-                <button type="button" data-wheel-close>OK</button>
+                <p id="wheelResultMessage">Siz <strong id="wheelResultPrize">—</strong> yutdingiz.</p>
+                <small id="wheelRewardCredit" class="wheel-reward-credit">Balansingizga avtomatik qo‘shildi.</small>
+                <button id="wheelCoinOrderButton" class="wheel-coin-order" type="button" hidden>🏆 Coin buyurtmasini rasmiylashtirish</button>
+                <button class="wheel-result-continue" type="button" data-wheel-close>Davom etish</button>
             </section>
         </div>`;
 }
@@ -107,6 +155,7 @@ function bindWheelEvents() {
     document.querySelectorAll("[data-wheel-close]").forEach((button) => {
         button.addEventListener("click", closeWheelResult);
     });
+    document.getElementById("wheelCoinOrderButton")?.addEventListener("click", showWheelCoinOrderPreview);
 }
 
 async function loadWheelStatus() {
@@ -175,10 +224,13 @@ async function spinFreeWheel() {
 
     const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     clearTimeout(wheelResultTimer);
-    wheelResultTimer = setTimeout(() => finishWheelSpin(resultIndex), reducedMotion ? 120 : 4600);
+    wheelResultTimer = setTimeout(() => {
+        const demoReward = WHEEL_DEMO_REWARDS[Math.floor(Math.random() * WHEEL_DEMO_REWARDS.length)];
+        finishWheelSpin(resultIndex, demoReward);
+    }, reducedMotion ? 120 : 4600);
 }
 
-function finishWheelSpin(resultIndex) {
+function finishWheelSpin(resultIndex, backendResult) {
     const disc = document.getElementById("premiumWheelDisc");
     const button = document.getElementById("wheelSpinButton");
     wheelSpinning = false;
@@ -190,16 +242,41 @@ function finishWheelSpin(resultIndex) {
     }
     const hint = document.getElementById("wheelSpinHint");
     if (hint) hint.textContent = "Demo spin";
-    openWheelResult(WHEEL_PRIZES[resultIndex]?.label || "sovrin");
+    openWheelResult(backendResult || { type: "EFC", amount: Number.parseFloat(WHEEL_PRIZES[resultIndex]?.label) || 0 });
 }
 
-function openWheelResult(prize) {
+function openWheelResult(backendResult) {
     const modal = document.getElementById("wheelResultModal");
     const prizeNode = document.getElementById("wheelResultPrize");
     if (!modal || !prizeNode) return;
-    prizeNode.textContent = prize;
+    const reward = normalizeWheelReward(backendResult);
+    const card = document.getElementById("wheelResultCard");
+    const coinButton = document.getElementById("wheelCoinOrderButton");
+    const credit = document.getElementById("wheelRewardCredit");
+    const title = document.getElementById("wheelResultTitle");
+    const message = document.getElementById("wheelResultMessage");
+
+    modal.classList.toggle("is-large-reward", reward.isLarge);
+    modal.classList.toggle("is-empty-reward", reward.empty);
+    card?.classList.toggle("is-coin-reward", reward.isCoin);
+    document.getElementById("wheelResultIcon").textContent = reward.icon;
+    document.getElementById("wheelResultKicker").textContent = reward.empty ? "KEYINGI SAFAR OMAD" : "SOVRIN QO‘LGA KIRITILDI";
+    title.textContent = reward.empty ? "Omad kelmadi" : "Tabriklaymiz!";
+    prizeNode.textContent = reward.label;
+    message.firstChild.textContent = reward.empty ? "Bu safar sovrin chiqmadi. " : "Siz ";
+    message.lastChild.textContent = reward.empty ? "" : " yutdingiz.";
+    credit.hidden = !reward.credited;
+    coinButton.hidden = !reward.isCoin;
     modal.hidden = false;
     requestAnimationFrame(() => modal.classList.add("is-open"));
+}
+
+function showWheelCoinOrderPreview() {
+    tg.showPopup({
+        title: "Coin buyurtmasi",
+        message: "Coin buyurtmasini rasmiylashtirish keyingi sprintda ishga tushadi.",
+        buttons: [{ type: "ok", text: "Tushunarli" }],
+    });
 }
 
 function closeWheelResult() {
@@ -218,5 +295,12 @@ async function refreshWheel() {
 }
 
 if (typeof module !== "undefined") {
-    module.exports = { WHEEL_PRIZES, wheelStatusValue, wheelTargetRotation, wheelPageMarkup };
+    module.exports = {
+        WHEEL_PRIZES,
+        WHEEL_DEMO_REWARDS,
+        wheelStatusValue,
+        wheelTargetRotation,
+        normalizeWheelReward,
+        wheelPageMarkup,
+    };
 }

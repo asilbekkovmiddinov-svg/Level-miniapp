@@ -5,8 +5,10 @@ const path = require("node:path");
 
 const {
     WHEEL_PRIZES,
+    WHEEL_DEMO_REWARDS,
     wheelStatusValue,
     wheelTargetRotation,
+    normalizeWheelReward,
     wheelPageMarkup,
 } = require("../miniapp/pages/wheel.js");
 
@@ -15,6 +17,25 @@ test("premium wheel exposes eight sectors and backend-ready target rotation", ()
     const rotation = wheelTargetRotation(3, 0, 4);
     assert.ok(rotation >= 4 * 360);
     assert.equal((rotation % 360 + 360) % 360, 202.5);
+});
+
+test("reward flow supports every requested reward type", () => {
+    assert.equal(WHEEL_DEMO_REWARDS.length, 10);
+    assert.deepEqual(
+        WHEEL_DEMO_REWARDS.map(normalizeWheelReward).map((reward) => reward.label),
+        ["Omad kelmadi", "50 EFC", "100 EFC", "500 UZS", "250 EFC", "500 EFC", "1 000 UZS", "5 000 UZS", "130 Coin", "2 000 Coin"],
+    );
+});
+
+test("balance and Coin rewards expose the correct premium actions", () => {
+    const efc = normalizeWheelReward({ reward_type: "EFC", reward_amount: 250 });
+    const uzs = normalizeWheelReward({ currency: "UZS", amount: 5000 });
+    const coin = normalizeWheelReward({ type: "COINS", value: 2000 });
+    assert.equal(efc.credited, true);
+    assert.equal(uzs.credited, true);
+    assert.equal(coin.credited, false);
+    assert.equal(coin.isCoin, true);
+    assert.equal(coin.isLarge, true);
 });
 
 test("target rotation always advances and supports 4–8 turns", () => {
@@ -35,6 +56,9 @@ test("premium wheel markup contains loading, stats, spin and result UX", () => {
     assert.match(markup, /wheelStatusRegion/);
     assert.match(markup, /Aylantirish/);
     assert.match(markup, /Tabriklaymiz!/);
+    assert.match(markup, /Balansingizga avtomatik qo‘shildi/);
+    assert.match(markup, /Coin buyurtmasini rasmiylashtirish/);
+    assert.match(markup, /Davom etish/);
 });
 
 test("wheel animation is transform-only and supports reduced motion", () => {
@@ -42,6 +66,7 @@ test("wheel animation is transform-only and supports reduced motion", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
     assert.match(css, /cubic-bezier\(\.12,\.64,\.08,1\)/);
     assert.match(css, /prefers-reduced-motion:reduce/);
+    assert.match(css, /wheel-confetti-fall/);
     assert.match(source, /4 \+ Math\.floor\(Math\.random\(\) \* 5\)/);
     assert.match(source, /wheelSpinning/);
 });
