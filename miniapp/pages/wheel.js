@@ -288,9 +288,9 @@ function renderWheelInfo() {
     const lastPrize = normalizeWheelLastWin(wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], null));
 
     region.innerHTML = `<div class="wheel-stats">
-        <article id="wheelFreeCard" class="wheel-timer-card ${cooldown.freeReady ? "is-ready" : "is-cooldown"}"><i>☀️</i><span>Bugungi bepul spin</span><b>${cooldown.freeSpins}</b><small id="wheelFreeCountdown">${cooldown.freeReady ? "Spin tayyor" : formatWheelCountdown(cooldown.freeAt)}</small><em id="wheelFreeBadge">${cooldown.freeReady ? "READY" : "COOLDOWN"}</em></article>
-        <article id="wheelAdCard" class="wheel-timer-card ${cooldown.adReady ? "is-ready" : "is-cooldown"}"><i>▶️</i><span>Reklama orqali</span><b>${cooldown.adSpins}</b><small id="wheelAdCountdown">${cooldown.adReady ? "Spin tayyor" : formatWheelCountdown(cooldown.adAt)}</small><em id="wheelAdBadge">${cooldown.adReady ? "READY" : "COOLDOWN"}</em></article>
-        <article class="wheel-timer-card ${cooldown.remaining > 0 ? "is-ready" : "is-cooldown"}"><i>✨</i><span>Qolgan spinlar</span><b>${cooldown.remaining}</b><small>${cooldown.remaining > 0 ? "Spin tayyor" : "Kutilmoqda"}</small><em>${cooldown.remaining > 0 ? "READY" : "COOLDOWN"}</em></article>
+        <article id="wheelFreeCard" class="wheel-timer-card ${cooldown.freeReady ? "is-ready" : "is-cooldown"}"><i>☀️</i><span>Bugungi bepul spin</span><b id="wheelFreeCountdown">${formatWheelCountdown(cooldown.freeAt)}</b><em id="wheelFreeBadge">${cooldown.freeReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
+        <article id="wheelAdCard" class="wheel-timer-card ${cooldown.adReady ? "is-ready" : "is-cooldown"}"><i>▶️</i><span>Reklama orqali</span><b id="wheelAdCountdown">${formatWheelCountdown(cooldown.adAt)}</b><em id="wheelAdBadge">${cooldown.adReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
+        <article class="wheel-remaining-card"><i>✨</i><span>Qolgan spinlar</span><b>${cooldown.remaining}</b></article>
         <article class="wheel-last-win"><i>${lastPrize.icon}</i><span>Oxirgi yutuq</span><b>${escapeWheelText(lastPrize.label)}</b><small>${escapeWheelText(lastPrize.time)}</small><em>LAST WIN</em></article>
     </div>`;
 
@@ -315,9 +315,7 @@ function updateWheelCountdowns(now = Date.now()) {
         button.disabled = wheelSpinning || !current.canSpin;
         button.classList.toggle("is-ready", current.canSpin && !wheelSpinning);
     }
-    if (hint) hint.textContent = current.canSpin
-        ? "Spin tayyor"
-        : current.nextReadyAt ? formatWheelCountdown(current.nextReadyAt, now) : "Spin mavjud emas";
+    if (hint) hint.textContent = wheelNextSpinHint(current, now);
     if (previous && ((!previous.freeReady && current.freeReady) || (!previous.adReady && current.adReady))) {
         button?.classList.add("just-ready");
         setTimeout(() => button?.classList.remove("just-ready"), 1400);
@@ -334,12 +332,23 @@ function updateWheelTimerCard(kind, ready, deadline, now) {
     card.classList.toggle("is-ready", ready);
     card.classList.toggle("is-cooldown", !ready);
     if (ready && !wasReady) card.classList.add("just-ready");
-    countdown.textContent = ready ? "Spin tayyor" : deadline ? formatWheelCountdown(deadline, now) : "Kutilmoqda";
-    badge.textContent = ready ? "READY" : "COOLDOWN";
+    countdown.textContent = formatWheelCountdown(deadline, now);
+    badge.textContent = ready ? "🟢 READY" : "🟡 COOLDOWN";
+}
+
+function wheelNextSpinHint(state, now = Date.now()) {
+    if (state.canSpin) return "Spin tayyor";
+    const options = [
+        !state.freeReady && state.freeAt ? { label: "Keyingi bepul spin", at: state.freeAt } : null,
+        !state.adReady && state.adAt ? { label: "Keyingi reklama spini", at: state.adAt } : null,
+    ].filter(Boolean).sort((left, right) => left.at - right.at);
+    return options.length
+        ? `${options[0].label}: ${formatWheelCountdown(options[0].at, now)}`
+        : "Spin mavjud emas";
 }
 
 function normalizeWheelLastWin(value) {
-    if (!value) return { icon: "✦", label: "Hali yo‘q", time: "—" };
+    if (!value) return { icon: "✦", label: "Hali yutuq yo‘q", time: "—" };
     if (typeof value === "string" || typeof value === "number") {
         return { icon: "🏆", label: String(value), time: "Yaqinda" };
     }
@@ -654,6 +663,7 @@ if (typeof module !== "undefined") {
         wheelTimestamp,
         wheelCooldownState,
         formatWheelCountdown,
+        wheelNextSpinHint,
         wheelTargetRotation,
         normalizeWheelReward,
         normalizeWheelLastWin,

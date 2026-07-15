@@ -10,6 +10,7 @@ const {
     wheelTimestamp,
     wheelCooldownState,
     formatWheelCountdown,
+    wheelNextSpinHint,
     wheelTargetRotation,
     normalizeWheelReward,
     normalizeWheelLastWin,
@@ -54,6 +55,20 @@ test("countdown unlocks automatically at backend availability time", () => {
     assert.equal(wheelCooldownState(status, deadline - 1).freeReady, false);
     assert.equal(wheelCooldownState(status, deadline).freeReady, true);
     assert.equal(formatWheelCountdown(deadline, deadline), "00:00:00");
+});
+
+test("countdown cards and disabled button always show unambiguous timer copy", () => {
+    const now = Date.parse("2030-01-02T12:00:00Z");
+    const state = wheelCooldownState({
+        free_spins: 0,
+        ad_spins: 0,
+        next_free_spin_at: "2030-01-03T11:59:58Z",
+        next_ad_spin_at: "2030-01-02T12:48:21Z",
+    }, now);
+    assert.equal(formatWheelCountdown(state.freeAt, now), "23:59:58");
+    assert.equal(formatWheelCountdown(state.adAt, now), "00:48:21");
+    assert.equal(wheelNextSpinHint(state, now), "Keyingi reklama spini: 00:48:21");
+    assert.equal(wheelNextSpinHint({ ...state, canSpin: true }, now), "Spin tayyor");
 });
 
 test("Coin wizard is restricted to four validated steps", () => {
@@ -116,6 +131,7 @@ test("premium wheel markup contains loading, stats, spin and result UX", () => {
     assert.match(markup, /premiumWheelDisc/);
     assert.match(markup, /wheelStatusRegion/);
     assert.match(markup, /Aylantirish/);
+    assert.doesNotMatch(markup, /Qolgan spinlar[\s\S]*?COOLDOWN[\s\S]*?Oxirgi yutuq/);
     assert.match(markup, /Tabriklaymiz!/);
     assert.match(markup, /Balansingizga avtomatik qo‘shildi/);
     assert.match(markup, /Coin buyurtmasini rasmiylashtirish/);
