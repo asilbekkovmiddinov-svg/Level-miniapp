@@ -1,6 +1,7 @@
 let p2pOrders = [];
 let currentP2PType = "SELL";
 let p2pCreatePending = false;
+let p2pTradePending = false;
 const P2P_RESPONSE_MINUTES = new Set([5, 10, 15, 30, 60]);
 
 async function loadP2PPage() {
@@ -84,21 +85,127 @@ function renderP2POrders() {
                 <p>⏱ Javob vaqti: <b>${order.response_minutes} daqiqa</b></p>
 
                 <button class="red-btn" onclick="openP2PTrade(${order.id})">
-                    🤝 Savdo qilish
+                    🤝 ${p2pTradeActionLabel(order.order_type)}
                 </button>
             </div>
         `;
     }).join("");
 }
 
+function p2pTradeActionLabel(orderType) {
+    return String(orderType).toUpperCase() === "SELL" ? "Sotib olish" : "Sotish";
+}
+
+function validateP2PTradeAmount(value, minimum, remaining) {
+    const amount = p2pNumber(value);
+    const min = p2pNumber(minimum);
+    const max = p2pNumber(remaining);
+    if (amount <= 0) return { valid: false, message: "Savdo miqdorini kiriting." };
+    if (amount < min) {
+        return { valid: false, message: `Minimal savdo miqdori ${formatNumber(min)} EFC.` };
+    }
+    if (amount > max) {
+        return { valid: false, message: `Maksimal savdo miqdori ${formatNumber(max)} EFC.` };
+    }
+    return { valid: true, amount };
+}
+
 function openP2PTrade(orderId) {
-    tg.showPopup({
-        title: "P2P savdo",
-        message: `Order #${orderId} bo‘yicha savdo bot orqali yakunlanadi. WebApp savdo formasi V1.1 da qo‘shiladi.`,
-        buttons: [
-            { type: "ok", text: "Tushunarli" }
-        ]
-    });
+    if (p2pTradePending) return;
+    const order = p2pOrders.find((item) => Number(item.id) === Number(orderId));
+    if (!order) {
+        Modal.error("E’lon topilmadi. Ro‘yxatni yangilang.");
+        return;
+    }
+    const remaining = p2pNumber(order.remaining_efc);
+    const minimum = p2pNumber(order.min_trade_efc);
+    if (remaining <= 0) {
+        refreshP2P();
+        return;
+    }
+    closeP2PTrade();
+    const overlay = document.createElement("div");
+    overlay.id = "p2pTradeOverlay";
+    overlay.className = "p2p-trade-overlay";
+    overlay.innerHTML = `<section>
+        <header><div><small>ORDER #${Number(order.id)}</small><h3>${p2pTradeActionLabel(order.order_type)}</h3></div>
+            <button type="button" onclick="closeP2PTrade()">×</button></header>
+        <div class="p2p-trade-summary"><span><small>1 EFC narxi</small><b>${formatNumber(order.price_uzs)} UZS</b></span>
+            <span><small>Mavjud</small><b>${formatNumber(remaining)} EFC</b></span></div>
+        <form onsubmit="submitP2PTrade(event, ${Number(order.id)})">
+            <label>Savdo miqdori (EFC)<input name="efcAmount" type="number" inputmode="decimal"
+                min="${minimum}" max="${remaining}" step="0.0001" placeholder="${formatNumber(minimum)}" required
+                oninput="updateP2PTradeTotal(this, ${p2pNumber(order.price_uzs)})"></label>
+            <div class="p2p-trade-limits"><span>Min: <b>${formatNumber(minimum)} EFC</b></span>
+                <span>Max: <b>${formatNumber(remaining)} EFC</b></span></div>
+            <div class="p2p-trade-total"><small>Taxminiy summa</small><b id="p2pTradeTotal">0 UZS</b></div>
+            <div id="p2pTradeError" class="p2p-create-error" role="alert"></div>
+            <button class="p2p-create-submit" type="submit"><span>✓</span><b>Savdoni tasdiqlash</b></button>
+        </form>
+    </section>`;
+    document.body.appendChild(overlay);
+}
+
+function closeP2PTrade() {
+    if (p2pTradePending) return;
+    document.getElementById("p2pTradeOverlay")?.remove();
+}
+
+function updateP2PTradeTotal(input, priceUzs) {
+    const target = document.getElementById("p2pTradeTotal");
+    if (target) target.textContent = `${formatNumber(p2pNumber(input?.value) * p2pNumber(priceUzs))} UZS`;
+}
+
+function setP2PTradePending(pending) {
+    p2pTradePending = pending;
+    document.querySelectorAll("#p2pTradeOverlay input, #p2pTradeOverlay button")
+        .forEach((element) => { element.disabled = pending; });
+    document.querySelector("#p2pTradeOverlay .p2p-create-submit")?.classList.toggle("is-loading", pending);
+}
+
+function p2pTradeError(message = "") {
+    const target = document.getElementById("p2pTradeError");
+    if (target) target.textContent = message;
+}
+
+function p2pTradeResponse(result) {
+    return result?.data || result?.trade || result || {};
+}
+
+async function submitP2PTrade(event, orderId) {
+    event.preventDefault();
+    if (p2pTradePending) return;
+    const order = p2pOrders.find((item) => Number(item.id) === Number(orderId));
+    if (!order) {
+        p2pTradeError("E’lon yangilangan. Ro‘yxatni qayta yuklang.");
+        return;
+    }
+    const validation = validateP2PTradeAmount(
+        new FormData(event.currentTarget).get("efcAmount"),
+        order.min_trade_efc,
+        order.remaining_efc,
+    );
+    if (!validation.valid) {
+        p2pTradeError(validation.message);
+        return;
+    }
+    setP2PTradePending(true);
+    p2pTradeError("");
+    try {
+        const result = await createP2PTrade(orderId, validation.amount);
+        if (!result || result.success === false) {
+            throw new Error(result?.message || "Savdo yaratilmadi.");
+        }
+        const trade = p2pTradeResponse(result);
+        p2pTradePending = false;
+        document.getElementById("p2pTradeOverlay")?.remove();
+        await loadP2POrders(currentP2PType);
+        tg?.HapticFeedback?.notificationOccurred?.("success");
+        Modal.success(`P2P Trade #${trade.id || trade.trade_id || "—"} yaratildi. Savdo holatini Buyurtmalar sahifasida kuzating.`);
+    } catch (error) {
+        setP2PTradePending(false);
+        p2pTradeError(error.message || "Savdo yaratishda xatolik yuz berdi.");
+    }
 }
 
 function p2pNumber(value) {
@@ -251,5 +358,8 @@ if (typeof module !== "undefined" && module.exports) {
         validateP2PCreateOrder,
         optimisticP2POrder,
         p2pNumber,
+        p2pTradeActionLabel,
+        validateP2PTradeAmount,
+        p2pTradeResponse,
     };
 }
