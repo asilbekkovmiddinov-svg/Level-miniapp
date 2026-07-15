@@ -7,7 +7,6 @@ const path = require("node:path");
 const {
     normalizeWalletData,
     normalizeDepositPaymentDetails,
-    depositBankByKey,
     depositCopyRow,
     validateDepositAmount,
     validateWithdrawForm,
@@ -211,21 +210,6 @@ test("deposit payment details normalize backend contract", () => {
     }), /rekvizitlarini/);
 });
 
-test("premium deposit bank registry contains primary and other banks", () => {
-    const keys = [
-        "click", "payme", "uzum", "anorbank", "kapitalbank", "hamkorbank",
-        "aloqabank", "agrobank", "asakabank", "ipakyuli", "nbu", "xalq",
-        "turonbank", "ofb", "tbc", "davrbank", "ziraat", "infinbank",
-        "trastbank", "universalbank", "octobank",
-    ];
-    for (const key of keys) {
-        const bank = depositBankByKey(key);
-        assert.equal(bank.key, key);
-        assert.match(bank.scheme, /^[a-z][a-z0-9]+:\/\//);
-    }
-    assert.equal(depositBankByKey("unknown"), null);
-});
-
 test("deposit copy row escapes backend values and renders animated copy control", () => {
     const html = depositCopyRow("Karta", "<script>", "86001234");
     assert.equal(html.includes("<script>"), false);
@@ -250,6 +234,10 @@ test("deposit UX gates production evidence upload behind payment confirmation", 
         /onclick="openDepositEvidence\(\$\{details\.depositId\}\)"/,
     );
     assert.match(walletSource, /Men to‘lov qildim/);
+    assert.match(walletSource, /chek rasmini saqlab qo‘ying/);
+    assert.doesNotMatch(walletSource, /Bank ilovasini ochish/);
+    assert.doesNotMatch(walletSource, /openDepositBank/);
+    assert.doesNotMatch(walletSource, /openDepositOtherBanks/);
     assert.match(apiSource, /\/deposit\/\$\{id\}\/evidence/);
     assert.match(apiSource, /"X-Telegram-Init-Data": initData/);
     assert.match(apiSource, /formData\.append\("file", file/);
