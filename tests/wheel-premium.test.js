@@ -7,10 +7,12 @@ const {
     WHEEL_PRIZES,
     WHEEL_DEMO_REWARDS,
     wheelStatusValue,
+    wheelStatusFlag,
     wheelTimestamp,
     wheelCooldownState,
     formatWheelCountdown,
     wheelNextSpinHint,
+    wheelExpiredRefreshKey,
     wheelTargetRotation,
     normalizeWheelReward,
     normalizeWheelLastWin,
@@ -55,6 +57,20 @@ test("countdown unlocks automatically at backend availability time", () => {
     assert.equal(wheelCooldownState(status, deadline - 1).freeReady, false);
     assert.equal(wheelCooldownState(status, deadline).freeReady, true);
     assert.equal(formatWheelCountdown(deadline, deadline), "00:00:00");
+    assert.equal(wheelExpiredRefreshKey(wheelCooldownState(status, deadline), deadline), `free:${deadline}`);
+});
+
+test("backend readiness fields restore free spin and remove cooldown", () => {
+    const readyByFlag = wheelCooldownState({ free_spin_available: true, remaining_free_spins: 0 });
+    const readyByCount = wheelCooldownState({ free_spin_available: false, remaining_free_spins: 1 });
+    const unavailable = wheelCooldownState({ remaining_free_spins: 0 });
+    assert.equal(wheelStatusFlag({ free_spin_available: "true" }, ["free_spin_available"]), true);
+    assert.equal(readyByFlag.freeReady, true);
+    assert.equal(readyByFlag.freeCooldown, false);
+    assert.equal(readyByCount.freeReady, true);
+    assert.equal(readyByCount.freeSpins, 1);
+    assert.equal(unavailable.freeReady, false);
+    assert.equal(unavailable.freeCooldown, false);
 });
 
 test("countdown cards and disabled button always show unambiguous timer copy", () => {
@@ -168,4 +184,5 @@ test("last win supports reward icon, relative time and sound-ready cues", () => 
     assert.match(source, /levelgroup:wheel-sound/);
     assert.doesNotMatch(source, /Demo spin/);
     assert.match(source, /setInterval\(updateWheelCountdowns, 1000\)/);
+    assert.match(source, /refreshWheelState\(\)/);
 });
