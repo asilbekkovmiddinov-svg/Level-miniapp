@@ -51,6 +51,10 @@ function wheelStatusFlag(source, keys) {
     return value === true || value === 1 || ["true", "1", "yes"].includes(String(value).toLowerCase());
 }
 
+function wheelHasStatusField(source, keys) {
+    return keys.some((key) => Object.prototype.hasOwnProperty.call(source || {}, key));
+}
+
 function wheelTimestamp(source, deadlineKeys, lastKeys, cooldownMs) {
     const direct = wheelStatusValue(source, deadlineKeys, null);
     if (direct) {
@@ -64,9 +68,27 @@ function wheelTimestamp(source, deadlineKeys, lastKeys, cooldownMs) {
 }
 
 function wheelCooldownState(source, now = Date.now()) {
-    const freeSpins = Number(wheelStatusValue(source, ["remaining_free_spins", "free_spins", "daily_free_spins"]));
-    const adSpins = Number(wheelStatusValue(source, ["remaining_ad_spins", "ad_spins", "rewarded_spins"]));
-    const remaining = Number(wheelStatusValue(source, ["remaining_spins", "spins_left"], freeSpins + adSpins));
+    const hasNewFreeCount = wheelHasStatusField(source, ["remaining_free_spins"]);
+    const hasNewFreeFlag = wheelHasStatusField(source, ["free_spin_available", "free_spin_ready"]);
+    const hasLegacyFree = wheelHasStatusField(source, ["free_spin_used"]);
+    const hasNewAdCount = wheelHasStatusField(source, ["remaining_ad_spins"]);
+    const hasNewAdFlag = wheelHasStatusField(source, ["ad_spin_available", "ad_spin_ready"]);
+    const hasLegacyAd = wheelHasStatusField(source, ["ad_spin_count", "max_ad_spins"]);
+
+    const legacyFreeAvailable = hasLegacyFree && !wheelStatusFlag(source, ["free_spin_used"]);
+    const freeSpins = hasNewFreeCount
+        ? Math.max(0, Number(source.remaining_free_spins) || 0)
+        : hasLegacyFree ? (legacyFreeAvailable ? 1 : 0)
+            : Math.max(0, Number(wheelStatusValue(source, ["free_spins", "daily_free_spins"])) || 0);
+
+    const legacyAdUsed = Math.max(0, Number(source?.ad_spin_count) || 0);
+    const legacyAdMax = Math.max(0, Number(source?.max_ad_spins) || 0);
+    const adSpins = hasNewAdCount
+        ? Math.max(0, Number(source.remaining_ad_spins) || 0)
+        : hasLegacyAd ? Math.max(0, legacyAdMax - legacyAdUsed)
+            : Math.max(0, Number(wheelStatusValue(source, ["ad_spins", "rewarded_spins"])) || 0);
+    const explicitRemaining = wheelStatusValue(source, ["remaining_spins", "spins_left"], null);
+    const remaining = explicitRemaining === null ? freeSpins + adSpins : Math.max(0, Number(explicitRemaining) || 0);
     const freeAt = wheelTimestamp(
         source,
         ["next_free_spin_at", "free_spin_available_at", "free_spin_cooldown_until"],
@@ -79,10 +101,12 @@ function wheelCooldownState(source, now = Date.now()) {
         ["last_ad_spin_at", "ad_spin_used_at", "ad_viewed_at"],
         60 * 60 * 1000,
     );
-    const freeReady = wheelStatusFlag(source, ["free_spin_available", "free_spin_ready"])
+    const freeReady = (hasNewFreeFlag && wheelStatusFlag(source, ["free_spin_available", "free_spin_ready"]))
+        || (!hasNewFreeFlag && legacyFreeAvailable)
         || freeSpins > 0 || (freeAt !== null && freeAt <= now);
-    const adReady = wheelStatusFlag(source, ["ad_spin_available", "ad_spin_ready"])
-        || adSpins > 0 || (adAt !== null && adAt <= now);
+    const adReady = hasNewAdFlag
+        ? wheelStatusFlag(source, ["ad_spin_available", "ad_spin_ready"])
+        : adSpins > 0 && adAt === null;
     const freeCooldown = !freeReady && freeAt !== null && freeAt > now;
     const adCooldown = !adReady && adAt !== null && adAt > now;
     const deadlines = [freeReady ? null : freeAt, adReady ? null : adAt].filter((value) => value && value > now);
@@ -97,7 +121,7 @@ function wheelCooldownState(source, now = Date.now()) {
         adReady,
         freeCooldown,
         adCooldown,
-        canSpin: remaining > 0 || freeReady || adReady,
+        canSpin: (explicitRemaining !== null && Number(explicitRemaining) > 0) || freeReady || adReady,
         nextReadyAt: deadlines.length ? Math.min(...deadlines) : null,
     };
 }
@@ -705,6 +729,7 @@ if (typeof module !== "undefined") {
         WHEEL_DEMO_REWARDS,
         wheelStatusValue,
         wheelStatusFlag,
+        wheelHasStatusField,
         wheelTimestamp,
         wheelCooldownState,
         formatWheelCountdown,
