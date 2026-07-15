@@ -1,5 +1,7 @@
 let p2pOrders = [];
 let currentP2PType = "SELL";
+let p2pCreatePending = false;
+const P2P_RESPONSE_MINUTES = new Set([5, 10, 15, 30, 60]);
 
 async function loadP2PPage() {
     Navbar.setActive("p2p");
@@ -14,6 +16,11 @@ async function loadP2POrders(type = "SELL") {
     const page = document.getElementById("p2pPage");
 
     page.innerHTML = `
+        <section class="p2p-v2-head">
+            <div><small>SECURE MARKET</small><h2>P2P e’lonlar</h2>
+                <p>EFC’ni xavfsiz sotib oling yoki soting.</p></div>
+            <button type="button" onclick="openP2PCreateOrder()"><span>＋</span>E’lon yaratish</button>
+        </section>
         <div class="tab-row">
             <button class="tab-btn ${type === "SELL" ? "active" : ""}" onclick="loadP2POrders('SELL')">
                 Sotish
@@ -94,6 +101,141 @@ function openP2PTrade(orderId) {
     });
 }
 
+function p2pNumber(value) {
+    const number = Number(String(value ?? "").replace(/[\s,]/g, ""));
+    return Number.isFinite(number) ? number : 0;
+}
+
+function validateP2PCreateOrder({ orderType, efcAmount, priceUzs, minTradeEfc, responseMinutes }) {
+    const type = String(orderType || "").toUpperCase();
+    const amount = p2pNumber(efcAmount);
+    const price = p2pNumber(priceUzs);
+    const minimum = p2pNumber(minTradeEfc);
+    const minutes = Number(responseMinutes);
+    if (!['BUY', 'SELL'].includes(type)) {
+        return { valid: false, message: "E’lon turini tanlang." };
+    }
+    if (amount <= 0) return { valid: false, message: "EFC miqdorini to‘g‘ri kiriting." };
+    if (price <= 0) return { valid: false, message: "1 EFC narxini to‘g‘ri kiriting." };
+    if (minimum <= 0) return { valid: false, message: "Minimal savdo miqdorini kiriting." };
+    if (minimum > amount) {
+        return { valid: false, message: "Minimal savdo miqdori umumiy EFC’dan oshmasin." };
+    }
+    if (!P2P_RESPONSE_MINUTES.has(minutes)) {
+        return { valid: false, message: "Javob vaqtini ro‘yxatdan tanlang." };
+    }
+    return {
+        valid: true,
+        orderType: type,
+        efcAmount: amount,
+        priceUzs: price,
+        minTradeEfc: minimum,
+        responseMinutes: minutes,
+    };
+}
+
+function openP2PCreateOrder() {
+    if (p2pCreatePending) return;
+    closeP2PCreateOrder();
+    const overlay = document.createElement("div");
+    overlay.id = "p2pCreateOverlay";
+    overlay.className = "p2p-create-overlay";
+    overlay.innerHTML = `<section>
+        <header><div><small>YANGI E’LON</small><h3>P2P order yaratish</h3></div>
+            <button type="button" onclick="closeP2PCreateOrder()">×</button></header>
+        <form onsubmit="submitP2PCreateOrder(event)">
+            <fieldset><legend>E’lon turi</legend>
+                <label><input type="radio" name="orderType" value="SELL" checked><span>Sotish</span></label>
+                <label><input type="radio" name="orderType" value="BUY"><span>Sotib olish</span></label>
+            </fieldset>
+            <label>EFC miqdori<input name="efcAmount" type="number" min="0.0001" step="0.0001"
+                inputmode="decimal" placeholder="100" required></label>
+            <label>1 EFC narxi (UZS)<input name="priceUzs" type="number" min="0.01" step="0.01"
+                inputmode="decimal" placeholder="1 000" required></label>
+            <label>Minimal savdo miqdori<input name="minTradeEfc" type="number" min="0.0001" step="0.0001"
+                inputmode="decimal" placeholder="10" required></label>
+            <label>Javob berish vaqti<select name="responseMinutes" required>
+                ${[5, 10, 15, 30, 60].map((minute) => `<option value="${minute}" ${minute === 15 ? "selected" : ""}>${minute} daqiqa</option>`).join("")}
+            </select></label>
+            <div id="p2pCreateError" class="p2p-create-error" role="alert"></div>
+            <button class="p2p-create-submit" type="submit"><span>＋</span><b>E’lon yaratish</b></button>
+        </form>
+    </section>`;
+    document.body.appendChild(overlay);
+}
+
+function closeP2PCreateOrder() {
+    if (p2pCreatePending) return;
+    document.getElementById("p2pCreateOverlay")?.remove();
+}
+
+function setP2PCreatePending(pending) {
+    p2pCreatePending = pending;
+    document.querySelectorAll("#p2pCreateOverlay input, #p2pCreateOverlay select, #p2pCreateOverlay button")
+        .forEach((element) => { element.disabled = pending; });
+    document.querySelector("#p2pCreateOverlay .p2p-create-submit")?.classList.toggle("is-loading", pending);
+}
+
+function p2pCreateError(message = "") {
+    const target = document.getElementById("p2pCreateError");
+    if (target) target.textContent = message;
+}
+
+function optimisticP2POrder(result, values) {
+    const data = result?.data || result?.order || result || {};
+    return {
+        ...data,
+        id: data.id || data.order_id || result?.order_id || "Yangi",
+        order_type: data.order_type || values.orderType,
+        efc_amount: data.efc_amount ?? values.efcAmount,
+        remaining_efc: data.remaining_efc ?? values.efcAmount,
+        price_uzs: data.price_uzs ?? values.priceUzs,
+        min_trade_efc: data.min_trade_efc ?? values.minTradeEfc,
+        response_minutes: data.response_minutes ?? values.responseMinutes,
+        owner_id: data.owner_id || (typeof TELEGRAM_ID !== "undefined" ? TELEGRAM_ID : 0),
+        owner_is_online: true,
+        owner_online_text: data.owner_online_text || "🟢 Sizning e’loningiz",
+    };
+}
+
+async function submitP2PCreateOrder(event) {
+    event.preventDefault();
+    if (p2pCreatePending) return;
+    const form = new FormData(event.currentTarget);
+    const values = validateP2PCreateOrder({
+        orderType: form.get("orderType"),
+        efcAmount: form.get("efcAmount"),
+        priceUzs: form.get("priceUzs"),
+        minTradeEfc: form.get("minTradeEfc"),
+        responseMinutes: form.get("responseMinutes"),
+    });
+    if (!values.valid) {
+        p2pCreateError(values.message);
+        return;
+    }
+    setP2PCreatePending(true);
+    p2pCreateError("");
+    try {
+        const result = await createP2POrder(values);
+        if (!result || result.success === false) {
+            throw new Error(result?.message || "E’lon yaratilmadi.");
+        }
+        const created = optimisticP2POrder(result, values);
+        p2pCreatePending = false;
+        document.getElementById("p2pCreateOverlay")?.remove();
+        currentP2PType = values.orderType;
+        await loadP2POrders(values.orderType);
+        if (!p2pOrders.some((order) => String(order.id) === String(created.id))) {
+            p2pOrders.unshift(created);
+            renderP2POrders();
+        }
+        tg?.HapticFeedback?.notificationOccurred?.("success");
+    } catch (error) {
+        setP2PCreatePending(false);
+        p2pCreateError(error.message || "E’lon yaratishda xatolik yuz berdi.");
+    }
+}
+
 async function refreshP2P() {
     await loadP2POrders(currentP2PType);
 }
@@ -102,4 +244,12 @@ function formatNumber(value) {
     return Number(value || 0).toLocaleString("uz-UZ", {
         maximumFractionDigits: 4,
     });
+}
+
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+        validateP2PCreateOrder,
+        optimisticP2POrder,
+        p2pNumber,
+    };
 }
