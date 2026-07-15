@@ -719,6 +719,11 @@ body {
 @media(max-width:340px){.wheel-timer-card>small{font-size:7px}.wheel-timer-card>em{font-size:5px}}
 @media(prefers-reduced-motion:reduce){.wheel-timer-card,.wheel-spin-button{transition:none}.wheel-timer-card.just-ready,.wheel-spin-button.is-ready,.wheel-spin-button.just-ready{animation:none}}
 
+/* Wheel Countdown UI Hotfix */
+.wheel-timer-card{min-height:88px;padding-top:35px}.wheel-timer-card>i{position:absolute;top:9px;left:10px}.wheel-timer-card>span{margin-top:0}#wheelStatusRegion .wheel-timer-card>b{position:static;display:block;max-width:none;margin-top:7px;overflow:visible;font-size:15px;font-variant-numeric:tabular-nums;letter-spacing:.04em;text-overflow:clip;white-space:nowrap}.wheel-timer-card>em{top:10px;right:9px;bottom:auto;max-width:calc(100% - 42px);white-space:nowrap}.wheel-timer-card.is-ready>b{color:#fde68a}.wheel-remaining-card{min-height:88px}#wheelStatusRegion .wheel-remaining-card>b{max-width:none}.wheel-last-win{min-height:96px;padding-top:12px;padding-bottom:28px}#wheelStatusRegion .wheel-last-win>b{position:static;display:block;max-width:100%;margin-top:7px;overflow:visible;font-size:12px;line-height:1.25;overflow-wrap:anywhere;text-overflow:clip;white-space:normal}.wheel-last-win>small{max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wheel-spin-button small{max-width:100%;padding-right:8px;overflow:hidden;font-size:8px;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:340px){.wheel-timer-card>b{font-size:13px}.wheel-timer-card>em{font-size:5px}.wheel-spin-button small{font-size:7px}}
+@media(min-width:400px){.wheel-timer-card,.wheel-remaining-card{min-height:98px;padding-left:9px;padding-right:9px}.wheel-timer-card>b{font-size:11px;letter-spacing:0}.wheel-timer-card>em{right:6px;font-size:5px}.wheel-last-win>b{font-size:10px}.wheel-last-win>small{right:8px}}
+
 .profile-box {
     background: linear-gradient(135deg, #151a23, #300b0b);
     border: 1px solid rgba(239,68,68,0.25);
