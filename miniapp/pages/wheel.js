@@ -25,7 +25,6 @@ let wheelCountdownTimer = null;
 let wheelCooldownSnapshot = null;
 let wheelStateRefreshing = false;
 let wheelLastExpiryRefreshKey = null;
-let wheelLastBackendResult = null;
 let wheelServerOffsetMs = 0;
 
 const WHEEL_COIN_REGIONS = ["Global", "Japan"];
@@ -372,10 +371,6 @@ async function loadWheelStatus({ silent = false } = {}) {
         if (!result || result.success === false) throw new Error("Wheel status unavailable");
         wheelData = result.data || result;
         syncWheelServerTime(wheelData);
-        if (wheelLastBackendResult
-            && !wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], null)) {
-            wheelData = { ...wheelData, last_win: wheelLastBackendResult };
-        }
         renderWheelInfo();
     } catch (error) {
         console.error(error);
@@ -406,7 +401,7 @@ function renderWheelInfo() {
     if (!region || !button) return;
 
     const cooldown = wheelCooldownState(wheelData);
-    const lastPrize = normalizeWheelLastWin(wheelStatusValue(wheelData, ["last_prize", "last_reward", "last_win"], null));
+    const lastPrize = normalizeWheelLastWin(wheelData?.last_win);
 
     region.innerHTML = `<div class="wheel-stats">
         <article id="wheelFreeCard" class="wheel-timer-card ${cooldown.freeReady ? "is-ready" : cooldown.freeCooldown ? "is-cooldown" : ""}"><i>☀️</i><span>Bugungi bepul spin</span><b id="wheelFreeCountdown" ${cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeCooldown ? formatWheelCountdown(cooldown.freeAt) : ""}</b><em id="wheelFreeBadge" ${cooldown.freeReady || cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
@@ -532,7 +527,6 @@ async function spinFreeWheel() {
         const spinType = wheelSpinType(wheelCooldownSnapshot, wheelData);
         const backendResult = await spinProductionWheel(spinType);
         if (!backendResult || backendResult.success === false) throw new Error(backendResult?.message || "Wheel aylantirilmadi.");
-        wheelLastBackendResult = backendResult;
         const resultIndex = applyWheelBackendSector(backendResult);
         const turns = 6 + (Math.abs(Number(backendResult.global_spin_number) || 0) % 3);
         beginWheelVisualSpin(disc, resultIndex, backendResult, turns);
