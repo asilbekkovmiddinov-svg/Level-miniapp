@@ -31,8 +31,8 @@ let wheelServerOffsetMs = 0;
 const WHEEL_COIN_REGIONS = ["Global", "Japan"];
 const WHEEL_COIN_PLATFORMS = ["Android", "iOS"];
 
-function wheelNow() {
-    return Date.now() + wheelServerOffsetMs;
+function wheelNow(clientNow = Date.now()) {
+    return clientNow + wheelServerOffsetMs;
 }
 
 function syncWheelServerTime(source, clientNow = Date.now()) {
