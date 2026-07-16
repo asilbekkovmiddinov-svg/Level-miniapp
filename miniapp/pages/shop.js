@@ -242,7 +242,7 @@ async function buyProduct(productId, region = null) {
             return;
         }
         shopOrderAttempt = null;
-        Modal.success("Buyurtma muvaffaqiyatli yaratildi.");
+        openShopOrderDetails(result.data || result);
     } catch (error) {
         Modal.error(error?.message || "Buyurtma yaratilmadi.");
     } finally {
@@ -251,6 +251,57 @@ async function buyProduct(productId, region = null) {
             button.disabled = false;
         });
     }
+}
+
+function openShopOrderDetails(order) {
+    const orderId = Number(order?.id || order?.order_id);
+    const container = document.getElementById("shopProducts");
+    if (!orderId || !container) return Modal.error("Order ID topilmadi.");
+    container.innerHTML = `<section class="coin-details-form"><small>ORDER #${orderId}</small>
+        <h3>MyKonami ma’lumotlari</h3>
+        <form onsubmit="submitShopDetails(event,${orderId})">
+            <label>Email<input name="email" type="email" autocomplete="username" required></label>
+            <label>Parol<span class="coin-password"><input name="password" type="password" autocomplete="current-password" required><button type="button" onclick="toggleShopPassword(this)">Ko‘rsatish</button></span></label>
+            <fieldset><legend>Platforma</legend><label><input type="radio" name="platform" value="ANDROID" checked> Android</label><label><input type="radio" name="platform" value="IOS"> iOS</label></fieldset>
+            <fieldset><legend>Region</legend><label><input type="radio" name="region" value="GLOBAL" checked> Global</label><label><input type="radio" name="region" value="JAPAN"> Japan</label></fieldset>
+            <p id="shopDetailsError" class="form-error"></p><button class="red-btn" type="submit">Yuborish</button>
+        </form></section>`;
+}
+
+function resumeShopDetails(orderId) {
+    closeOrderDetails?.();
+    Navbar.setActive("shop"); showPage("shopPage", "Coin Shop");
+    const page = document.getElementById("shopPage");
+    if (page) page.innerHTML = `<div id="shopProducts"></div>`;
+    openShopOrderDetails({ id: orderId });
+}
+
+function toggleShopPassword(button) {
+    const input = button?.parentElement?.querySelector("input");
+    if (!input) return;
+    input.type = input.type === "password" ? "text" : "password";
+    button.textContent = input.type === "password" ? "Ko‘rsatish" : "Yashirish";
+}
+
+async function submitShopDetails(event, orderId) {
+    event.preventDefault();
+    if (shopOrderSubmitting) return;
+    const form = event.currentTarget; const button = form.querySelector("button[type=submit]");
+    const email = String(form.elements.email.value || "").trim();
+    const password = String(form.elements.password.value || "");
+    const error = document.getElementById("shopDetailsError");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 4) {
+        error.textContent = "Email yoki parolni tekshiring."; return;
+    }
+    shopOrderSubmitting = true; button.disabled = true;
+    try {
+        await submitShopOrderDetails(orderId, { konami_login: email, konami_password: password,
+            platform: form.elements.platform.value, region: form.elements.region.value });
+        form.elements.password.value = "";
+        Modal.success("Ma’lumotlar yuborildi. Operator kod yuborishini kuting.");
+        await loadOrdersPage();
+    } catch (exception) { error.textContent = exception?.message || "Ma’lumotlar yuborilmadi."; }
+    finally { shopOrderSubmitting = false; button.disabled = false; }
 }
 
 async function refreshShop() {
