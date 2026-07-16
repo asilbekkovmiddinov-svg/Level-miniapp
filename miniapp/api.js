@@ -150,22 +150,25 @@ async function createOrder(productId, region = null, idempotencyKey = null) {
     });
 }
 
-async function createCoinRewardOrder({ productId, email, password, region, platform }) {
-    const id = Number(productId);
+async function createCoinRewardOrder({ spinId, email, password, region, platform }) {
+    const id = Number(spinId);
     if (!Number.isInteger(id) || id <= 0) {
-        throw new Error("Coin mahsuloti topilmadi.");
+        throw new Error("Wheel spin ID topilmadi.");
     }
-    return await walletRequest("/orders/create", {
+    return await walletRequest("/wheel/coin-order/details", {
         method: "POST",
         body: {
-            telegram_id: TELEGRAM_ID,
-            product_id: id,
+            spin_id: id,
+            konami_login: email,
+            konami_password: password,
             region,
-            login: email,
-            password,
             platform,
         },
     });
+}
+
+async function getPendingWheelCoinOrder() {
+    return await walletRequest("/wheel/coin-order/pending");
 }
 
 async function getUserOrders() {
