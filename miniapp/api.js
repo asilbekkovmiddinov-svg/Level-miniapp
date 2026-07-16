@@ -171,6 +171,10 @@ async function getPendingWheelCoinOrder() {
     return await walletRequest("/wheel/coin-order/pending");
 }
 
+async function getWheelCoinOrders() {
+    return await walletRequest("/wheel/coin-orders/user");
+}
+
 async function getUserOrders() {
     return await walletRequest("/orders/user");
 }
