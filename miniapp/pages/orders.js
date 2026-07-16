@@ -241,7 +241,7 @@ async function openOrderDetails(index) {
             <span>Summa</span><b>${ordersAmount(order)}</b><span>Sana</span><b>${ordersEscape(ordersDateTime(order.date))}</b>
             <span>Tavsif</span><b>${ordersEscape(order.description)}</b>
             ${extra.map(([key, value]) => `<span>${ordersEscape(key.replaceAll("_", " "))}</span><b>${ordersEscape(value)}</b>`).join("")}
-        </div>${order.kind === "shop" && order.status === "WAITING_DETAILS" ? `<button class="orders-detail-action" type="button" onclick="resumeShopDetails(${Number(order.id)})">Ma’lumotlarni davom ettirish</button>` : ""}${["wheel_coin", "shop"].includes(order.kind) ? coinOrderChatMarkup() : ""}</section>`;
+        </div>${["wheel_coin", "shop"].includes(order.kind) ? coinOrderChatMarkup() : ""}</section>`;
     document.body.appendChild(overlay);
     if (["wheel_coin", "shop"].includes(order.kind)) await loadCoinOrderChat(order);
 }
