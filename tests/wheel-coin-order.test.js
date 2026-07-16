@@ -46,7 +46,7 @@ test("Wheel wizard keeps spin identity and restores WAITING_DETAILS after reload
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
     assert.match(source, /spinId: Number\(source\.spin_id/);
     assert.match(source, /await restorePendingWheelCoinOrder\(\)/);
-    assert.match(source, /"WAITING_DETAILS", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED"/);
+    assert.match(source, /"WAITING_DETAILS", "PENDING", "CLAIMED"/);
     assert.match(source, /spin_id: pending\.spin_id/);
     assert.match(source, /pending\.status !== "WAITING_DETAILS"\) renderWheelCoinSuccess/);
     assert.match(source, /spinId: state\.spinId/);
