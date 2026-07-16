@@ -139,14 +139,14 @@ async function getProducts(category = "") {
         ? `?category=${encodeURIComponent(category)}`
         : "";
 
-    return await api(`/products/active${query}`);
+    return await walletRequest(`/products/active${query}`);
 }
 
-async function createOrder(productId, region = null) {
-    return await api("/orders/create", "POST", {
-        telegram_id: TELEGRAM_ID,
-        product_id: productId,
-        region,
+async function createOrder(productId, region = null, idempotencyKey = null) {
+    return await walletRequest("/orders/create", {
+        method: "POST",
+        body: { product_id: productId, region },
+        idempotencyKey,
     });
 }
 
@@ -169,7 +169,7 @@ async function createCoinRewardOrder({ productId, email, password, region, platf
 }
 
 async function getUserOrders() {
-    return await api(`/orders/user/${TELEGRAM_ID}`);
+    return await walletRequest("/orders/user");
 }
 
 async function getOpenP2POrders(orderType = "") {
