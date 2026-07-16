@@ -276,6 +276,7 @@ test("production backend reward selects its exact sector", () => {
     assert.equal(wheelSectorIndexForReward({ reward_type: "EFC", reward_amount: 100 }), 2);
     assert.equal(wheelSectorIndexForReward({ reward_type: "COIN_ORDER", reward_amount: 130 }), 8);
     assert.equal(normalizeWheelReward({ reward_type: "COIN_ORDER", reward_amount: 2000 }).label, "2 000 Coin");
+    assert.equal(normalizeWheelReward({ reward_type: "COIN_ORDER", reward_amount: 130, spin_id: 731 }).spinId, 731);
 });
 
 test("production spin type follows backend-ready state", () => {
