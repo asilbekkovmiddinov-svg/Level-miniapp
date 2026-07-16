@@ -150,6 +150,26 @@ async function createOrder(productId, region = null, idempotencyKey = null) {
     });
 }
 
+async function submitShopOrderDetails(orderId, details) {
+    return await walletRequest(`/orders/${Number(orderId)}/details`, {
+        method: "POST", body: details,
+    });
+}
+
+async function getCoinOrderMessages(orderType, orderId) {
+    return await walletRequest(`/coin-order-chat/${encodeURIComponent(orderType)}/${Number(orderId)}/messages`);
+}
+
+async function sendCoinOrderMessage(orderType, orderId, message) {
+    return await walletRequest(`/coin-order-chat/${encodeURIComponent(orderType)}/${Number(orderId)}/messages`, {
+        method: "POST", body: { message },
+    });
+}
+
+async function markCoinOrderMessagesRead(orderType, orderId) {
+    return await walletRequest(`/coin-order-chat/${encodeURIComponent(orderType)}/${Number(orderId)}/read`, { method: "POST" });
+}
+
 async function createCoinRewardOrder({ spinId, email, password, region, platform }) {
     const id = Number(spinId);
     if (!Number.isInteger(id) || id <= 0) {
