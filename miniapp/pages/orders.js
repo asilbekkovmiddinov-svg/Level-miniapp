@@ -2,6 +2,7 @@ let orderHistory = [];
 let ordersLoading = false;
 
 const ORDER_STATUS_LABELS = {
+    WAITING_DETAILS: "Ma’lumotlar kutilmoqda",
     PENDING: "Kutilmoqda",
     CLAIMED: "Tekshiruvda",
     PROCESSING: "Jarayonda",
@@ -54,10 +55,11 @@ function normalizeHistoryItem(kind, item, index = 0) {
         p2p_trade: { type: "P2P Trade", icon: "P", currency: "EFC" },
         arena: { type: "Arena Match", icon: "A", currency: "EFC" },
         shop: { type: "Coin Shop", icon: "C", currency: "UZS" },
+        wheel_coin: { type: "Wheel Coin", icon: "C", currency: "COIN" },
         wheel: { type: "Wheel Reward", icon: "W", currency: item.currency || "EFC" },
     };
     const definition = definitions[kind];
-    const amount = item.amount ?? item.efc_amount ?? item.stakeEfc ?? item.locked_amount
+    const amount = item.amount ?? item.coin_amount ?? item.efc_amount ?? item.stakeEfc ?? item.locked_amount
         ?? item.total_uzs ?? item.total_price ?? item.price_uzs ?? item.price ?? 0;
     const id = item.id ?? item.order_id ?? item.match_id ?? item.transaction_id ?? index + 1;
     const description = item.description || item.product_name || item.game_type || item.gameType
@@ -89,10 +91,11 @@ function normalizeTransactionHistory(payload) {
     });
 }
 
-function normalizeOrdersHistory({ transactions, shop, p2pOrders, p2pTrades, matches }) {
+function normalizeOrdersHistory({ transactions, shop, wheelCoins, p2pOrders, p2pTrades, matches }) {
     const combined = [
         ...normalizeTransactionHistory(transactions),
         ...ordersArray(shop, ["orders"]).map((item, index) => normalizeHistoryItem("shop", item, index)),
+        ...ordersArray(wheelCoins, ["orders"]).map((item, index) => normalizeHistoryItem("wheel_coin", item, index)),
         ...ordersArray(p2pOrders, ["orders"]).map((item, index) => normalizeHistoryItem("p2p_order", item, index)),
         ...ordersArray(p2pTrades, ["trades"]).map((item, index) => normalizeHistoryItem("p2p_trade", item, index)),
         ...ordersArray(matches, ["matches"]).map((item, index) => normalizeHistoryItem("arena", item, index)),
@@ -176,6 +179,7 @@ async function loadOrders() {
         const requests = await Promise.allSettled([
             loadAllWalletTransactions(),
             getUserOrders(),
+            getWheelCoinOrders(),
             getMyP2POrders(),
             getMyP2PTrades(),
             loadAllArenaMatches(),
@@ -185,8 +189,8 @@ async function loadOrders() {
         }
         const value = (index) => requests[index].status === "fulfilled" ? requests[index].value : [];
         orderHistory = normalizeOrdersHistory({
-            transactions: value(0), shop: value(1), p2pOrders: value(2),
-            p2pTrades: value(3), matches: value(4),
+            transactions: value(0), shop: value(1), wheelCoins: value(2),
+            p2pOrders: value(3), p2pTrades: value(4), matches: value(5),
         });
         renderOrders();
     } catch (error) {
@@ -230,12 +234,21 @@ function openOrderDetails(index) {
         .slice(0, 5);
     overlay.innerHTML = `<section><header><div><small>${ordersEscape(order.type.toUpperCase())}</small>
         <h3>Order #${ordersEscape(order.id)}</h3></div><button type="button" onclick="closeOrderDetails()">×</button></header>
+        ${order.kind === "wheel_coin" ? wheelCoinTimelineMarkup(order.status) : ""}
         <div class="orders-detail-grid"><span>Status</span><b>${orderStatusBadge(order.status)}</b>
             <span>Summa</span><b>${ordersAmount(order)}</b><span>Sana</span><b>${ordersEscape(ordersDateTime(order.date))}</b>
             <span>Tavsif</span><b>${ordersEscape(order.description)}</b>
             ${extra.map(([key, value]) => `<span>${ordersEscape(key.replaceAll("_", " "))}</span><b>${ordersEscape(value)}</b>`).join("")}
         </div></section>`;
     document.body.appendChild(overlay);
+}
+
+function wheelCoinTimelineMarkup(status) {
+    const current = String(status || "WAITING_DETAILS").toUpperCase();
+    const steps = ["WAITING_DETAILS", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"];
+    return `<ol class="coin-order-timeline" aria-label="Coin order status">
+        ${steps.map((step) => `<li class="${step === current ? "is-current" : ""}"><i></i><span>${ordersEscape(ORDER_STATUS_LABELS[step] || step)}</span></li>`).join("")}
+    </ol>`;
 }
 
 function closeOrderDetails() {
@@ -255,5 +268,6 @@ if (typeof module !== "undefined" && module.exports) {
         normalizeOrdersHistory,
         ordersArray,
         ordersDateTime,
+        wheelCoinTimelineMarkup,
     };
 }
