@@ -4,7 +4,7 @@ const vm = require("node:vm");
 const fs = require("node:fs");
 const path = require("node:path");
 
-test("Coin reward order uses existing endpoint with initData and credentials only in submit body", async () => {
+test("Coin reward order uses authoritative Wheel endpoint with verified identity", async () => {
     const calls = [];
     const context = {
         window: { Telegram: { WebApp: { initData: "verified-wheel-init" } } },
@@ -20,24 +20,36 @@ test("Coin reward order uses existing endpoint with initData and credentials onl
     vm.runInContext(fs.readFileSync(path.join(__dirname, "../miniapp/api.js"), "utf8"), context);
 
     await context.createCoinRewardOrder({
-        productId: 130,
+        spinId: 731,
         email: "player@example.com",
         password: "one-time-secret",
         region: "Global",
         platform: "Android",
     });
+    await context.getPendingWheelCoinOrder();
 
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "https://backend.example/orders/create");
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].url, "https://backend.example/wheel/coin-order/details");
+    assert.equal(calls[1].url, "https://backend.example/wheel/coin-order/pending");
     assert.equal(calls[0].options.headers["X-Telegram-Init-Data"], "verified-wheel-init");
+    assert.equal(calls[1].options.headers["X-Telegram-Init-Data"], "verified-wheel-init");
     assert.deepEqual(JSON.parse(calls[0].options.body), {
-        telegram_id: 42,
-        product_id: 130,
+        spin_id: 731,
+        konami_login: "player@example.com",
+        konami_password: "one-time-secret",
         region: "Global",
-        login: "player@example.com",
-        password: "one-time-secret",
         platform: "Android",
     });
+});
+
+test("Wheel wizard keeps spin identity and restores WAITING_DETAILS after reload", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.match(source, /spinId: Number\(source\.spin_id/);
+    assert.match(source, /await restorePendingWheelCoinOrder\(\)/);
+    assert.match(source, /pending\.status !== "WAITING_DETAILS"/);
+    assert.match(source, /spin_id: pending\.spin_id/);
+    assert.match(source, /spinId: state\.spinId/);
+    assert.doesNotMatch(source, /findWheelCoinProduct/);
 });
 
 test("Coin Shop APIs use verified initData, authenticated history and idempotency", async () => {
