@@ -150,12 +150,6 @@ async function createOrder(productId, region = null, idempotencyKey = null) {
     });
 }
 
-async function submitShopOrderDetails(orderId, details) {
-    return await walletRequest(`/orders/${Number(orderId)}/details`, {
-        method: "POST", body: details,
-    });
-}
-
 async function getCoinOrderMessages(orderType, orderId) {
     return await walletRequest(`/coin-order-chat/${encodeURIComponent(orderType)}/${Number(orderId)}/messages`);
 }
