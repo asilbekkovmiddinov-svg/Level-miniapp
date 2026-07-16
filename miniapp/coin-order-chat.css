@@ -69,3 +69,8 @@
 .orders-card-amount em {
     font-style: normal;
 }
+
+.coin-credential-form {padding:18px;border:1px solid #30343d;border-radius:18px;background:#17191f}
+.coin-credential-form form,.coin-credential-form label{display:grid;gap:8px}.coin-credential-form form{gap:14px}
+.coin-credential-form input{padding:12px;border:1px solid #3b404b;border-radius:12px;background:#0d0f13;color:#fff}
+.coin-credential-form label>span{display:flex;gap:8px}.coin-credential-form label>span input{flex:1;min-width:0}
