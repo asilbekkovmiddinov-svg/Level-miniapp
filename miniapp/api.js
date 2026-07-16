@@ -142,10 +142,16 @@ async function getProducts(category = "") {
     return await walletRequest(`/products/active${query}`);
 }
 
-async function createOrder(productId, region = null, idempotencyKey = null) {
+async function createOrder(productId, region = null, idempotencyKey = null, credentials = {}) {
     return await walletRequest("/orders/create", {
         method: "POST",
-        body: { product_id: productId, region },
+        body: {
+            product_id: productId,
+            region,
+            konami_login: credentials.email,
+            konami_password: credentials.password,
+            platform: credentials.platform,
+        },
         idempotencyKey,
     });
 }

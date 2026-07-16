@@ -282,7 +282,8 @@ async function loadCoinOrderChat(order) {
         const messages = Array.isArray(result.data) ? result.data : [];
         box.innerHTML = messages.length ? messages.map((item) => `<article class="coin-chat-${String(item.sender).toLowerCase()}">
             <b>${item.sender === "USER" ? "Siz" : "Operator"}</b><p>${ordersEscape(item.message)}</p>
-            <time>${ordersEscape(ordersDateTime(item.created_at))}</time></article>`).join("") : "<p>Suhbat hali boshlanmagan.</p>";
+            <time>${ordersEscape(ordersDateTime(item.created_at))}</time></article>`).join("")
+            : `<p>${result.status === "WAITING_OTP" ? "MyKonami emailingizga kelgan 6 xonali kodni yozing." : "Suhbat hali boshlanmagan."}</p>`;
         box.scrollTop = box.scrollHeight;
         if (result.unread_count) await markCoinOrderMessagesRead(type, order.id);
     } catch (error) { box.innerHTML = `<p>${ordersEscape(error?.message || "Chat yuklanmadi.")}</p>`; }
