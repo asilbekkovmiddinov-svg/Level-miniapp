@@ -7,6 +7,7 @@ const {
     normalizeOrdersHistory,
     normalizeTransactionHistory,
     ordersDateTime,
+    wheelCoinTimelineMarkup,
 } = require("../miniapp/pages/orders.js");
 
 test("orders history combines every supported production source newest first", () => {
@@ -17,12 +18,13 @@ test("orders history combines every supported production source newest first", (
             { id: 3, transaction_type: "WHEEL_REWARD", amount: 5, currency: "EFC", status: "SUCCESS", created_at: "2026-01-03T08:00:00Z" },
         ],
         shop: { data: [{ id: 4, price_uzs: 90000, status: "PENDING", created_at: "2026-01-04T08:00:00Z" }] },
+        wheelCoins: { data: [{ id: 8, coin_amount: 130, status: "CLAIMED", created_at: "2026-01-04T09:00:00Z" }] },
         p2pOrders: { data: [{ id: 5, efc_amount: 50, status: "OPEN", created_at: "2026-01-05T08:00:00Z" }] },
         p2pTrades: { data: [{ id: 6, efc_amount: 25, status: "COMPLETED", created_at: "2026-01-06T08:00:00Z" }] },
         matches: [{ id: 7, efc_amount: 100, status: "PLAYING", created_at: "2026-01-07T08:00:00Z" }],
     });
     assert.deepEqual(new Set(history.map((item) => item.kind)), new Set([
-        "deposit", "withdraw", "wheel", "shop", "p2p_order", "p2p_trade", "arena",
+        "deposit", "withdraw", "wheel", "shop", "wheel_coin", "p2p_order", "p2p_trade", "arena",
     ]));
     assert.equal(history[0].kind, "arena");
     assert.equal(history.at(-1).kind, "deposit");
@@ -48,6 +50,7 @@ test("orders page uses production APIs, detail, refresh and premium empty state"
     assert.doesNotMatch(source, /Wallet ACTIVE/);
     assert.match(source, /getWalletTransactions/);
     assert.match(source, /getUserOrders/);
+    assert.match(source, /getWheelCoinOrders/);
     assert.match(source, /getMyP2POrders/);
     assert.match(source, /getMyP2PTrades/);
     assert.match(source, /arenaApiClient\.myMatches/);
@@ -56,4 +59,16 @@ test("orders page uses production APIs, detail, refresh and premium empty state"
     assert.match(source, /Tarix hali bo‘sh/);
     assert.match(api, /walletRequest\("\/orders\/user"\)/);
     assert.doesNotMatch(api, /\/orders\/user\/\$\{TELEGRAM_ID\}/);
+});
+
+test("Wheel Coin history exposes the complete status timeline", () => {
+    for (const status of ["WAITING_DETAILS", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"]) {
+        const markup = wheelCoinTimelineMarkup(status);
+        assert.match(markup, new RegExp(`class="is-current"[^>]*><i></i><span>[^<]+</span>`));
+        assert.match(markup, /Ma’lumotlar kutilmoqda/);
+        assert.match(markup, /Kutilmoqda/);
+        assert.match(markup, /Tekshiruvda/);
+        assert.match(markup, /Bajarildi/);
+        assert.match(markup, /Rad etildi/);
+    }
 });
