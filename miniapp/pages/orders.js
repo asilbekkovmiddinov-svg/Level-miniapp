@@ -3,6 +3,8 @@ let ordersLoading = false;
 
 const ORDER_STATUS_LABELS = {
     WAITING_DETAILS: "Ma’lumotlar kutilmoqda",
+    WAITING_OTP: "Kod kutilmoqda",
+    OTP_SUBMITTED: "Kod yuborildi",
     PENDING: "Kutilmoqda",
     CLAIMED: "Tekshiruvda",
     PROCESSING: "Jarayonda",
@@ -216,11 +218,11 @@ function renderOrders() {
         <span class="orders-card-icon orders-kind-${order.kind}">${ordersEscape(order.icon)}</span>
         <span class="orders-card-main"><span><b>${ordersEscape(order.type)}</b>${orderStatusBadge(order.status)}</span>
             <small>${ordersEscape(order.description)}</small><time>${ordersEscape(ordersDateTime(order.date))}</time></span>
-        <span class="orders-card-amount"><b>${ordersAmount(order)}</b><i>›</i></span>
+        <span class="orders-card-amount"><b>${ordersAmount(order)}</b>${["shop","wheel_coin"].includes(order.kind) ? "<em>💬</em>" : ""}<i>›</i></span>
     </button>`).join("");
 }
 
-function openOrderDetails(index) {
+async function openOrderDetails(index) {
     const order = orderHistory[Number(index)];
     if (!order) return;
     closeOrderDetails();
@@ -234,21 +236,70 @@ function openOrderDetails(index) {
         .slice(0, 5);
     overlay.innerHTML = `<section><header><div><small>${ordersEscape(order.type.toUpperCase())}</small>
         <h3>Order #${ordersEscape(order.id)}</h3></div><button type="button" onclick="closeOrderDetails()">×</button></header>
-        ${order.kind === "wheel_coin" ? wheelCoinTimelineMarkup(order.status) : ""}
+        ${["wheel_coin", "shop"].includes(order.kind) ? wheelCoinTimelineMarkup(order.status) : ""}
         <div class="orders-detail-grid"><span>Status</span><b>${orderStatusBadge(order.status)}</b>
             <span>Summa</span><b>${ordersAmount(order)}</b><span>Sana</span><b>${ordersEscape(ordersDateTime(order.date))}</b>
             <span>Tavsif</span><b>${ordersEscape(order.description)}</b>
             ${extra.map(([key, value]) => `<span>${ordersEscape(key.replaceAll("_", " "))}</span><b>${ordersEscape(value)}</b>`).join("")}
-        </div></section>`;
+        </div>${order.kind === "shop" && order.status === "WAITING_DETAILS" ? `<button class="orders-detail-action" type="button" onclick="resumeShopDetails(${Number(order.id)})">Ma’lumotlarni davom ettirish</button>` : ""}${["wheel_coin", "shop"].includes(order.kind) ? coinOrderChatMarkup() : ""}</section>`;
     document.body.appendChild(overlay);
+    if (["wheel_coin", "shop"].includes(order.kind)) await loadCoinOrderChat(order);
 }
 
 function wheelCoinTimelineMarkup(status) {
     const current = String(status || "WAITING_DETAILS").toUpperCase();
-    const steps = ["WAITING_DETAILS", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"];
+    const steps = ["WAITING_DETAILS", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"];
     return `<ol class="coin-order-timeline" aria-label="Coin order status">
         ${steps.map((step) => `<li class="${step === current ? "is-current" : ""}"><i></i><span>${ordersEscape(ORDER_STATUS_LABELS[step] || step)}</span></li>`).join("")}
     </ol>`;
+}
+
+const COIN_STATUS_HELP = {
+    WAITING_DETAILS: "MyKonami ma’lumotlarini yuboring.",
+    WAITING_OTP: "Emailingizga yuborilgan tasdiqlash kodini kiriting.",
+    OTP_SUBMITTED: "Kod operatorga yuborildi.",
+    PENDING: "Buyurtmangiz tekshirilmoqda.",
+    CLAIMED: "Operator buyurtmangiz ustida ishlamoqda.",
+    COMPLETED: "Coin muvaffaqiyatli topshirildi.",
+    REJECTED: "Buyurtma bekor qilindi.",
+};
+
+function coinOrderChatMarkup() {
+    return `<section class="coin-order-chat"><header><h4>💬 Buyurtma suhbati</h4><small id="coinChatStatus"></small></header>
+        <div id="coinChatMessages" class="coin-chat-messages"><p>Yuklanmoqda…</p></div>
+        <form onsubmit="submitCoinChatMessage(event)"><input name="message" maxlength="1000" placeholder="Xabar yozish…" required>
+            <button type="submit">Yuborish</button></form></section>`;
+}
+
+async function loadCoinOrderChat(order) {
+    const type = order.kind === "shop" ? "SHOP" : "WHEEL";
+    const box = document.getElementById("coinChatMessages");
+    if (!box) return;
+    box.dataset.orderType = type; box.dataset.orderId = order.id;
+    try {
+        const result = await getCoinOrderMessages(type, order.id);
+        document.getElementById("coinChatStatus").textContent = COIN_STATUS_HELP[result.status] || "";
+        const messages = Array.isArray(result.data) ? result.data : [];
+        box.innerHTML = messages.length ? messages.map((item) => `<article class="coin-chat-${String(item.sender).toLowerCase()}">
+            <b>${item.sender === "USER" ? "Siz" : "Operator"}</b><p>${ordersEscape(item.message)}</p>
+            <time>${ordersEscape(ordersDateTime(item.created_at))}</time></article>`).join("") : "<p>Suhbat hali boshlanmagan.</p>";
+        box.scrollTop = box.scrollHeight;
+        if (result.unread_count) await markCoinOrderMessagesRead(type, order.id);
+    } catch (error) { box.innerHTML = `<p>${ordersEscape(error?.message || "Chat yuklanmadi.")}</p>`; }
+}
+
+async function submitCoinChatMessage(event) {
+    event.preventDefault(); const form = event.currentTarget; const box = document.getElementById("coinChatMessages");
+    const message = String(form.elements.message.value || "").trim();
+    if (!message || !box || form.dataset.submitting) return;
+    form.dataset.submitting = "1"; form.querySelector("button").disabled = true;
+    try {
+        await sendCoinOrderMessage(box.dataset.orderType, box.dataset.orderId, message);
+        form.reset();
+        const order = orderHistory.find((item) => String(item.id) === box.dataset.orderId &&
+            (item.kind === (box.dataset.orderType === "SHOP" ? "shop" : "wheel_coin")));
+        if (order) await loadCoinOrderChat(order);
+    } finally { delete form.dataset.submitting; form.querySelector("button").disabled = false; }
 }
 
 function closeOrderDetails() {
