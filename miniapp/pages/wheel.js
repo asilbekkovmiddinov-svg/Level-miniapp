@@ -208,6 +208,7 @@ function normalizeWheelReward(payload) {
     return {
         type: currency,
         amount,
+        spinId: Number(source.spin_id ?? payload?.spin_id ?? 0) || null,
         label,
         icon: empty ? "✦" : isCoin ? (amount >= 2000 ? "👑" : "🪙") : currency === "UZS" ? "💵" : amount >= 250 ? "💎" : "💰",
         isCoin,
@@ -341,6 +342,7 @@ async function loadWheelPage() {
     page.innerHTML = wheelPageMarkup();
     bindWheelEvents();
     await loadWheelStatus();
+    await restorePendingWheelCoinOrder();
 }
 
 function bindWheelEvents() {
@@ -624,11 +626,31 @@ function createWheelWizardState(reward) {
     return {
         step: 1,
         reward,
+        spinId: Number(reward?.spinId) || null,
         email: "",
         password: "",
         region: WHEEL_COIN_REGIONS[0],
         platform: WHEEL_COIN_PLATFORMS[0],
     };
+}
+
+async function restorePendingWheelCoinOrder() {
+    try {
+        const result = await getPendingWheelCoinOrder();
+        const pending = result?.data || null;
+        if (!pending || !["WAITING_DETAILS", "PENDING", "CLAIMED"].includes(pending.status)) return false;
+        const reward = normalizeWheelReward({
+            reward_type: "COIN_ORDER",
+            reward_amount: pending.coin_amount,
+            spin_id: pending.spin_id,
+        });
+        openWheelCoinWizard(reward);
+        if (pending.status !== "WAITING_DETAILS") renderWheelCoinSuccess(pending);
+        return true;
+    } catch (error) {
+        console.error(error);
+        return false;
+    }
 }
 
 function openWheelCoinWizard(reward) {
@@ -728,12 +750,6 @@ function toggleWheelPassword() {
     input.nextElementSibling.textContent = input.type === "password" ? "Ko‘rsatish" : "Yashirish";
 }
 
-async function findWheelCoinProduct(amount) {
-    const result = await getProducts();
-    const list = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
-    return list.find((product) => Number(product.coin_amount) === Number(amount)) || null;
-}
-
 async function submitWheelCoinOrder() {
     const state = wheelCoinWizard;
     if (!state || wheelCoinSubmitting) return;
@@ -745,12 +761,11 @@ async function submitWheelCoinOrder() {
     button.textContent = "Yuborilmoqda…";
 
     try {
-        const product = await findWheelCoinProduct(state.reward.amount);
-        if (!product) throw new Error(`${state.reward.label} mahsuloti hozir mavjud emas.`);
+        if (!state.spinId) throw new Error("Wheel spin ID topilmadi.");
         const password = state.password;
         state.password = "";
         const result = await createCoinRewardOrder({
-            productId: product.id,
+            spinId: state.spinId,
             email: state.email,
             password,
             region: state.region,

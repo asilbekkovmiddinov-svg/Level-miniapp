@@ -139,37 +139,44 @@ async function getProducts(category = "") {
         ? `?category=${encodeURIComponent(category)}`
         : "";
 
-    return await api(`/products/active${query}`);
+    return await walletRequest(`/products/active${query}`);
 }
 
-async function createOrder(productId, region = null) {
-    return await api("/orders/create", "POST", {
-        telegram_id: TELEGRAM_ID,
-        product_id: productId,
-        region,
+async function createOrder(productId, region = null, idempotencyKey = null) {
+    return await walletRequest("/orders/create", {
+        method: "POST",
+        body: { product_id: productId, region },
+        idempotencyKey,
     });
 }
 
-async function createCoinRewardOrder({ productId, email, password, region, platform }) {
-    const id = Number(productId);
+async function createCoinRewardOrder({ spinId, email, password, region, platform }) {
+    const id = Number(spinId);
     if (!Number.isInteger(id) || id <= 0) {
-        throw new Error("Coin mahsuloti topilmadi.");
+        throw new Error("Wheel spin ID topilmadi.");
     }
-    return await walletRequest("/orders/create", {
+    return await walletRequest("/wheel/coin-order/details", {
         method: "POST",
         body: {
-            telegram_id: TELEGRAM_ID,
-            product_id: id,
+            spin_id: id,
+            konami_login: email,
+            konami_password: password,
             region,
-            login: email,
-            password,
             platform,
         },
     });
 }
 
+async function getPendingWheelCoinOrder() {
+    return await walletRequest("/wheel/coin-order/pending");
+}
+
+async function getWheelCoinOrders() {
+    return await walletRequest("/wheel/coin-orders/user");
+}
+
 async function getUserOrders() {
-    return await api(`/orders/user/${TELEGRAM_ID}`);
+    return await walletRequest("/orders/user");
 }
 
 async function getOpenP2POrders(orderType = "") {

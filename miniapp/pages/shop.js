@@ -1,6 +1,8 @@
 let products = [];
 let selectedShopCategory = null;
 let selectedShopProduct = null;
+let shopOrderSubmitting = false;
+let shopOrderAttempt = null;
 
 const SHOP_REGIONS = [
     "🇺🇿 Uzbekistan",
@@ -84,6 +86,7 @@ function renderShopCategories() {
 function openShopCategory(category) {
     selectedShopCategory = category;
     selectedShopProduct = null;
+    shopOrderAttempt = null;
 
     const filtered = products.filter((product) => {
         return product.category === category;
@@ -153,6 +156,7 @@ function renderProductList(list, category) {
 
 function selectShopProduct(productId) {
     selectedShopProduct = products.find((product) => product.id === productId);
+    shopOrderAttempt = null;
 
     if (!selectedShopProduct) {
         Modal.error("Mahsulot topilmadi.");
@@ -199,6 +203,7 @@ function renderRegionSelect() {
 }
 
 async function confirmBuyProduct(region) {
+    if (shopOrderSubmitting) return;
     if (!selectedShopProduct) {
         Modal.error("Mahsulot tanlanmagan.");
         return;
@@ -218,14 +223,34 @@ async function confirmBuyProduct(region) {
 }
 
 async function buyProduct(productId, region = null) {
-    const result = await createOrder(productId, region);
-
-    if (!result || result.success === false) {
-        Modal.error(result?.message || "Buyurtma yaratilmadi.");
-        return;
+    if (shopOrderSubmitting) return;
+    const fingerprint = `${Number(productId)}:${region || ""}`;
+    if (!shopOrderAttempt || shopOrderAttempt.fingerprint !== fingerprint) {
+        shopOrderAttempt = {
+            fingerprint,
+            idempotencyKey: walletIdempotencyKey("coin-order"),
+        };
     }
-
-    Modal.success("Buyurtma muvaffaqiyatli yaratildi.");
+    shopOrderSubmitting = true;
+    document.querySelectorAll("#shopProducts button").forEach((button) => {
+        button.disabled = true;
+    });
+    try {
+        const result = await createOrder(productId, region, shopOrderAttempt.idempotencyKey);
+        if (!result || result.success === false) {
+            Modal.error(result?.message || "Buyurtma yaratilmadi.");
+            return;
+        }
+        shopOrderAttempt = null;
+        Modal.success("Buyurtma muvaffaqiyatli yaratildi.");
+    } catch (error) {
+        Modal.error(error?.message || "Buyurtma yaratilmadi.");
+    } finally {
+        shopOrderSubmitting = false;
+        document.querySelectorAll("#shopProducts button").forEach((button) => {
+            button.disabled = false;
+        });
+    }
 }
 
 async function refreshShop() {
