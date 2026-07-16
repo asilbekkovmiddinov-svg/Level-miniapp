@@ -638,13 +638,14 @@ async function restorePendingWheelCoinOrder() {
     try {
         const result = await getPendingWheelCoinOrder();
         const pending = result?.data || null;
-        if (!pending || pending.status !== "WAITING_DETAILS") return false;
+        if (!pending || !["WAITING_DETAILS", "PENDING", "CLAIMED"].includes(pending.status)) return false;
         const reward = normalizeWheelReward({
             reward_type: "COIN_ORDER",
             reward_amount: pending.coin_amount,
             spin_id: pending.spin_id,
         });
         openWheelCoinWizard(reward);
+        if (pending.status !== "WAITING_DETAILS") renderWheelCoinSuccess(pending);
         return true;
     } catch (error) {
         console.error(error);
