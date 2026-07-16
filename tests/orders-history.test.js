@@ -54,5 +54,6 @@ test("orders page uses production APIs, detail, refresh and premium empty state"
     assert.match(source, /openOrderDetails/);
     assert.match(source, /refreshOrders/);
     assert.match(source, /Tarix hali bo‘sh/);
-    assert.match(api, /\/orders\/user\/\$\{TELEGRAM_ID\}/);
+    assert.match(api, /walletRequest\("\/orders\/user"\)/);
+    assert.doesNotMatch(api, /\/orders\/user\/\$\{TELEGRAM_ID\}/);
 });
