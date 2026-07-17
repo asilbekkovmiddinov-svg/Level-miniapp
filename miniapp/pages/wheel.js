@@ -638,7 +638,7 @@ async function restorePendingWheelCoinOrder() {
     try {
         const result = await getPendingWheelCoinOrder();
         const pending = result?.data || null;
-        if (!pending || !["WAITING_DETAILS", "PENDING", "CLAIMED"].includes(pending.status)) return false;
+        if (!pending || !["WAITING_DETAILS", "WAITING_OPERATOR", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED"].includes(pending.status)) return false;
         const reward = normalizeWheelReward({
             reward_type: "COIN_ORDER",
             reward_amount: pending.coin_amount,
@@ -773,6 +773,9 @@ async function submitWheelCoinOrder() {
         });
         if (!result || result.success === false) throw new Error(result?.message || "Coin buyurtmasi yaratilmadi.");
         renderWheelCoinSuccess(result.data || result);
+        document.getElementById("wheelCoinWizard").hidden = true;
+        await loadOrdersPage();
+        await openCoinOrderChatById("wheel_coin", (result.data || result).id);
     } catch (error) {
         state.password = "";
         state.step = 2;
