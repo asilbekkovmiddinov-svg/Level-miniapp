@@ -15,6 +15,7 @@ window.addEventListener("load", async () => {
         bindHeaderButtons();
 
         await loadHome();
+        await openCoinOrderDeepLink();
     } catch (error) {
         console.error(error);
         Modal.error("Mini App yuklanishda xatolik yuz berdi.");
@@ -23,6 +24,15 @@ window.addEventListener("load", async () => {
         window.dispatchEvent(new CustomEvent("levelgroup:app-ready"));
     }
 });
+
+async function openCoinOrderDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const type = String(params.get("coin_order_type") || "").toUpperCase();
+    const orderId = params.get("coin_order_id");
+    if (!orderId || !["SHOP", "WHEEL"].includes(type)) return;
+    await loadOrdersPage();
+    await openCoinOrderChatById(type === "SHOP" ? "shop" : "wheel_coin", orderId);
+}
 
 function showPage(pageId, title) {
     document.querySelectorAll(".page").forEach((page) => {
