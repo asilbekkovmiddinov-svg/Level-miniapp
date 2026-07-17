@@ -62,7 +62,7 @@ test("orders page uses production APIs, detail, refresh and premium empty state"
 });
 
 test("Coin history exposes chat and complete OTP status timeline", () => {
-    for (const status of ["WAITING_DETAILS", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"]) {
+    for (const status of ["WAITING_DETAILS", "WAITING_OPERATOR", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"]) {
         const markup = wheelCoinTimelineMarkup(status);
         assert.match(markup, new RegExp(`class="is-current"[^>]*><i></i><span>[^<]+</span>`));
         assert.match(markup, /Ma’lumotlar kutilmoqda/);
@@ -75,4 +75,7 @@ test("Coin history exposes chat and complete OTP status timeline", () => {
     assert.match(source, /Buyurtma suhbati/);
     assert.match(source, /sendCoinOrderMessage/);
     assert.match(source, /markCoinOrderMessagesRead/);
+    assert.match(source, /openCoinOrderChatById/);
+    assert.match(source, /form\.hidden = result\.status !== "WAITING_OTP"/);
+    assert.match(source, /Tizim/);
 });

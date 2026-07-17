@@ -277,8 +277,9 @@ async function buyProduct(productId, region = null, credentials = {}) {
             return;
         }
         shopOrderAttempt = null;
-        Modal.success("Buyurtma yaratildi. MyKonami emailingizga kelgan 6 xonali kodni Order Chat ichiga yozing.");
+        Modal.success("Buyurtmangiz muvaffaqiyatli yaratildi. Iltimos kuting. Operator tez orada buyurtma suhbati orqali siz bilan bog‘lanadi.");
         await loadOrdersPage();
+        await openCoinOrderChatById("shop", result.data?.id);
     } catch (error) {
         Modal.error(error?.message || "Buyurtma yaratilmadi.");
     } finally {

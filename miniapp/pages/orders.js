@@ -3,6 +3,7 @@ let ordersLoading = false;
 
 const ORDER_STATUS_LABELS = {
     WAITING_DETAILS: "Ma’lumotlar kutilmoqda",
+    WAITING_OPERATOR: "Operator kutilmoqda",
     WAITING_OTP: "Kod kutilmoqda",
     OTP_SUBMITTED: "Kod yuborildi",
     PENDING: "Kutilmoqda",
@@ -246,9 +247,14 @@ async function openOrderDetails(index) {
     if (["wheel_coin", "shop"].includes(order.kind)) await loadCoinOrderChat(order);
 }
 
+async function openCoinOrderChatById(kind, orderId) {
+    const index = orderHistory.findIndex((item) => item.kind === kind && String(item.id) === String(orderId));
+    if (index >= 0) await openOrderDetails(index);
+}
+
 function wheelCoinTimelineMarkup(status) {
     const current = String(status || "WAITING_DETAILS").toUpperCase();
-    const steps = ["WAITING_DETAILS", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"];
+    const steps = ["WAITING_DETAILS", "WAITING_OPERATOR", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"];
     return `<ol class="coin-order-timeline" aria-label="Coin order status">
         ${steps.map((step) => `<li class="${step === current ? "is-current" : ""}"><i></i><span>${ordersEscape(ORDER_STATUS_LABELS[step] || step)}</span></li>`).join("")}
     </ol>`;
@@ -256,6 +262,7 @@ function wheelCoinTimelineMarkup(status) {
 
 const COIN_STATUS_HELP = {
     WAITING_DETAILS: "MyKonami ma’lumotlarini yuboring.",
+    WAITING_OPERATOR: "Operator tez orada buyurtma suhbati orqali siz bilan bog‘lanadi.",
     WAITING_OTP: "Emailingizga yuborilgan tasdiqlash kodini kiriting.",
     OTP_SUBMITTED: "Kod operatorga yuborildi.",
     PENDING: "Buyurtmangiz tekshirilmoqda.",
@@ -267,7 +274,7 @@ const COIN_STATUS_HELP = {
 function coinOrderChatMarkup() {
     return `<section class="coin-order-chat"><header><h4>💬 Buyurtma suhbati</h4><small id="coinChatStatus"></small></header>
         <div id="coinChatMessages" class="coin-chat-messages"><p>Yuklanmoqda…</p></div>
-        <form onsubmit="submitCoinChatMessage(event)"><input name="message" maxlength="1000" placeholder="Xabar yozish…" required>
+        <form id="coinChatForm" onsubmit="submitCoinChatMessage(event)" hidden><input name="message" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 xonali kod" required>
             <button type="submit">Yuborish</button></form></section>`;
 }
 
@@ -279,11 +286,13 @@ async function loadCoinOrderChat(order) {
     try {
         const result = await getCoinOrderMessages(type, order.id);
         document.getElementById("coinChatStatus").textContent = COIN_STATUS_HELP[result.status] || "";
+        const form = document.getElementById("coinChatForm");
+        if (form) form.hidden = result.status !== "WAITING_OTP";
         const messages = Array.isArray(result.data) ? result.data : [];
         box.innerHTML = messages.length ? messages.map((item) => `<article class="coin-chat-${String(item.sender).toLowerCase()}">
-            <b>${item.sender === "USER" ? "Siz" : "Operator"}</b><p>${ordersEscape(item.message)}</p>
+            <b>${item.sender === "USER" ? "Siz" : item.sender === "SYSTEM" ? "Tizim" : "Operator"}</b><p>${ordersEscape(item.message)}</p>
             <time>${ordersEscape(ordersDateTime(item.created_at))}</time></article>`).join("")
-            : `<p>${result.status === "WAITING_OTP" ? "MyKonami emailingizga kelgan 6 xonali kodni yozing." : "Suhbat hali boshlanmagan."}</p>`;
+            : `<p>${result.status === "WAITING_OTP" ? "Emailingizga kelgan 6 xonali kodni yozing." : "Operator bilan bog‘lanish kutilmoqda."}</p>`;
         box.scrollTop = box.scrollHeight;
         if (result.unread_count) await markCoinOrderMessagesRead(type, order.id);
     } catch (error) { box.innerHTML = `<p>${ordersEscape(error?.message || "Chat yuklanmadi.")}</p>`; }
@@ -292,7 +301,7 @@ async function loadCoinOrderChat(order) {
 async function submitCoinChatMessage(event) {
     event.preventDefault(); const form = event.currentTarget; const box = document.getElementById("coinChatMessages");
     const message = String(form.elements.message.value || "").trim();
-    if (!message || !box || form.dataset.submitting) return;
+    if (!/^\d{6}$/.test(message) || !box || form.dataset.submitting) return;
     form.dataset.submitting = "1"; form.querySelector("button").disabled = true;
     try {
         await sendCoinOrderMessage(box.dataset.orderType, box.dataset.orderId, message);

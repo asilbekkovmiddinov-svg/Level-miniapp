@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-test("Shop collects credentials in memory and creates WAITING_OTP contract", () => {
+test("Shop collects credentials in memory and waits for operator confirmation", () => {
     const shop = fs.readFileSync("miniapp/pages/shop.js", "utf8");
     const api = fs.readFileSync("miniapp/api.js", "utf8");
     assert.match(shop, /openShopCredentialForm/);
@@ -12,4 +12,5 @@ test("Shop collects credentials in memory and creates WAITING_OTP contract", () 
     assert.match(api, /konami_login: credentials\.email/);
     assert.match(api, /konami_password: credentials\.password/);
     assert.doesNotMatch(shop, /localStorage|sessionStorage|indexedDB/);
+    assert.match(shop, /Operator tez orada buyurtma suhbati orqali siz bilan bog‘lanadi/);
 });
