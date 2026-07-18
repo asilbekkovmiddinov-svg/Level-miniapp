@@ -91,6 +91,9 @@ async function openPage(page) {
         case "profile":
             await loadProfilePage();
             break;
+        case "referral":
+            await loadReferralPage();
+            break;
         case "wallet":
             await loadDedicatedWalletPage();
             break;
