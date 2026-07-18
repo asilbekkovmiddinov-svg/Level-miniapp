@@ -2,15 +2,16 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-test("Shop collects credentials in memory and waits for operator confirmation", () => {
+test("Shop creates first and collects credentials only in Order Chat", () => {
     const shop = fs.readFileSync("miniapp/pages/shop.js", "utf8");
     const api = fs.readFileSync("miniapp/api.js", "utf8");
-    assert.match(shop, /openShopCredentialForm/);
-    assert.match(shop, /type="password"/);
-    assert.match(shop, /ANDROID/); assert.match(shop, /IOS/);
-    assert.match(shop, /GLOBAL/); assert.match(shop, /JAPAN/);
-    assert.match(api, /konami_login: credentials\.email/);
-    assert.match(api, /konami_password: credentials\.password/);
+    const orders = fs.readFileSync("miniapp/pages/orders.js", "utf8");
+    assert.doesNotMatch(shop, /openShopCredentialForm/);
+    assert.match(orders, /id="coinDetailsForm"/);
+    assert.match(orders, /type="password"/);
+    assert.match(api, /submitCoinOrderDetails/);
+    assert.match(api, /konami_login: email/);
+    assert.match(api, /konami_password: password/);
     assert.doesNotMatch(shop, /localStorage|sessionStorage|indexedDB/);
     assert.match(shop, /Operator tez orada buyurtma suhbati orqali siz bilan bog‘lanadi/);
 });
