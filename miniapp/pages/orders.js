@@ -219,7 +219,7 @@ function renderOrders() {
         <span class="orders-card-icon orders-kind-${order.kind}">${ordersEscape(order.icon)}</span>
         <span class="orders-card-main"><span><b>${ordersEscape(order.type)}</b>${orderStatusBadge(order.status)}</span>
             <small>${ordersEscape(order.description)}</small><time>${ordersEscape(ordersDateTime(order.date))}</time></span>
-        <span class="orders-card-amount"><b>${ordersAmount(order)}</b>${["shop","wheel_coin"].includes(order.kind) ? "<em>💬</em>" : ""}<i>›</i></span>
+        <span class="orders-card-amount"><b>${ordersAmount(order)}</b>${order.kind === "wheel_coin" ? "<em>💬</em>" : ""}<i>›</i></span>
     </button>`).join("");
 }
 
@@ -237,14 +237,14 @@ async function openOrderDetails(index) {
         .slice(0, 5);
     overlay.innerHTML = `<section><header><div><small>${ordersEscape(order.type.toUpperCase())}</small>
         <h3>Order #${ordersEscape(order.id)}</h3></div><button type="button" onclick="closeOrderDetails()">×</button></header>
-        ${["wheel_coin", "shop"].includes(order.kind) ? wheelCoinTimelineMarkup(order.status) : ""}
+        ${order.kind === "wheel_coin" ? wheelCoinTimelineMarkup(order.status) : ""}
         <div class="orders-detail-grid"><span>Status</span><b>${orderStatusBadge(order.status)}</b>
             <span>Summa</span><b>${ordersAmount(order)}</b><span>Sana</span><b>${ordersEscape(ordersDateTime(order.date))}</b>
             <span>Tavsif</span><b>${ordersEscape(order.description)}</b>
             ${extra.map(([key, value]) => `<span>${ordersEscape(key.replaceAll("_", " "))}</span><b>${ordersEscape(value)}</b>`).join("")}
-        </div>${["wheel_coin", "shop"].includes(order.kind) ? coinOrderChatMarkup() : ""}</section>`;
+        </div>${order.kind === "wheel_coin" ? coinOrderChatMarkup() : ""}</section>`;
     document.body.appendChild(overlay);
-    if (["wheel_coin", "shop"].includes(order.kind)) await loadCoinOrderChat(order);
+    if (order.kind === "wheel_coin") await loadCoinOrderChat(order);
 }
 
 async function openCoinOrderChatById(kind, orderId) {
@@ -279,7 +279,7 @@ function coinOrderChatMarkup() {
 }
 
 async function loadCoinOrderChat(order) {
-    const type = order.kind === "shop" ? "SHOP" : "WHEEL";
+    const type = "WHEEL";
     const box = document.getElementById("coinChatMessages");
     if (!box) return;
     box.dataset.orderType = type; box.dataset.orderId = order.id;
@@ -287,10 +287,9 @@ async function loadCoinOrderChat(order) {
         const result = await getCoinOrderMessages(type, order.id);
         document.getElementById("coinChatStatus").textContent = COIN_STATUS_HELP[result.status] || "";
         const form = document.getElementById("coinChatForm");
-        const shopChat = type === "SHOP" && result.status === "CLAIMED";
         const wheelOtp = type === "WHEEL" && result.status === "WAITING_OTP";
         if (form) {
-            form.hidden = !shopChat && !wheelOtp;
+            form.hidden = !wheelOtp;
             const input = form.elements.message;
             input.placeholder = wheelOtp ? "6 xonali kod" : "Xabar yozing";
             input.inputMode = wheelOtp ? "numeric" : "text";
@@ -310,14 +309,13 @@ async function loadCoinOrderChat(order) {
 async function submitCoinChatMessage(event) {
     event.preventDefault(); const form = event.currentTarget; const box = document.getElementById("coinChatMessages");
     const message = String(form.elements.message.value || "").trim();
-    const valid = box?.dataset.orderType === "WHEEL" ? /^\d{6}$/.test(message) : message.length > 0 && message.length <= 1000;
+    const valid = /^\d{6}$/.test(message);
     if (!valid || !box || form.dataset.submitting) return;
     form.dataset.submitting = "1"; form.querySelector("button").disabled = true;
     try {
         await sendCoinOrderMessage(box.dataset.orderType, box.dataset.orderId, message);
         form.reset();
-        const order = orderHistory.find((item) => String(item.id) === box.dataset.orderId &&
-            (item.kind === (box.dataset.orderType === "SHOP" ? "shop" : "wheel_coin")));
+        const order = orderHistory.find((item) => String(item.id) === box.dataset.orderId && item.kind === "wheel_coin");
         if (order) await loadCoinOrderChat(order);
     } finally { delete form.dataset.submitting; form.querySelector("button").disabled = false; }
 }
