@@ -11,7 +11,20 @@ function normalizeReferralSummary(payload) {
         throw new Error("Referral ma’lumotlari noto‘g‘ri formatda olindi.");
     }
     const link = data.referral_link.trim();
-    if (!/^https:\/\/t\.me\/[A-Za-z0-9_]+\?start=ref_[A-Za-z0-9_-]+$/.test(link)) {
+    let parsedLink;
+    try {
+        parsedLink = new URL(link);
+    } catch (_error) {
+        throw new Error("Referral havolasi yaroqsiz.");
+    }
+    const start = parsedLink.searchParams.get("start") || "";
+    const queryKeys = [...parsedLink.searchParams.keys()];
+    if (parsedLink.protocol !== "https:"
+        || parsedLink.hostname !== "t.me"
+        || !/^\/[A-Za-z0-9_]+$/.test(parsedLink.pathname)
+        || queryKeys.length !== 1
+        || queryKeys[0] !== "start"
+        || !/^ref_[A-Za-z0-9_-]+$/.test(start)) {
         throw new Error("Referral havolasi yaroqsiz.");
     }
     return {
@@ -51,7 +64,10 @@ ${referralLink}`;
 function referralShareUrl(referralLink, firstName) {
     const message = referralShareMessage(referralLink, firstName);
     const text = message.slice(0, -(referralLink.length + 2));
-    return `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`;
+    const shareUrl = new URL("/share/url", new URL(referralLink).origin);
+    shareUrl.searchParams.set("url", referralLink);
+    shareUrl.searchParams.set("text", text);
+    return shareUrl.toString();
 }
 
 function shareReferralLink() {
