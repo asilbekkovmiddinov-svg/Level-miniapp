@@ -274,11 +274,7 @@ const COIN_STATUS_HELP = {
 function coinOrderChatMarkup() {
     return `<section class="coin-order-chat"><header><h4>💬 Buyurtma suhbati</h4><small id="coinChatStatus"></small></header>
         <div id="coinChatMessages" class="coin-chat-messages"><p>Yuklanmoqda…</p></div>
-        <form id="coinDetailsForm" class="coin-details-form" onsubmit="submitCoinOrderDetailsForm(event)" hidden>
-            <label>MyKonami Email<input name="email" type="email" autocomplete="username" required></label>
-            <label>MyKonami Password<input name="password" type="password" autocomplete="current-password" minlength="4" required></label>
-            <button type="submit">Ma’lumotlarni yuborish</button></form>
-        <form id="coinChatForm" onsubmit="submitCoinChatMessage(event)" hidden><input name="message" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 xonali kod" required>
+        <form id="coinChatForm" onsubmit="submitCoinChatMessage(event)" hidden><input name="message" maxlength="1000" placeholder="Xabar yozing" required>
             <button type="submit">Yuborish</button></form></section>`;
 }
 
@@ -291,9 +287,16 @@ async function loadCoinOrderChat(order) {
         const result = await getCoinOrderMessages(type, order.id);
         document.getElementById("coinChatStatus").textContent = COIN_STATUS_HELP[result.status] || "";
         const form = document.getElementById("coinChatForm");
-        if (form) form.hidden = result.status !== "WAITING_OTP";
-        const detailsForm = document.getElementById("coinDetailsForm");
-        if (detailsForm) detailsForm.hidden = result.status !== "WAITING_DETAILS" || type !== "SHOP";
+        const shopChat = type === "SHOP" && result.status === "CLAIMED";
+        const wheelOtp = type === "WHEEL" && result.status === "WAITING_OTP";
+        if (form) {
+            form.hidden = !shopChat && !wheelOtp;
+            const input = form.elements.message;
+            input.placeholder = wheelOtp ? "6 xonali kod" : "Xabar yozing";
+            input.inputMode = wheelOtp ? "numeric" : "text";
+            input.pattern = wheelOtp ? "[0-9]{6}" : "";
+            input.maxLength = wheelOtp ? 6 : 1000;
+        }
         const messages = Array.isArray(result.data) ? result.data : [];
         box.innerHTML = messages.length ? messages.map((item) => `<article class="coin-chat-${String(item.sender).toLowerCase()}">
             <b>${item.sender === "USER" ? "Siz" : item.sender === "SYSTEM" ? "Tizim" : "Operator"}</b><p>${ordersEscape(item.message)}</p>
@@ -304,24 +307,11 @@ async function loadCoinOrderChat(order) {
     } catch (error) { box.innerHTML = `<p>${ordersEscape(error?.message || "Chat yuklanmadi.")}</p>`; }
 }
 
-async function submitCoinOrderDetailsForm(event) {
-    event.preventDefault(); const form = event.currentTarget; const box = document.getElementById("coinChatMessages");
-    const email = String(form.elements.email.value || "").trim();
-    const password = String(form.elements.password.value || "");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 4 || !box || form.dataset.submitting) return;
-    form.dataset.submitting = "1"; form.querySelector("button").disabled = true;
-    try {
-        await submitCoinOrderDetails(box.dataset.orderType, box.dataset.orderId, email, password);
-        form.elements.password.value = "";
-        const order = orderHistory.find((item) => item.kind === "shop" && String(item.id) === box.dataset.orderId);
-        if (order) await loadCoinOrderChat(order);
-    } finally { form.elements.password.value = ""; delete form.dataset.submitting; form.querySelector("button").disabled = false; }
-}
-
 async function submitCoinChatMessage(event) {
     event.preventDefault(); const form = event.currentTarget; const box = document.getElementById("coinChatMessages");
     const message = String(form.elements.message.value || "").trim();
-    if (!/^\d{6}$/.test(message) || !box || form.dataset.submitting) return;
+    const valid = box?.dataset.orderType === "WHEEL" ? /^\d{6}$/.test(message) : message.length > 0 && message.length <= 1000;
+    if (!valid || !box || form.dataset.submitting) return;
     form.dataset.submitting = "1"; form.querySelector("button").disabled = true;
     try {
         await sendCoinOrderMessage(box.dataset.orderType, box.dataset.orderId, message);
