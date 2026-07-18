@@ -26,7 +26,7 @@ function promotionsAdminInputDate(value) {
 }
 
 function promotionsAdminBanner(item) {
-    const safeUrl = /^https?:\/\//i.test(item.banner_url || "")
+    const safeUrl = /^(https?:\/\/|blob:)/i.test(item.banner_url || "")
         ? PromotionsAdminCore.escapeHtml(item.banner_url)
         : "";
     return safeUrl
@@ -206,7 +206,8 @@ function promotionAdminField(label, name, value = "", options = {}) {
     return `<label class="${options.wide ? "wide" : ""}"><span>${label}</span><input name="${name}" type="${options.type || "text"}" value="${e(value)}" ${options.min !== undefined ? `min="${options.min}"` : ""}></label>`;
 }
 
-function promotionAdminPreview(values = {}) {
+function promotionAdminPreview(values = {}, bannerOverride = "") {
+    if (bannerOverride) values = { ...values, banner_url: bannerOverride };
     const item = PromotionsAdminCore.normalizePromotion({ ...values, id: 0, status: values.status || "DRAFT" });
     return `<div class="pac-preview-banner ${item.banner_url ? "" : "is-placeholder"}">${promotionsAdminBanner(item)}</div>
         <div><small>LIVE PREVIEW</small><h3>${PromotionsAdminCore.escapeHtml(item.title || "Promotion title")}</h3><p>${PromotionsAdminCore.escapeHtml(item.subtitle || "Promotion subtitle")}</p>
@@ -216,6 +217,10 @@ function promotionAdminPreview(values = {}) {
 function openPromotionAdminForm(item = null) {
     const editing = Boolean(item);
     const value = (key) => item?.[key] ?? "";
+    let selectedBannerBlob = null;
+    let selectedBannerUrl = "";
+    let targetId = item?.id || null;
+    let contentSaved = false;
     const overlay = document.createElement("div");
     overlay.className = "pac-form-overlay";
     overlay.innerHTML = `<section class="pac-form-sheet">
@@ -225,7 +230,20 @@ function openPromotionAdminForm(item = null) {
             ${promotionAdminField("Title *", "title", value("title"), { wide: true })}
             ${promotionAdminField("Subtitle", "subtitle", value("subtitle"), { wide: true })}
             ${promotionAdminField("Description", "description", value("description"), { type: "textarea" })}
-            ${promotionAdminField("Banner URL", "banner_url", value("banner_url"), { wide: true })}
+            <section class="pac-banner-manager wide" id="promotionBannerManager">
+                <div class="pac-banner-drop" tabindex="0">
+                    <span>▧</span><div><b>${item?.banner_uploaded ? "Banner yuklangan" : "Banner rasmini tanlang"}</b><small>16:9 • JPG, PNG, WEBP • max 5 MB</small></div>
+                </div>
+                <div class="pac-banner-buttons">
+                    <button type="button" data-gallery>▣ Gallery</button>
+                    <button type="button" data-camera>◉ Camera</button>
+                    ${item?.banner_uploaded ? `<button class="danger" type="button" data-delete-banner>⌫ Delete</button>` : ""}
+                </div>
+                <input data-gallery-input type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                <input data-camera-input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+                <div class="pac-upload-progress" hidden><i></i><span>0%</span></div>
+                <p class="pac-banner-message">Desktopda rasmni shu maydonga drag & drop qilishingiz mumkin.</p>
+            </section>
             ${promotionAdminField("Badge", "badge", value("badge"))}
             ${promotionAdminField("Priority", "priority", value("priority") || 0, { type: "number", min: 0 })}
             ${promotionAdminField("Button Text", "button_text", value("button_text"))}
@@ -241,13 +259,63 @@ function openPromotionAdminForm(item = null) {
     </section>`;
     document.body.appendChild(overlay);
     const form = overlay.querySelector("form");
-    const close = () => overlay.remove();
+    const manager = overlay.querySelector("#promotionBannerManager");
+    const drop = manager.querySelector(".pac-banner-drop");
+    const galleryInput = manager.querySelector("[data-gallery-input]");
+    const cameraInput = manager.querySelector("[data-camera-input]");
+    const managerMessage = manager.querySelector(".pac-banner-message");
+    const progress = manager.querySelector(".pac-upload-progress");
+    const close = () => {
+        if (selectedBannerUrl) URL.revokeObjectURL(selectedBannerUrl);
+        overlay.remove();
+    };
     overlay.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", close));
     overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
-    form.addEventListener("input", () => {
+    const renderFormPreview = () => {
         const values = Object.fromEntries(new FormData(form));
-        document.getElementById("promotionAdminPreview").innerHTML = promotionAdminPreview(values);
+        document.getElementById("promotionAdminPreview").innerHTML = promotionAdminPreview(values, selectedBannerUrl);
+    };
+    const chooseBanner = async (file) => {
+        if (!file) return;
+        try {
+            managerMessage.textContent = "Crop studio ochilmoqda...";
+            const blob = await PromotionBannerStudio.open(file);
+            if (selectedBannerUrl) URL.revokeObjectURL(selectedBannerUrl);
+            selectedBannerBlob = blob;
+            selectedBannerUrl = URL.createObjectURL(blob);
+            drop.classList.add("has-file");
+            drop.querySelector("b").textContent = "Banner crop va compress qilindi";
+            managerMessage.textContent = `${Math.max(1, Math.round(blob.size / 1024))} KB • Saqlanganda upload qilinadi.`;
+            renderFormPreview();
+        } catch (error) {
+            if (!/cancelled/i.test(error.message || "")) promotionsAdminToast(error.message, "error");
+            managerMessage.textContent = "Banner tanlanmadi. Qayta urinishingiz mumkin.";
+        }
+    };
+    overlay.querySelector("[data-gallery]").addEventListener("click", () => galleryInput.click());
+    overlay.querySelector("[data-camera]").addEventListener("click", () => cameraInput.click());
+    galleryInput.addEventListener("change", () => chooseBanner(galleryInput.files[0]));
+    cameraInput.addEventListener("change", () => chooseBanner(cameraInput.files[0]));
+    ["dragenter", "dragover"].forEach((name) => drop.addEventListener(name, (event) => { event.preventDefault(); drop.classList.add("is-dragging"); }));
+    ["dragleave", "drop"].forEach((name) => drop.addEventListener(name, (event) => { event.preventDefault(); drop.classList.remove("is-dragging"); }));
+    drop.addEventListener("drop", (event) => chooseBanner(event.dataTransfer?.files?.[0]));
+    drop.addEventListener("click", () => galleryInput.click());
+    drop.addEventListener("keydown", (event) => { if (["Enter", " "].includes(event.key)) galleryInput.click(); });
+    overlay.querySelector("[data-delete-banner]")?.addEventListener("click", async (event) => {
+        if (!await promotionsAdminConfirm("Promotion bannerini o‘chirishni tasdiqlaysizmi?")) return;
+        event.currentTarget.disabled = true;
+        try {
+            await promotionsAdminApi.deleteBanner(targetId);
+            item.banner_uploaded = false; item.banner_url = "";
+            event.currentTarget.remove();
+            managerMessage.textContent = "Banner o‘chirildi.";
+            document.getElementById("promotionAdminPreview").innerHTML = promotionAdminPreview(Object.fromEntries(new FormData(form)));
+            promotionsAdminToast("Banner o‘chirildi.");
+        } catch (error) {
+            event.currentTarget.disabled = false; promotionsAdminToast(error.message, "error");
+        }
     });
+    form.addEventListener("input", renderFormPreview);
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const submit = form.querySelector("button[type=submit]");
@@ -255,13 +323,26 @@ function openPromotionAdminForm(item = null) {
             const payload = PromotionsAdminCore.formPayload(Object.fromEntries(new FormData(form)));
             if (editing) delete payload.status;
             submit.disabled = true; submit.textContent = "Saqlanmoqda...";
-            if (editing) await promotionsAdminApi.update(item.id, payload);
-            else await promotionsAdminApi.create(payload);
+            if (!contentSaved) {
+                const saved = editing
+                    ? await promotionsAdminApi.update(item.id, payload)
+                    : await promotionsAdminApi.create(payload);
+                targetId = saved.id;
+                contentSaved = true;
+            }
+            if (selectedBannerBlob) {
+                progress.hidden = false;
+                await promotionsAdminApi.uploadBanner(targetId, selectedBannerBlob, (percent) => {
+                    progress.querySelector("i").style.width = `${percent}%`;
+                    progress.querySelector("span").textContent = `${percent}%`;
+                });
+            }
             close(); promotionsAdminToast(editing ? "Promotion yangilandi." : "Promotion yaratildi.");
             await loadPromotionsAdminPage(true);
         } catch (error) {
             promotionsAdminToast(error.message || "Saqlab bo‘lmadi.", "error");
-            submit.disabled = false; submit.textContent = editing ? "Saqlash" : "Yaratish";
+            managerMessage.textContent = contentSaved && selectedBannerBlob ? "Upload bajarilmadi. Retry tugmasini bosing." : managerMessage.textContent;
+            submit.disabled = false; submit.textContent = contentSaved && selectedBannerBlob ? "Uploadni qayta urinish" : editing ? "Saqlash" : "Yaratish";
         }
     });
 }

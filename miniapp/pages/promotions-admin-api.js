@@ -51,6 +51,39 @@
         activate(id) { return this.request(`/admin/promotions/${Number(id)}/activate`, { method: "POST" }); }
         pause(id) { return this.request(`/admin/promotions/${Number(id)}/pause`, { method: "POST" }); }
         deactivate(id) { return this.request(`/admin/promotions/${Number(id)}/deactivate`, { method: "POST" }); }
+        deleteBanner(id) { return this.request(`/admin/promotions/${Number(id)}/banner`, { method: "DELETE" }); }
+
+        uploadBanner(id, blob, onProgress = () => {}, xhrFactory = () => new XMLHttpRequest()) {
+            const initData = this.initDataProvider();
+            if (!initData) return Promise.reject(new PromotionsAdminError("Admin login required.", 401));
+            return new Promise((resolve, reject) => {
+                const xhr = xhrFactory();
+                xhr.open("POST", `${this.baseUrl}/admin/promotions/${Number(id)}/banner`);
+                xhr.setRequestHeader("X-Telegram-Init-Data", initData);
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+                };
+                xhr.onerror = () => reject(new PromotionsAdminError("Banner upload network error."));
+                xhr.onload = () => {
+                    let payload = null;
+                    try { payload = JSON.parse(xhr.responseText || "null"); } catch (_error) { /* handled below */ }
+                    if (xhr.status < 200 || xhr.status >= 300) {
+                        const message = xhr.status === 401 ? "Admin login required."
+                            : xhr.status === 403 ? "Admin permission required."
+                                : payload?.detail || "Banner upload failed.";
+                        reject(new PromotionsAdminError(message, xhr.status));
+                        return;
+                    }
+                    if (!payload) return reject(new PromotionsAdminError("Serverdan noto‘g‘ri javob olindi.", xhr.status));
+                    onProgress(100);
+                    resolve(payload);
+                };
+                const form = new FormData();
+                const extension = blob.type === "image/png" ? "png" : blob.type === "image/jpeg" ? "jpg" : "webp";
+                form.append("file", blob, `promotion-banner.${extension}`);
+                xhr.send(form);
+            });
+        }
     }
 
     return { PromotionsAdminApi, PromotionsAdminError };
