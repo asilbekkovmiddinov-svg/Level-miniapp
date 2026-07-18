@@ -153,13 +153,6 @@ async function createOrder(productId, region = null, idempotencyKey = null) {
     });
 }
 
-async function submitCoinOrderDetails(orderType, orderId, email, password) {
-    return await walletRequest(`/coin-order-chat/${encodeURIComponent(orderType)}/${Number(orderId)}/details`, {
-        method: "POST",
-        body: { konami_login: email, konami_password: password },
-    });
-}
-
 async function getCoinOrderMessages(orderType, orderId) {
     return await walletRequest(`/coin-order-chat/${encodeURIComponent(orderType)}/${Number(orderId)}/messages`);
 }

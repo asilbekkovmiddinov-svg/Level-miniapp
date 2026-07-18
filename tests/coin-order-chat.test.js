@@ -7,15 +7,15 @@ test("chat API uses authenticated wallet requests", () => {
     const source=fs.readFileSync(path.join(__dirname,"../miniapp/api.js"),"utf8");
     assert.match(source,/coin-order-chat/); assert.match(source,/sendCoinOrderMessage/);
     assert.match(source,/markCoinOrderMessagesRead/);
-    assert.match(source,/submitCoinOrderDetails/);
+    assert.doesNotMatch(source,/submitCoinOrderDetails/);
 });
 
-test("SHOP credentials are collected only inside WAITING_DETAILS order chat", () => {
+test("SHOP uses one plain Order Chat with no details form", () => {
     const orders=fs.readFileSync(path.join(__dirname,"../miniapp/pages/orders.js"),"utf8");
     const shop=fs.readFileSync(path.join(__dirname,"../miniapp/pages/shop.js"),"utf8");
-    assert.match(orders,/id="coinDetailsForm"/);
-    assert.match(orders,/result\.status !== "WAITING_DETAILS"/);
-    assert.match(orders,/await submitCoinOrderDetails/);
+    assert.doesNotMatch(orders,/coinDetailsForm|submitCoinOrderDetails/);
+    assert.match(orders,/type === "SHOP" && result\.status === "CLAIMED"/);
+    assert.match(orders,/message\.length > 0 && message\.length <= 1000/);
     assert.doesNotMatch(shop,/openShopCredentialForm/);
     assert.doesNotMatch(shop,/submitShopCredentialOrder/);
 });

@@ -61,7 +61,7 @@ test("orders page uses production APIs, detail, refresh and premium empty state"
     assert.doesNotMatch(api, /\/orders\/user\/\$\{TELEGRAM_ID\}/);
 });
 
-test("Coin history exposes chat and complete OTP status timeline", () => {
+test("Coin history exposes the shared order chat and status timeline", () => {
     for (const status of ["WAITING_DETAILS", "WAITING_OPERATOR", "WAITING_OTP", "OTP_SUBMITTED", "PENDING", "CLAIMED", "COMPLETED", "REJECTED"]) {
         const markup = wheelCoinTimelineMarkup(status);
         assert.match(markup, new RegExp(`class="is-current"[^>]*><i></i><span>[^<]+</span>`));
@@ -76,6 +76,7 @@ test("Coin history exposes chat and complete OTP status timeline", () => {
     assert.match(source, /sendCoinOrderMessage/);
     assert.match(source, /markCoinOrderMessagesRead/);
     assert.match(source, /openCoinOrderChatById/);
-    assert.match(source, /form\.hidden = result\.status !== "WAITING_OTP"/);
+    assert.match(source, /const shopChat = type === "SHOP" && result\.status === "CLAIMED"/);
+    assert.match(source, /const wheelOtp = type === "WHEEL" && result\.status === "WAITING_OTP"/);
     assert.match(source, /Tizim/);
 });
