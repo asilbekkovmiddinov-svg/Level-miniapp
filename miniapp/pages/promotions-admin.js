@@ -1,5 +1,5 @@
 const promotionsAdminState = {
-    items: [], filter: "ALL", search: "", sort: "PRIORITY", loading: false,
+    items: [], filter: "ALL", search: "", sort: "PRIORITY", loading: false, analytics: null, period: "7D",
 };
 
 const promotionsAdminApi = new PromotionsAdminApi({
@@ -62,6 +62,7 @@ function promotionsAdminActions(item) {
 
 function promotionsAdminCard(item) {
     const e = PromotionsAdminCore.escapeHtml;
+    const metric = PromotionsAnalyticsCore.metricMap(promotionsAdminState.analytics).get(item.id) || {};
     return `<article class="pac-card status-${e(item.status.toLowerCase())}">
         <div class="pac-banner ${item.banner_url ? "" : "is-placeholder"}">
             ${promotionsAdminBanner(item)}
@@ -76,9 +77,40 @@ function promotionsAdminCard(item) {
                 <span><small>VIEWS</small><b>${item.view_count}${item.max_views ? ` / ${item.max_views}` : ""}</b></span>
                 <span><small>CLICKS</small><b>${item.click_count}${item.max_clicks ? ` / ${item.max_clicks}` : ""}</b></span>
             </div>
+            <div class="pac-analytics-strip">
+                <span><small>📈 VIEWS</small><b>${metric.views || 0}</b></span><span><small>👆 CLICKS</small><b>${metric.clicks || 0}</b></span>
+                <span><small>🎯 CTR</small><b>${metric.ctr || 0}%</b></span><span><small>👥 UNIQUE</small><b>${metric.unique_users || 0}</b></span>
+                <span><small>⏱ LAST VIEW</small><b>${promotionsAdminDate(metric.last_viewed_at, true)}</b></span><span><small>⚡ LAST CLICK</small><b>${promotionsAdminDate(metric.last_clicked_at, true)}</b></span>
+            </div>
             <footer>${promotionsAdminActions(item)}</footer>
         </div>
     </article>`;
+}
+
+function promotionsAnalyticsChart(title, key, color) {
+    const rows = promotionsAdminState.analytics?.daily || [];
+    const points = PromotionsAnalyticsCore.chartPoints(rows, key);
+    return `<article class="pac-chart"><header><h4>${title}</h4><b>${rows.length ? rows[rows.length - 1][key] : 0}</b></header>
+        <svg viewBox="0 0 300 90" role="img" aria-label="${title}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <footer><span>${rows[0]?.date || "—"}</span><span>${rows[rows.length - 1]?.date || "—"}</span></footer></article>`;
+}
+
+function promotionsAnalyticsRank(title, key) {
+    const values = promotionsAdminState.analytics?.rankings?.[key] || [];
+    return `<article class="pac-ranking"><h4>${title}</h4>${values.length ? values.map((item, index) => `<div><b>${index + 1}</b><span>${PromotionsAdminCore.escapeHtml(item.title)}</span><em>${item.clicks} click • ${item.ctr}%</em></div>`).join("") : `<p>Bu davr uchun ma’lumot yo‘q.</p>`}</article>`;
+}
+
+function promotionsAnalyticsDashboard() {
+    const a = promotionsAdminState.analytics;
+    if (!a) return "";
+    const s = a.summary;
+    const labels = { TODAY: "Today", "7D": "7 Days", "30D": "30 Days", ALL: "All Time" };
+    return `<section class="pac-analytics">
+        <header><div><small>PERFORMANCE</small><h3>Promotion Analytics</h3></div><div class="pac-periods">${PromotionsAnalyticsCore.PERIODS.map((p) => `<button type="button" data-period="${p}" class="${promotionsAdminState.period === p ? "is-active" : ""}">${labels[p]}</button>`).join("")}<button id="promotionsAnalyticsExport" type="button">⇩ CSV</button></div></header>
+        <div class="pac-kpis"><span><small>📈 Views</small><b>${s.views}</b></span><span><small>👆 Clicks</small><b>${s.clicks}</b></span><span><small>🎯 CTR</small><b>${s.ctr}%</b></span><span><small>👥 Unique Users</small><b>${s.unique_users || 0}</b></span></div>
+        <div class="pac-charts">${promotionsAnalyticsChart("Daily Views", "views", "#60a5fa")}${promotionsAnalyticsChart("Daily Clicks", "clicks", "#f87171")}${promotionsAnalyticsChart("CTR Trend", "ctr", "#34d399")}</div>
+        <div class="pac-rankings">${promotionsAnalyticsRank("Top Performing", "top_performing")}${promotionsAnalyticsRank("Worst Performing", "worst_performing")}${promotionsAnalyticsRank("Most Clicked", "most_clicked")}${promotionsAnalyticsRank("Highest CTR", "highest_ctr")}</div>
+    </section>`;
 }
 
 function renderPromotionsAdminList() {
@@ -100,6 +132,7 @@ function promotionsAdminShell() {
             <button id="promotionsAdminCreate" type="button"><span>＋</span> Yangi aksiya</button>
         </section>
         <section id="promotionsAdminStats" class="pac-stats">${promotionsAdminStats()}</section>
+        ${promotionsAnalyticsDashboard()}
         <section class="pac-toolbar">
             <label class="pac-search"><span>⌕</span><input id="promotionsAdminSearch" type="search" placeholder="Title yoki subtitle..." autocomplete="off"></label>
             <select id="promotionsAdminFilter" aria-label="Status filter">
@@ -139,6 +172,7 @@ function bindPromotionsAdmin() {
     document.getElementById("promotionsAdminSort")?.addEventListener("change", (event) => {
         promotionsAdminState.sort = event.target.value; renderPromotionsAdminList();
     });
+    document.getElementById("promotionsAnalyticsExport")?.addEventListener("click", exportPromotionsAnalytics);
     if (page) page.onclick = (event) => {
         const filter = event.target.closest("[data-filter]");
         if (filter) {
@@ -147,6 +181,8 @@ function bindPromotionsAdmin() {
             if (select) select.value = promotionsAdminState.filter;
             renderPromotionsAdminList(); return;
         }
+        const period = event.target.closest("[data-period]");
+        if (period) { loadPromotionsAnalytics(period.dataset.period); return; }
         const action = event.target.closest("[data-action]");
         if (action) handlePromotionAdminAction(action.dataset.action, Number(action.dataset.id));
     };
@@ -157,16 +193,36 @@ async function loadPromotionsAdminPage(force = false) {
     showPage("promotionsAdminPage", "Marketing CMS");
     document.body.classList.add("promotions-admin-open");
     const page = document.getElementById("promotionsAdminPage");
-    if (!force && promotionsAdminState.items.length) {
+    if (!force && promotionsAdminState.items.length && promotionsAdminState.analytics) {
         page.innerHTML = promotionsAdminShell(); bindPromotionsAdmin(); renderPromotionsAdminList(); return;
     }
     page.innerHTML = promotionsAdminSkeleton();
     try {
-        promotionsAdminState.items = PromotionsAdminCore.normalizeList(await promotionsAdminApi.list());
+        const [items, analytics] = await Promise.all([promotionsAdminApi.list(), promotionsAdminApi.analytics(promotionsAdminState.period)]);
+        promotionsAdminState.items = PromotionsAdminCore.normalizeList(items);
+        promotionsAdminState.analytics = PromotionsAnalyticsCore.normalize(analytics);
         page.innerHTML = promotionsAdminShell(); bindPromotionsAdmin(); renderPromotionsAdminList();
     } catch (error) {
         page.innerHTML = promotionsAdminError(error);
     }
+}
+
+async function loadPromotionsAnalytics(period) {
+    promotionsAdminState.period = period;
+    try {
+        promotionsAdminState.analytics = PromotionsAnalyticsCore.normalize(await promotionsAdminApi.analytics(period));
+        const page = document.getElementById("promotionsAdminPage");
+        page.innerHTML = promotionsAdminShell(); bindPromotionsAdmin(); renderPromotionsAdminList();
+    } catch (error) { promotionsAdminToast(error.message || "Analytics yuklanmadi.", "error"); }
+}
+
+async function exportPromotionsAnalytics() {
+    try {
+        const result = await promotionsAdminApi.exportAnalytics(promotionsAdminState.period);
+        const url = URL.createObjectURL(result.blob);
+        const anchor = document.createElement("a"); anchor.href = url; anchor.download = result.filename; anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000); promotionsAdminToast("Analytics CSV tayyor.");
+    } catch (error) { promotionsAdminToast(error.message || "CSV export failed.", "error"); }
 }
 
 function promotionsAdminToast(message, type = "success") {

@@ -51,6 +51,16 @@
         activate(id) { return this.request(`/admin/promotions/${Number(id)}/activate`, { method: "POST" }); }
         pause(id) { return this.request(`/admin/promotions/${Number(id)}/pause`, { method: "POST" }); }
         deactivate(id) { return this.request(`/admin/promotions/${Number(id)}/deactivate`, { method: "POST" }); }
+        analytics(period = "7D") { return this.request(`/admin/promotions/analytics?period=${encodeURIComponent(period)}`); }
+        async exportAnalytics(period = "7D") {
+            const initData = this.initDataProvider();
+            if (!initData) throw new PromotionsAdminError("Admin login required.", 401);
+            const response = await this.fetchImpl(`${this.baseUrl}/admin/promotions/analytics/export?period=${encodeURIComponent(period)}`, {
+                headers: { "X-Telegram-Init-Data": initData },
+            });
+            if (!response.ok) throw new PromotionsAdminError(response.status === 401 ? "Admin login required." : response.status === 403 ? "Admin permission required." : "CSV export failed.", response.status);
+            return { blob: await response.blob(), filename: `promotion-analytics-${period.toLowerCase()}.csv` };
+        }
         deleteBanner(id) { return this.request(`/admin/promotions/${Number(id)}/banner`, { method: "DELETE" }); }
 
         uploadBanner(id, blob, onProgress = () => {}, xhrFactory = () => new XMLHttpRequest()) {
