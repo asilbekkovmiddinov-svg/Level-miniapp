@@ -108,6 +108,9 @@ async function openPage(page) {
         case "promotions-admin":
             await loadPromotionsAdminPage();
             break;
+        case "promotions":
+            await loadPromotionsPage();
+            break;
         default:
             await loadHome();
     }
@@ -118,6 +121,8 @@ async function loadHome() {
     Navbar.setActive("home");
     showPage("homePage", "LEVEL_GROUP");
     await loadWalletPage();
+    await loadUserPromotions();
+    startPromotionsAutoRefresh();
     startLiveWinners();
 }
 
