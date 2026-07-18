@@ -49,6 +49,15 @@ function renderProfile() {
                     <strong>V1.1</strong>
                 </div>
             </div>
+
+            <button class="profile-referral-cta" type="button" onclick="openPage('referral')">
+                <span>🎁</span>
+                <span>
+                    <strong>Referral dasturi</strong>
+                    <small>Do‘stlarni taklif qiling va UZS bonus oling</small>
+                </span>
+                <b>›</b>
+            </button>
         </div>
     `;
 }
