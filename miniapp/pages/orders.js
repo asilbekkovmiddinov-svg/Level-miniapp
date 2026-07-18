@@ -274,6 +274,10 @@ const COIN_STATUS_HELP = {
 function coinOrderChatMarkup() {
     return `<section class="coin-order-chat"><header><h4>💬 Buyurtma suhbati</h4><small id="coinChatStatus"></small></header>
         <div id="coinChatMessages" class="coin-chat-messages"><p>Yuklanmoqda…</p></div>
+        <form id="coinDetailsForm" class="coin-details-form" onsubmit="submitCoinOrderDetailsForm(event)" hidden>
+            <label>MyKonami Email<input name="email" type="email" autocomplete="username" required></label>
+            <label>MyKonami Password<input name="password" type="password" autocomplete="current-password" minlength="4" required></label>
+            <button type="submit">Ma’lumotlarni yuborish</button></form>
         <form id="coinChatForm" onsubmit="submitCoinChatMessage(event)" hidden><input name="message" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 xonali kod" required>
             <button type="submit">Yuborish</button></form></section>`;
 }
@@ -288,6 +292,8 @@ async function loadCoinOrderChat(order) {
         document.getElementById("coinChatStatus").textContent = COIN_STATUS_HELP[result.status] || "";
         const form = document.getElementById("coinChatForm");
         if (form) form.hidden = result.status !== "WAITING_OTP";
+        const detailsForm = document.getElementById("coinDetailsForm");
+        if (detailsForm) detailsForm.hidden = result.status !== "WAITING_DETAILS" || type !== "SHOP";
         const messages = Array.isArray(result.data) ? result.data : [];
         box.innerHTML = messages.length ? messages.map((item) => `<article class="coin-chat-${String(item.sender).toLowerCase()}">
             <b>${item.sender === "USER" ? "Siz" : item.sender === "SYSTEM" ? "Tizim" : "Operator"}</b><p>${ordersEscape(item.message)}</p>
@@ -296,6 +302,20 @@ async function loadCoinOrderChat(order) {
         box.scrollTop = box.scrollHeight;
         if (result.unread_count) await markCoinOrderMessagesRead(type, order.id);
     } catch (error) { box.innerHTML = `<p>${ordersEscape(error?.message || "Chat yuklanmadi.")}</p>`; }
+}
+
+async function submitCoinOrderDetailsForm(event) {
+    event.preventDefault(); const form = event.currentTarget; const box = document.getElementById("coinChatMessages");
+    const email = String(form.elements.email.value || "").trim();
+    const password = String(form.elements.password.value || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 4 || !box || form.dataset.submitting) return;
+    form.dataset.submitting = "1"; form.querySelector("button").disabled = true;
+    try {
+        await submitCoinOrderDetails(box.dataset.orderType, box.dataset.orderId, email, password);
+        form.elements.password.value = "";
+        const order = orderHistory.find((item) => item.kind === "shop" && String(item.id) === box.dataset.orderId);
+        if (order) await loadCoinOrderChat(order);
+    } finally { form.elements.password.value = ""; delete form.dataset.submitting; form.querySelector("button").disabled = false; }
 }
 
 async function submitCoinChatMessage(event) {
