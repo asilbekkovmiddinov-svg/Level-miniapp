@@ -31,7 +31,7 @@ async function openCoinOrderDeepLink() {
     const orderId = params.get("coin_order_id");
     if (!orderId || !["SHOP", "WHEEL"].includes(type)) return;
     await loadOrdersPage();
-    await openCoinOrderChatById(type === "SHOP" ? "shop" : "wheel_coin", orderId);
+    if (type === "WHEEL") await openCoinOrderChatById("wheel_coin", orderId);
 }
 
 function showPage(pageId, title) {
