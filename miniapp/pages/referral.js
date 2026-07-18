@@ -28,6 +28,41 @@ function referralMoney(value) {
     return `${referralNumber(value).toLocaleString("uz-UZ")} UZS`;
 }
 
+function referralShareMessage(referralLink) {
+    return `🔥 LEVEL_GROUP'ga xush kelibsiz!
+
+🎮 Arena'da raqobatlashing.
+🎡 Wheel'da sovg'alar yuting.
+🛒 Coin Shop orqali xarid qiling.
+🤝 P2P savdo qiling.
+💳 Wallet orqali mablag'ingizni boshqaring.
+
+✨ Hammasi bitta Telegram MiniApp ichida.
+
+🚀 Hoziroq qo'shiling:
+
+${referralLink}`;
+}
+
+function referralShareUrl(referralLink) {
+    const message = referralShareMessage(referralLink);
+    const text = message.slice(0, -(referralLink.length + 2));
+    return `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`;
+}
+
+function shareReferralLink() {
+    if (!referralData?.referralLink) {
+        Modal.error("Referral havolasi hali tayyor emas.");
+        return;
+    }
+    const shareUrl = referralShareUrl(referralData.referralLink);
+    if (globalThis.Telegram?.WebApp?.openTelegramLink) {
+        globalThis.Telegram.WebApp.openTelegramLink(shareUrl);
+        return;
+    }
+    globalThis.open?.(shareUrl, "_blank");
+}
+
 async function referralClipboardWrite(text, environment = {}) {
     const navigatorObject = environment.navigator || globalThis.navigator;
     try {
@@ -87,7 +122,11 @@ function renderReferralPage(data) {
         </header>
         <section class="referral-link-card">
             <span>SHAXSIY REFERRAL HAVOLANGIZ</span>
-            <div><code>${data.referralLink}</code><button type="button" onclick="copyReferralLink()">📋 Nusxalash</button></div>
+            <div><code>${data.referralLink}</code></div>
+            <div class="referral-link-actions">
+                <button type="button" onclick="copyReferralLink()">📋 Nusxalash</button>
+                <button type="button" onclick="shareReferralLink()">✈️ Ulashish</button>
+            </div>
             <small>Havola faqat sizga tegishli va har bir yangi foydalanuvchi bir marta hisoblanadi.</small>
         </section>
         <section class="referral-stats">
@@ -142,5 +181,7 @@ if (typeof module !== "undefined") {
         normalizeReferralSummary,
         referralClipboardWrite,
         referralMoney,
+        referralShareMessage,
+        referralShareUrl,
     };
 }

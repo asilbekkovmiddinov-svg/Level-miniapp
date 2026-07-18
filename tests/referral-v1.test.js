@@ -7,6 +7,8 @@ const {
     normalizeReferralSummary,
     referralClipboardWrite,
     referralMoney,
+    referralShareMessage,
+    referralShareUrl,
 } = require("../miniapp/pages/referral.js");
 
 test("referral summary normalizes the authenticated backend contract", () => {
@@ -51,6 +53,32 @@ test("copy prefers Clipboard API and falls back for Telegram WebView", async () 
     };
     assert.equal(await referralClipboardWrite("link", { navigator: {}, document }), true);
     assert.equal(removed, true);
+});
+
+test("Telegram share contains the approved message once and keeps copy independent", () => {
+    const link = "https://t.me/LevelGroupBot?start=ref_abc123";
+    const expected = `🔥 LEVEL_GROUP'ga xush kelibsiz!
+
+🎮 Arena'da raqobatlashing.
+🎡 Wheel'da sovg'alar yuting.
+🛒 Coin Shop orqali xarid qiling.
+🤝 P2P savdo qiling.
+💳 Wallet orqali mablag'ingizni boshqaring.
+
+✨ Hammasi bitta Telegram MiniApp ichida.
+
+🚀 Hoziroq qo'shiling:
+
+${link}`;
+    assert.equal(referralShareMessage(link), expected);
+
+    const shareUrl = new URL(referralShareUrl(link));
+    assert.equal(shareUrl.origin + shareUrl.pathname, "https://t.me/share/url");
+    assert.equal(`${shareUrl.searchParams.get("text")}\n\n${shareUrl.searchParams.get("url")}`, expected);
+
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/referral.js"), "utf8");
+    assert.match(source, /onclick="shareReferralLink\(\)"/);
+    assert.match(source, /referralClipboardWrite\(referralData\.referralLink\)/);
 });
 
 test("referral page includes loading, empty, error, retry and approved metrics", () => {
