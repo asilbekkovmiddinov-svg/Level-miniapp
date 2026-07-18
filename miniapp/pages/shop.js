@@ -242,9 +242,15 @@ async function buyProduct(productId, region = null) {
             return;
         }
         shopOrderAttempt = null;
-        Modal.success("Buyurtmangiz muvaffaqiyatli yaratildi. Iltimos kuting. Operator tez orada buyurtma suhbati orqali siz bilan bog‘lanadi.");
+        Modal.success(
+            `Buyurtmangiz yaratildi.\n\n` +
+            `Tartib raqami: ${result.data?.id}\n` +
+            `Order raqami: ${result.data?.order_number}\n\n` +
+            "Admin siz bilan Telegram orqali bog‘lanadi.\n\n" +
+            "Faqat Tartib raqami va Order raqamingiz mos kelsagina ma’lumot bering.\n\n" +
+            "Begona foydalanuvchilarga ma’lumot bermang."
+        );
         await loadOrdersPage();
-        await openCoinOrderChatById("shop", result.data?.id);
     } catch (error) {
         Modal.error(error?.message || "Buyurtma yaratilmadi.");
     } finally {
