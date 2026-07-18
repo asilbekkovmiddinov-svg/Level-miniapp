@@ -28,8 +28,12 @@ function referralMoney(value) {
     return `${referralNumber(value).toLocaleString("uz-UZ")} UZS`;
 }
 
-function referralShareMessage(referralLink) {
-    return `🔥 LEVEL_GROUP'ga xush kelibsiz!
+function referralShareMessage(referralLink, firstName) {
+    const name = typeof firstName === "string" ? firstName.trim() : "";
+    const invitation = name
+        ? `🔥 ${name} sizni LEVEL_GROUP'ga taklif qildi!`
+        : "🔥 Sizni LEVEL_GROUP'ga taklif qilishmoqda!";
+    return `${invitation}
 
 🎮 Arena'da raqobatlashing.
 🎡 Wheel'da sovg'alar yuting.
@@ -44,8 +48,8 @@ function referralShareMessage(referralLink) {
 ${referralLink}`;
 }
 
-function referralShareUrl(referralLink) {
-    const message = referralShareMessage(referralLink);
+function referralShareUrl(referralLink, firstName) {
+    const message = referralShareMessage(referralLink, firstName);
     const text = message.slice(0, -(referralLink.length + 2));
     return `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`;
 }
@@ -55,7 +59,8 @@ function shareReferralLink() {
         Modal.error("Referral havolasi hali tayyor emas.");
         return;
     }
-    const shareUrl = referralShareUrl(referralData.referralLink);
+    const firstName = globalThis.Telegram?.WebApp?.initDataUnsafe?.user?.first_name;
+    const shareUrl = referralShareUrl(referralData.referralLink, firstName);
     if (globalThis.Telegram?.WebApp?.openTelegramLink) {
         globalThis.Telegram.WebApp.openTelegramLink(shareUrl);
         return;

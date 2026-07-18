@@ -57,7 +57,7 @@ test("copy prefers Clipboard API and falls back for Telegram WebView", async () 
 
 test("Telegram share contains the approved message once and keeps copy independent", () => {
     const link = "https://t.me/LevelGroupBot?start=ref_abc123";
-    const expected = `🔥 LEVEL_GROUP'ga xush kelibsiz!
+    const expected = `🔥 Ali sizni LEVEL_GROUP'ga taklif qildi!
 
 🎮 Arena'da raqobatlashing.
 🎡 Wheel'da sovg'alar yuting.
@@ -70,15 +70,23 @@ test("Telegram share contains the approved message once and keeps copy independe
 🚀 Hoziroq qo'shiling:
 
 ${link}`;
-    assert.equal(referralShareMessage(link), expected);
+    assert.equal(referralShareMessage(link, "  Ali  "), expected);
 
-    const shareUrl = new URL(referralShareUrl(link));
+    const shareUrl = new URL(referralShareUrl(link, "Ali"));
     assert.equal(shareUrl.origin + shareUrl.pathname, "https://t.me/share/url");
     assert.equal(`${shareUrl.searchParams.get("text")}\n\n${shareUrl.searchParams.get("url")}`, expected);
 
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/referral.js"), "utf8");
     assert.match(source, /onclick="shareReferralLink\(\)"/);
     assert.match(source, /referralClipboardWrite\(referralData\.referralLink\)/);
+});
+
+test("Telegram share uses the approved fallback when first_name is missing", () => {
+    const link = "https://t.me/LevelGroupBot?start=ref_fallback";
+    const expectedStart = "🔥 Sizni LEVEL_GROUP'ga taklif qilishmoqda!";
+    assert.equal(referralShareMessage(link).split("\n")[0], expectedStart);
+    assert.equal(referralShareMessage(link, "   ").split("\n")[0], expectedStart);
+    assert.equal(new URL(referralShareUrl(link, "")).searchParams.get("url"), link);
 });
 
 test("referral page includes loading, empty, error, retry and approved metrics", () => {
