@@ -76,7 +76,7 @@ test("Coin history exposes the shared order chat and status timeline", () => {
     assert.match(source, /sendCoinOrderMessage/);
     assert.match(source, /markCoinOrderMessagesRead/);
     assert.match(source, /openCoinOrderChatById/);
-    assert.match(source, /const shopChat = type === "SHOP" && result\.status === "CLAIMED"/);
     assert.match(source, /const wheelOtp = type === "WHEEL" && result\.status === "WAITING_OTP"/);
+    assert.doesNotMatch(source, /shopChat|type === "SHOP"/);
     assert.match(source, /Tizim/);
 });
