@@ -11,7 +11,20 @@ function normalizeReferralSummary(payload) {
         throw new Error("Referral ma’lumotlari noto‘g‘ri formatda olindi.");
     }
     const link = data.referral_link.trim();
-    if (!/^https:\/\/t\.me\/[A-Za-z0-9_]+\?start=ref_[A-Za-z0-9_-]+$/.test(link)) {
+    let parsedLink;
+    try {
+        parsedLink = new URL(link);
+    } catch (_error) {
+        throw new Error("Referral havolasi yaroqsiz.");
+    }
+    const start = parsedLink.searchParams.get("start") || "";
+    const queryKeys = [...parsedLink.searchParams.keys()];
+    if (parsedLink.protocol !== "https:"
+        || parsedLink.hostname !== "t.me"
+        || !/^\/[A-Za-z0-9_]+$/.test(parsedLink.pathname)
+        || queryKeys.length !== 1
+        || queryKeys[0] !== "start"
+        || !/^ref_[A-Za-z0-9_-]+$/.test(start)) {
         throw new Error("Referral havolasi yaroqsiz.");
     }
     return {
@@ -28,8 +41,12 @@ function referralMoney(value) {
     return `${referralNumber(value).toLocaleString("uz-UZ")} UZS`;
 }
 
-function referralShareMessage(referralLink) {
-    return `🔥 LEVEL_GROUP'ga xush kelibsiz!
+function referralShareMessage(referralLink, firstName) {
+    const name = typeof firstName === "string" ? firstName.trim() : "";
+    const invitation = name
+        ? `🔥 ${name} sizni LEVEL_GROUP'ga taklif qildi!`
+        : "🔥 Sizni LEVEL_GROUP'ga taklif qilishmoqda!";
+    return `${invitation}
 
 🎮 Arena'da raqobatlashing.
 🎡 Wheel'da sovg'alar yuting.
@@ -44,10 +61,13 @@ function referralShareMessage(referralLink) {
 ${referralLink}`;
 }
 
-function referralShareUrl(referralLink) {
-    const message = referralShareMessage(referralLink);
+function referralShareUrl(referralLink, firstName) {
+    const message = referralShareMessage(referralLink, firstName);
     const text = message.slice(0, -(referralLink.length + 2));
-    return `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`;
+    const shareUrl = new URL("/share/url", new URL(referralLink).origin);
+    shareUrl.searchParams.set("url", referralLink);
+    shareUrl.searchParams.set("text", text);
+    return shareUrl.toString();
 }
 
 function shareReferralLink() {
@@ -55,7 +75,8 @@ function shareReferralLink() {
         Modal.error("Referral havolasi hali tayyor emas.");
         return;
     }
-    const shareUrl = referralShareUrl(referralData.referralLink);
+    const firstName = globalThis.Telegram?.WebApp?.initDataUnsafe?.user?.first_name;
+    const shareUrl = referralShareUrl(referralData.referralLink, firstName);
     if (globalThis.Telegram?.WebApp?.openTelegramLink) {
         globalThis.Telegram.WebApp.openTelegramLink(shareUrl);
         return;
