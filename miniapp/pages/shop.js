@@ -219,45 +219,10 @@ async function confirmBuyProduct(region) {
         return;
     }
 
-    openShopCredentialForm(selectedShopProduct.id);
+    await buyProduct(selectedShopProduct.id, region);
 }
 
-function openShopCredentialForm(productId) {
-    const container = document.getElementById("shopProducts");
-    if (!container) return;
-    container.innerHTML = `<section class="coin-credential-form"><small>MYKONAMI</small><h3>Coin buyurtmasi</h3>
-        <p>Ma’lumotlar shifrlangan holda yuboriladi va order tugagach o‘chiriladi.</p>
-        <form onsubmit="submitShopCredentialOrder(event,${Number(productId)})">
-            <label>Email<input name="email" type="email" autocomplete="username" required></label>
-            <label>Parol<span><input name="password" type="password" autocomplete="current-password" required><button type="button" onclick="toggleShopCredentialPassword(this)">Ko‘rsatish</button></span></label>
-            <fieldset><legend>Platforma</legend><label><input type="radio" name="platform" value="ANDROID" checked> Android</label><label><input type="radio" name="platform" value="IOS"> iOS</label></fieldset>
-            <fieldset><legend>Region</legend><label><input type="radio" name="region" value="GLOBAL" checked> Global</label><label><input type="radio" name="region" value="JAPAN"> Japan</label></fieldset>
-            <p class="form-error" id="shopCredentialError"></p><button class="red-btn" type="submit">Buyurtma yaratish</button>
-        </form></section>`;
-}
-
-function toggleShopCredentialPassword(button) {
-    const input = button.parentElement.querySelector("input");
-    input.type = input.type === "password" ? "text" : "password";
-    button.textContent = input.type === "password" ? "Ko‘rsatish" : "Yashirish";
-}
-
-async function submitShopCredentialOrder(event, productId) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const email = String(form.elements.email.value || "").trim();
-    const password = String(form.elements.password.value || "");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 4) {
-        document.getElementById("shopCredentialError").textContent = "Email yoki parolni tekshiring.";
-        return;
-    }
-    await buyProduct(productId, form.elements.region.value, {
-        email, password, platform: form.elements.platform.value,
-    });
-    form.elements.password.value = "";
-}
-
-async function buyProduct(productId, region = null, credentials = {}) {
+async function buyProduct(productId, region = null) {
     if (shopOrderSubmitting) return;
     const fingerprint = `${Number(productId)}:${region || ""}`;
     if (!shopOrderAttempt || shopOrderAttempt.fingerprint !== fingerprint) {
@@ -271,7 +236,7 @@ async function buyProduct(productId, region = null, credentials = {}) {
         button.disabled = true;
     });
     try {
-        const result = await createOrder(productId, region, shopOrderAttempt.idempotencyKey, credentials);
+        const result = await createOrder(productId, region, shopOrderAttempt.idempotencyKey);
         if (!result || result.success === false) {
             Modal.error(result?.message || "Buyurtma yaratilmadi.");
             return;
