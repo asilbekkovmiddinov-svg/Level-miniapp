@@ -12,6 +12,20 @@
     gap: 10px;
 }
 
+.coin-order-chat .coin-details-form {
+    display: grid;
+}
+
+.coin-order-chat .coin-details-form[hidden] {
+    display: none;
+}
+
+.coin-details-form label {
+    display: grid;
+    gap: 6px;
+    font-size: 12px;
+}
+
 .coin-order-chat header {
     justify-content: space-between;
 }
