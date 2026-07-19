@@ -17,8 +17,7 @@ async function loadProfilePage() {
 
 async function checkProfileAdminAccess() {
     try {
-        const adminApi = new PromotionsAdminApi({ baseUrl: API_URL });
-        await adminApi.list();
+        await walletRequest("/admin/promotions?include_deleted=true");
         return true;
     } catch (_error) {
         return false;
