@@ -3,6 +3,10 @@ let selectedShopCategory = null;
 let selectedShopProduct = null;
 let shopOrderSubmitting = false;
 let shopOrderAttempt = null;
+let shopPromotionRefreshTimer = null;
+let shopPromotionCountdownTimer = null;
+let shopView = "categories";
+const SHOP_PROMOTION_REFRESH_MS = 15000;
 
 const SHOP_REGIONS = [
     "🇺🇿 Uzbekistan",
@@ -47,8 +51,10 @@ async function loadShopPage() {
             return;
         }
 
-        products = result.data || [];
+        products = (result.data || []).map(CoinPromotionCore.normalizeProduct);
         renderShopCategories();
+        startShopPromotionRefresh();
+        startShopPromotionCountdown();
 
     } catch (error) {
         console.error(error);
@@ -62,6 +68,7 @@ async function loadShopPage() {
 }
 
 function renderShopCategories() {
+    shopView = "categories";
     const container = document.getElementById("shopProducts");
 
     container.innerHTML = `
@@ -96,6 +103,7 @@ function openShopCategory(category) {
 }
 
 function renderProductList(list, category) {
+    shopView = "list";
     const container = document.getElementById("shopProducts");
 
     const title = category === "ANDROID_COINS"
@@ -131,13 +139,11 @@ function renderProductList(list, category) {
         </div>
 
         ${list.map((product) => `
-            <div class="list-card">
+            <div class="list-card coin-product-card ${product.has_promotion ? "is-promotion" : ""}" data-product-id="${product.id}">
+                ${product.has_promotion ? '<span class="coin-promotion-badge">🔥 Flash Sale</span>' : ""}
                 <h3>${formatMoney(product.coin_amount)} Coins</h3>
-
-                <p>
-                    💵 Narx:
-                    <b>${formatMoney(product.price)} UZS</b>
-                </p>
+                ${shopPriceMarkup(product)}
+                ${shopPromotionMetaMarkup(product)}
 
                 <button
                     class="red-btn"
@@ -172,15 +178,14 @@ function selectShopProduct(productId) {
 }
 
 function renderRegionSelect() {
+    shopView = "region";
     const container = document.getElementById("shopProducts");
 
     container.innerHTML = `
         <div class="list-card">
             <h3>${formatMoney(selectedShopProduct.coin_amount)} Coins</h3>
-            <p>
-                💵 Narx:
-                <b>${formatMoney(selectedShopProduct.price)} UZS</b>
-            </p>
+            ${shopPriceMarkup(selectedShopProduct)}
+            ${shopPromotionMetaMarkup(selectedShopProduct)}
             <p>🌍 Regionni tanlang</p>
         </div>
 
@@ -212,7 +217,7 @@ async function confirmBuyProduct(region) {
     const regionText = region ? `\nRegion: ${region}` : "";
 
     const confirmed = confirm(
-        `${selectedShopProduct.coin_amount} Coins\nNarx: ${formatMoney(selectedShopProduct.price)} UZS${regionText}\n\nBuyurtma berasizmi?`
+        `${selectedShopProduct.coin_amount} Coins\nNarx: ${formatMoney(selectedShopProduct.display_price)} UZS${regionText}\n\nBuyurtma berasizmi?`
     );
 
     if (!confirmed) {
@@ -242,10 +247,15 @@ async function buyProduct(productId, region = null) {
             return;
         }
         shopOrderAttempt = null;
+        const locked = globalThis.CoinPromotionCore?.normalizeOrder
+            ? CoinPromotionCore.normalizeOrder(result.data)
+            : { promotionId: Number(result.data?.promotion_id) || null, lockedPrice: Number(result.data?.locked_price ?? result.data?.price_uzs ?? 0) };
         Modal.success(
             `Buyurtmangiz yaratildi.\n\n` +
             `Tartib raqami: ${result.data?.id}\n` +
             `Order raqami: ${result.data?.order_number}\n\n` +
+            `Locked narx: ${formatMoney(locked.lockedPrice)} UZS\n` +
+            `${locked.promotionId ? `Promotion: #${locked.promotionId}\n` : ""}\n` +
             "Admin siz bilan Telegram orqali bog‘lanadi.\n\n" +
             "Faqat Tartib raqami va Order raqamingiz mos kelsagina ma’lumot bering.\n\n" +
             "Begona foydalanuvchilarga ma’lumot bermang."
@@ -263,6 +273,78 @@ async function buyProduct(productId, region = null) {
 
 async function refreshShop() {
     await loadShopPage();
+}
+
+function shopPriceMarkup(product) {
+    if (!product.has_promotion) {
+        return `<div class="coin-price"><strong>${formatMoney(product.display_price)} UZS</strong></div>`;
+    }
+    return `<div class="coin-price"><del>${formatMoney(product.original_price)} UZS</del><strong class="promo">${formatMoney(product.promotion_price)} UZS</strong></div>`;
+}
+
+function shopPromotionMetaMarkup(product) {
+    if (!product.has_promotion) return "";
+    const timer = CoinPromotionCore.countdown(product.promotion_end_at);
+    return `<div class="coin-promotion-meta">
+        <span class="coin-promotion-remaining">Qoldi: ${product.remaining_quantity} ta</span>
+        ${timer ? `<span class="coin-promotion-countdown ${timer.urgent ? "is-urgent" : ""}" data-promotion-countdown="${product.id}">⏱ ${timer.text}</span>` : ""}
+    </div>`;
+}
+
+function updateShopPromotionCountdowns() {
+    let expired = false;
+    products = products.map((product) => {
+        if (!product.has_promotion || !product.promotion_end_at) return product;
+        const timer = CoinPromotionCore.countdown(product.promotion_end_at);
+        if (!timer?.expired) return product;
+        expired = true;
+        return CoinPromotionCore.expirePromotion(product);
+    });
+    if (expired) {
+        if (selectedShopProduct) selectedShopProduct = products.find((product) => product.id === selectedShopProduct.id) || selectedShopProduct;
+        if (selectedShopCategory && shopView === "list") renderProductList(products.filter((product) => product.category === selectedShopCategory), selectedShopCategory);
+        else if (shopView === "region" && selectedShopProduct) renderRegionSelect();
+        return;
+    }
+    document.querySelectorAll("[data-promotion-countdown]").forEach((element) => {
+        const product = products.find((item) => item.id === Number(element.dataset.promotionCountdown));
+        const timer = CoinPromotionCore.countdown(product?.promotion_end_at);
+        if (!timer) return;
+        element.textContent = `⏱ ${timer.text}`;
+        element.classList.toggle("is-urgent", timer.urgent);
+    });
+}
+
+async function refreshShopPromotionData(animate = true) {
+    if (shopOrderSubmitting) return;
+    const page = document.getElementById("shopPage");
+    if (!page?.classList.contains("active-page")) return;
+    try {
+        const result = await getProducts();
+        if (!result || result.success === false) return;
+        products = (result.data || []).map(CoinPromotionCore.normalizeProduct);
+        if (selectedShopProduct) {
+            selectedShopProduct = products.find((product) => product.id === selectedShopProduct.id) || selectedShopProduct;
+        }
+        if (selectedShopCategory && shopView === "list") {
+            renderProductList(products.filter((product) => product.category === selectedShopCategory), selectedShopCategory);
+            if (animate) document.querySelectorAll(".coin-product-card").forEach((card) => card.classList.add("promotion-refresh"));
+        } else if (shopView === "region" && selectedShopProduct) {
+            renderRegionSelect();
+        }
+    } catch (error) {
+        console.warn("Coin promotion refresh failed", error);
+    }
+}
+
+function startShopPromotionRefresh() {
+    if (shopPromotionRefreshTimer) return;
+    shopPromotionRefreshTimer = setInterval(() => refreshShopPromotionData(), SHOP_PROMOTION_REFRESH_MS);
+}
+
+function startShopPromotionCountdown() {
+    if (shopPromotionCountdownTimer) return;
+    shopPromotionCountdownTimer = setInterval(updateShopPromotionCountdowns, 1000);
 }
 
 function formatMoney(value) {
