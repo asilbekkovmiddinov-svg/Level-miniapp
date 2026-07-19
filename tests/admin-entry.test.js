@@ -4,10 +4,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const profile = fs.readFileSync(path.join(__dirname, "../miniapp/pages/profile.js"), "utf8");
+const api = fs.readFileSync(path.join(__dirname, "../miniapp/api.js"), "utf8");
 
-test("Profile admin entry uses the existing authoritative admin API", () => {
-    assert.match(profile, /new PromotionsAdminApi\(\{ baseUrl: API_URL \}\)/);
-    assert.match(profile, /await adminApi\.list\(\)/);
+test("Profile admin entry uses the existing authenticated API client", () => {
+    assert.match(profile, /await walletRequest\("\/admin\/promotions\?include_deleted=true"\)/);
+    assert.doesNotMatch(profile, /new PromotionsAdminApi|fetch\s*\(/);
+    assert.match(api, /const initData = telegramInitData\(\)/);
+    assert.match(api, /"X-Telegram-Init-Data": initData/);
     assert.match(profile, /profileAdminAccess = await checkProfileAdminAccess\(\)/);
     assert.doesNotMatch(profile, /X-Internal-Api-Key|isAdmin|adminTelegramIds|allowlist/i);
 });
