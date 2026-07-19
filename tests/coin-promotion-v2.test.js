@@ -74,6 +74,18 @@ test("order result keeps backend locked price and promotion identity", () => {
     });
 });
 
+test("Coin order success popup stays within Telegram's 256 character limit", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/shop.js"), "utf8");
+    const payload = "✅ Buyurtma yaratildi.\n\nOrder raqami: LG-20260719-ABCDEF\n\n" +
+        "Locked narx: 15 000 UZS\n\nAdmin siz bilan Telegram orqali bog‘lanadi.";
+    assert.ok(payload.length < 256);
+    assert.match(source, /`Buyurtma yaratildi\.\\n\\n`/);
+    assert.match(source, /`Order raqami: \$\{result\.data\?\.order_number\}\\n\\n`/);
+    assert.match(source, /`Locked narx: \$\{formatMoney\(locked\.lockedPrice\)\} UZS\\n\\n`/);
+    assert.match(source, /Admin siz bilan Telegram orqali bog‘lanadi\./);
+    assert.doesNotMatch(source, /Begona foydalanuvchilarga|Faqat Tartib raqami/);
+});
+
 test("Coin Shop UI includes premium promotion, remaining and near-live refresh UX", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/shop.js"), "utf8");
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/coin-promotion.css"), "utf8");

@@ -251,14 +251,10 @@ async function buyProduct(productId, region = null) {
             ? CoinPromotionCore.normalizeOrder(result.data)
             : { promotionId: Number(result.data?.promotion_id) || null, lockedPrice: Number(result.data?.locked_price ?? result.data?.price_uzs ?? 0) };
         Modal.success(
-            `Buyurtmangiz yaratildi.\n\n` +
-            `Tartib raqami: ${result.data?.id}\n` +
+            `Buyurtma yaratildi.\n\n` +
             `Order raqami: ${result.data?.order_number}\n\n` +
-            `Locked narx: ${formatMoney(locked.lockedPrice)} UZS\n` +
-            `${locked.promotionId ? `Promotion: #${locked.promotionId}\n` : ""}\n` +
-            "Admin siz bilan Telegram orqali bog‘lanadi.\n\n" +
-            "Faqat Tartib raqami va Order raqamingiz mos kelsagina ma’lumot bering.\n\n" +
-            "Begona foydalanuvchilarga ma’lumot bermang."
+            `Locked narx: ${formatMoney(locked.lockedPrice)} UZS\n\n` +
+            "Admin siz bilan Telegram orqali bog‘lanadi."
         );
         await loadOrdersPage();
     } catch (error) {
