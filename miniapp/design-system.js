@@ -2,7 +2,7 @@ const LevelDesignSystem = (() => {
     const HAPTIC_SELECTORS = Object.freeze({
         selection: ".nav-btn",
         light: ".menu-card,.wallet-action,.icon-btn,.back-btn,.lg-button-secondary,.lg-button-ghost",
-        medium: ".primary-btn,.red-btn,.lg-button-primary,.wallet-form-submit,.arena-v2-submit,.wheel-spin-button",
+        medium: ".primary-btn,.red-btn,.lg-button-primary,.wallet-form-submit,.arena-v2-submit,.arena-v2-ready-button,.arena-v2-join,.arena-v2-room-submit,.wheel-spin-button",
         warning: ".lg-button-danger,[data-haptic='danger']",
     });
     let lastHapticAt = 0;
