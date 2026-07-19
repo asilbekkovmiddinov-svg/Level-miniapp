@@ -1,8 +1,8 @@
 const LevelDesignSystem = (() => {
     const HAPTIC_SELECTORS = Object.freeze({
         selection: ".nav-btn",
-        light: ".menu-card,.wallet-action,.wallet-v2-title button,.wallet-pagination button,.icon-btn,.back-btn,.lg-button-secondary,.lg-button-ghost",
-        medium: ".primary-btn,.red-btn,.lg-button-primary,.wallet-form-submit,.wallet-v2-actions button,.deposit-paid-btn,.arena-v2-submit,.arena-v2-ready-button,.arena-v2-join,.arena-v2-room-submit,.wheel-spin-button",
+        light: ".menu-card,.wallet-action,.wallet-v2-title button,.wallet-pagination button,.referral-copy-button,.icon-btn,.back-btn,.lg-button-secondary,.lg-button-ghost",
+        medium: ".primary-btn,.red-btn,.lg-button-primary,.wallet-form-submit,.wallet-v2-actions button,.deposit-paid-btn,.referral-share-button,.referral-invite-button,.arena-v2-submit,.arena-v2-ready-button,.arena-v2-join,.arena-v2-room-submit,.wheel-spin-button",
         warning: ".lg-button-danger,[data-haptic='danger']",
     });
     let lastHapticAt = 0;
