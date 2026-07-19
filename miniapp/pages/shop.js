@@ -4,6 +4,7 @@ let selectedShopProduct = null;
 let shopOrderSubmitting = false;
 let shopOrderAttempt = null;
 let shopPromotionRefreshTimer = null;
+let shopPromotionCountdownTimer = null;
 let shopView = "categories";
 const SHOP_PROMOTION_REFRESH_MS = 15000;
 
@@ -53,6 +54,7 @@ async function loadShopPage() {
         products = (result.data || []).map(CoinPromotionCore.normalizeProduct);
         renderShopCategories();
         startShopPromotionRefresh();
+        startShopPromotionCountdown();
 
     } catch (error) {
         console.error(error);
@@ -138,10 +140,10 @@ function renderProductList(list, category) {
 
         ${list.map((product) => `
             <div class="list-card coin-product-card ${product.has_promotion ? "is-promotion" : ""}" data-product-id="${product.id}">
-                ${product.has_promotion ? '<span class="coin-promotion-badge">🔥 Promotion</span>' : ""}
+                ${product.has_promotion ? '<span class="coin-promotion-badge">🔥 Flash Sale</span>' : ""}
                 <h3>${formatMoney(product.coin_amount)} Coins</h3>
                 ${shopPriceMarkup(product)}
-                ${product.has_promotion ? `<span class="coin-promotion-remaining">Qoldi: ${product.remaining_quantity} ta</span>` : ""}
+                ${shopPromotionMetaMarkup(product)}
 
                 <button
                     class="red-btn"
@@ -183,7 +185,7 @@ function renderRegionSelect() {
         <div class="list-card">
             <h3>${formatMoney(selectedShopProduct.coin_amount)} Coins</h3>
             ${shopPriceMarkup(selectedShopProduct)}
-            ${selectedShopProduct.has_promotion ? `<span class="coin-promotion-remaining">Qoldi: ${selectedShopProduct.remaining_quantity} ta</span>` : ""}
+            ${shopPromotionMetaMarkup(selectedShopProduct)}
             <p>🌍 Regionni tanlang</p>
         </div>
 
@@ -280,6 +282,39 @@ function shopPriceMarkup(product) {
     return `<div class="coin-price"><del>${formatMoney(product.original_price)} UZS</del><strong class="promo">${formatMoney(product.promotion_price)} UZS</strong></div>`;
 }
 
+function shopPromotionMetaMarkup(product) {
+    if (!product.has_promotion) return "";
+    const timer = CoinPromotionCore.countdown(product.promotion_end_at);
+    return `<div class="coin-promotion-meta">
+        <span class="coin-promotion-remaining">Qoldi: ${product.remaining_quantity} ta</span>
+        ${timer ? `<span class="coin-promotion-countdown ${timer.urgent ? "is-urgent" : ""}" data-promotion-countdown="${product.id}">⏱ ${timer.text}</span>` : ""}
+    </div>`;
+}
+
+function updateShopPromotionCountdowns() {
+    let expired = false;
+    products = products.map((product) => {
+        if (!product.has_promotion || !product.promotion_end_at) return product;
+        const timer = CoinPromotionCore.countdown(product.promotion_end_at);
+        if (!timer?.expired) return product;
+        expired = true;
+        return CoinPromotionCore.expirePromotion(product);
+    });
+    if (expired) {
+        if (selectedShopProduct) selectedShopProduct = products.find((product) => product.id === selectedShopProduct.id) || selectedShopProduct;
+        if (selectedShopCategory && shopView === "list") renderProductList(products.filter((product) => product.category === selectedShopCategory), selectedShopCategory);
+        else if (shopView === "region" && selectedShopProduct) renderRegionSelect();
+        return;
+    }
+    document.querySelectorAll("[data-promotion-countdown]").forEach((element) => {
+        const product = products.find((item) => item.id === Number(element.dataset.promotionCountdown));
+        const timer = CoinPromotionCore.countdown(product?.promotion_end_at);
+        if (!timer) return;
+        element.textContent = `⏱ ${timer.text}`;
+        element.classList.toggle("is-urgent", timer.urgent);
+    });
+}
+
 async function refreshShopPromotionData(animate = true) {
     if (shopOrderSubmitting) return;
     const page = document.getElementById("shopPage");
@@ -305,6 +340,11 @@ async function refreshShopPromotionData(animate = true) {
 function startShopPromotionRefresh() {
     if (shopPromotionRefreshTimer) return;
     shopPromotionRefreshTimer = setInterval(() => refreshShopPromotionData(), SHOP_PROMOTION_REFRESH_MS);
+}
+
+function startShopPromotionCountdown() {
+    if (shopPromotionCountdownTimer) return;
+    shopPromotionCountdownTimer = setInterval(updateShopPromotionCountdowns, 1000);
 }
 
 function formatMoney(value) {
