@@ -14,8 +14,13 @@ window.addEventListener("load", async () => {
         bindMenuButtons();
         bindHeaderButtons();
 
-        await loadHome();
-        await openCoinOrderDeepLink();
+        const query = new URLSearchParams(window.location.search);
+        if (query.get("admin") === "promotions") {
+            await loadPromotionsAdminPage();
+        } else {
+            await loadHome();
+            await openCoinOrderDeepLink();
+        }
     } catch (error) {
         console.error(error);
         Modal.error("Mini App yuklanishda xatolik yuz berdi.");
@@ -72,6 +77,9 @@ function bindHeaderButtons() {
 }
 
 async function openPage(page) {
+    if (page !== "promotions-admin") {
+        document.body.classList.remove("promotions-admin-open");
+    }
     switch (page) {
         case "shop":
             await loadShopPage();
@@ -97,15 +105,29 @@ async function openPage(page) {
         case "wallet":
             await loadDedicatedWalletPage();
             break;
+        case "promotions-admin":
+            await loadPromotionsAdminPage();
+            break;
+        case "promotions":
+            await loadPromotionsPage();
+            break;
+        case "notifications":
+            await loadNotificationsPage();
+            break;
         default:
             await loadHome();
     }
 }
 
 async function loadHome() {
+    document.body.classList.remove("promotions-admin-open");
     Navbar.setActive("home");
     showPage("homePage", "LEVEL_GROUP");
     await loadWalletPage();
+    await loadUserPromotions();
+    startPromotionsAutoRefresh();
+    await refreshNotifications();
+    startNotificationsAutoRefresh();
     startLiveWinners();
 }
 
