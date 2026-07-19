@@ -1,4 +1,5 @@
 let profileData = null;
+let profileAdminAccess = false;
 
 async function loadProfilePage() {
     Navbar.setActive("profile");
@@ -10,7 +11,22 @@ async function loadProfilePage() {
         username: USERNAME || "",
     };
 
+    profileAdminAccess = await checkProfileAdminAccess();
     renderProfile();
+}
+
+async function checkProfileAdminAccess() {
+    try {
+        const adminApi = new PromotionsAdminApi({ baseUrl: API_URL });
+        await adminApi.list();
+        return true;
+    } catch (_error) {
+        return false;
+    }
+}
+
+function openAdminPanelFromProfile() {
+    window.location.assign("?admin=promotions");
 }
 
 function renderProfile() {
@@ -58,6 +74,17 @@ function renderProfile() {
                 </span>
                 <b>›</b>
             </button>
+
+            ${profileAdminAccess ? `
+                <button class="profile-admin-cta" type="button" onclick="openAdminPanelFromProfile()">
+                    <span>🛠</span>
+                    <span>
+                        <strong>Admin Panel</strong>
+                        <small>Promotions va Coin Promotions boshqaruvi</small>
+                    </span>
+                    <b>›</b>
+                </button>
+            ` : ""}
         </div>
     `;
 }
