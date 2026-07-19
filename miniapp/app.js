@@ -15,7 +15,9 @@ window.addEventListener("load", async () => {
         bindHeaderButtons();
 
         const query = new URLSearchParams(window.location.search);
-        if (query.get("admin") === "coin-promotions") {
+        if (query.get("admin") === "wheel-orders") {
+            await loadWheelOrderAdminPage();
+        } else if (query.get("admin") === "coin-promotions") {
             await loadCoinPromotionAdminPage();
         } else if (query.get("admin") === "promotions") {
             await loadPromotionsAdminPage();
@@ -79,6 +81,7 @@ function bindHeaderButtons() {
 }
 
 async function openPage(page) {
+    if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
     if (page !== "coin-promotions-admin") document.body.classList.remove("coin-promotion-admin-open");
     if (page !== "promotions-admin") {
         document.body.classList.remove("promotions-admin-open");
@@ -114,6 +117,9 @@ async function openPage(page) {
         case "coin-promotions-admin":
             await loadCoinPromotionAdminPage();
             break;
+        case "wheel-orders-admin":
+            await loadWheelOrderAdminPage();
+            break;
         case "promotions":
             await loadPromotionsPage();
             break;
@@ -128,6 +134,7 @@ async function openPage(page) {
 async function loadHome() {
     document.body.classList.remove("promotions-admin-open");
     document.body.classList.remove("coin-promotion-admin-open");
+    document.body.classList.remove("wheel-order-admin-open");
     Navbar.setActive("home");
     showPage("homePage", "LEVEL_GROUP");
     await loadWalletPage();
