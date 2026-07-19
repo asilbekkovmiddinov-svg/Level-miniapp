@@ -43,16 +43,26 @@
     function payload(values, packages) {
         const selected = packages.find((item) => item.id === number(values.coin_package_id));
         if (!selected) throw new Error("Coin package tanlang.");
-        const date = (value) => value ? new Date(value).toISOString() : null;
+        const promotionPrice = number(values.promotion_price);
+        const totalQuantity = number(values.total_quantity);
+        const start = new Date(values.start_at);
+        const end = new Date(values.end_at);
+        if (!(promotionPrice > 0 && promotionPrice < selected.price)) {
+            throw new Error("Promotion narxi original narxdan kichik bo‘lishi kerak.");
+        }
+        if (totalQuantity <= 0) throw new Error("Total quantity 0 dan katta bo‘lishi kerak.");
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+            throw new Error("End time Start time’dan keyin bo‘lishi kerak.");
+        }
         return {
             coin_package_id: selected.id,
             title: text(values.title),
             original_price: selected.price,
-            promotion_price: number(values.promotion_price),
-            total_quantity: number(values.total_quantity),
+            promotion_price: promotionPrice,
+            total_quantity: totalQuantity,
             per_user_limit: number(values.per_user_limit),
-            start_at: date(values.start_at),
-            end_at: date(values.end_at),
+            start_at: start.toISOString(),
+            end_at: end.toISOString(),
         };
     }
 

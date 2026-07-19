@@ -35,6 +35,7 @@ function renderCoinPromotionAdminPage() {
     const state = coinPromotionAdminState;
     const items = state.filter === "ALL" ? state.items : state.items.filter((item) => item.status === state.filter);
     document.getElementById("coinPromotionAdminPage").innerHTML = `<div class="cpa-shell">
+        <nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button onclick="openPage('promotions-admin')">Promotions</button><button class="active">Coin Promotions</button></nav>
         <header class="cpa-hero"><div><small>LEVEL_GROUP ADMIN</small><h2>Coin Promotions</h2><p>Cheklangan Coin aksiyalarini boshqaring</p></div><button onclick="openCoinPromotionForm()">＋ Create</button></header>
         <div class="cpa-stats"><span><b>${state.items.length}</b>Total</span><span><b>${state.items.filter((x) => x.status === "ACTIVE").length}</b>Active</span><span><b>${state.items.reduce((sum, x) => sum + x.sold_quantity, 0)}</b>Sold</span><span><b>${state.items.reduce((sum, x) => sum + x.remaining_quantity, 0)}</b>Remaining</span></div>
         <nav class="cpa-filters">${CoinPromotionAdminCore.STATUSES.map((status) => `<button class="${state.filter === status ? "active" : ""}" onclick="setCoinPromotionFilter('${status}')">${status}</button>`).join("")}</nav>

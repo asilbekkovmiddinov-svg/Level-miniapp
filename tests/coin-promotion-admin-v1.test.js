@@ -38,6 +38,14 @@ test("form payload uses selected backend package price and excludes counters", (
     assert.equal(value.status, undefined);
 });
 
+test("form validates price, quantity and schedule before submit", () => {
+    const packages = [{ id: 7, price: 25000 }];
+    const base = { coin_package_id: 7, title: "Flash", promotion_price: 15000, total_quantity: 10, per_user_limit: 1, start_at: "2026-07-20T10:00", end_at: "2026-07-21T10:00" };
+    assert.throws(() => Core.payload({ ...base, promotion_price: 25000 }, packages), /original narxdan kichik/);
+    assert.throws(() => Core.payload({ ...base, total_quantity: 0 }, packages), /0 dan katta/);
+    assert.throws(() => Core.payload({ ...base, end_at: "2026-07-19T10:00" }, packages), /Start time/);
+});
+
 test("Admin API uses exact backend routes and verified initData", async () => {
     const calls = [];
     const api = new CoinPromotionAdminApi({
@@ -73,8 +81,11 @@ test("Coin Promotion Admin page exposes required premium management UX", () => {
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/coin-promotion-admin.css"), "utf8");
     const html = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
     const app = fs.readFileSync(path.join(__dirname, "../miniapp/app.js"), "utf8");
+    const promotions = fs.readFileSync(path.join(__dirname, "../miniapp/pages/promotions-admin.js"), "utf8");
     for (const expected of ["Coin Promotions", "Original", "Promotion", "Qoldi", "Reserved", "Sotilgan", "START", "END", "openCoinPromotionForm", "saveCoinPromotion", "activate", "pause", "deactivate", "remove", "restore", "Qayta urinish"]) assert.match(source, new RegExp(expected));
     assert.match(css, /cpa-skeleton/); assert.match(css, /prefers-reduced-motion/);
     assert.match(html, /id="coinPromotionAdminPage"/); assert.match(html, /coin-promotion-admin\.js/);
     assert.match(app, /query\.get\("admin"\) === "coin-promotions"/);
+    assert.match(source, /openPage\('promotions-admin'\)/);
+    assert.match(promotions, /openPage\('coin-promotions-admin'\)/);
 });
