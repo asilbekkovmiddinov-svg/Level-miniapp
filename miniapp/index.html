@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="promotions-analytics.css?v=1.0.0">
     <link rel="stylesheet" href="promotions-banner.css?v=1.0.0">
     <link rel="stylesheet" href="promotions-user.css?v=1.0.0">
+    <link rel="stylesheet" href="notifications.css?v=1.0.0">
 </head>
 <body>
 <div id="app" class="app hidden">
@@ -50,7 +51,7 @@
                     <h2 id="homeName">LEVEL_GROUP</h2>
                     <p class="home-online"><i></i>Platforma faol</p>
                 </div>
-                <button class="home-bell menu-card" data-page="profile" type="button" aria-label="Bildirishnomalar">♢</button>
+                <button class="home-bell menu-card" data-page="notifications" type="button" aria-label="Bildirishnomalar">🔔<span id="notificationBellBadge" hidden>0</span></button>
             </div>
             <section id="homePromotions" class="home-promotions" aria-live="polite"></section>
             <article class="premium-wallet">
@@ -132,6 +133,7 @@
         <section id="walletPage" class="page"></section>
         <section id="promotionsAdminPage" class="page"></section>
         <section id="promotionsPage" class="page"></section>
+        <section id="notificationsPage" class="page"></section>
     </main>
     <nav class="bottom-nav">
         <button class="nav-btn active" data-page="home" type="button">
@@ -179,6 +181,9 @@
 <script src="pages/promotions-user-core.js?v=1.0.0"></script>
 <script src="pages/promotions-user-api.js?v=1.0.0"></script>
 <script src="pages/promotions-user.js?v=1.0.0"></script>
+<script src="pages/notifications-core.js?v=1.0.0"></script>
+<script src="pages/notifications-api.js?v=1.0.0"></script>
+<script src="pages/notifications.js?v=1.0.0"></script>
 <script src="splash.js?v=3.1.0"></script>
 <script src="app.js"></script>
 </body>

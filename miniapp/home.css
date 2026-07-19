@@ -7,7 +7,7 @@
 .home-online{margin-top:5px;color:#a7abb4;font-size:11px;font-weight:700}
 .home-online i{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:#23d979;box-shadow:0 0 10px #23d979}
 .home-bell{position:relative;width:42px;height:42px;margin-left:auto;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:linear-gradient(145deg,#17191f,#0d0e12);color:#fff;font-size:17px}
-.home-bell::after{content:"";position:absolute;top:8px;right:8px;width:6px;height:6px;border-radius:50%;background:#f1263f;box-shadow:0 0 8px #f1263f}
+.home-bell::after{display:none}.home-bell>span{position:absolute;top:-5px;right:-5px;display:grid;place-items:center;min-width:17px;height:17px;box-sizing:border-box;border:2px solid #0a0b0f;border-radius:99px;padding:0 4px;background:#ef233c;color:#fff;font-size:8px;font-weight:950;box-shadow:0 4px 12px rgba(239,35,60,.4)}.home-bell>span[hidden]{display:none}
 .premium-wallet{position:relative;overflow:hidden;padding:19px;border:1px solid rgba(255,66,82,.22);border-radius:25px;background:linear-gradient(135deg,rgba(36,10,14,.98),rgba(13,14,18,.98) 54%,rgba(27,28,34,.98));box-shadow:0 20px 55px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.07)}
 .premium-wallet::after{content:"LG";position:absolute;right:-8px;bottom:-29px;color:rgba(255,255,255,.025);font-size:100px;font-weight:950;letter-spacing:-12px;transform:rotate(-8deg)}
 .wallet-top,.wallet-values,.wallet-actions{position:relative;z-index:1;display:flex;align-items:center}

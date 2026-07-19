@@ -111,6 +111,9 @@ async function openPage(page) {
         case "promotions":
             await loadPromotionsPage();
             break;
+        case "notifications":
+            await loadNotificationsPage();
+            break;
         default:
             await loadHome();
     }
@@ -123,6 +126,8 @@ async function loadHome() {
     await loadWalletPage();
     await loadUserPromotions();
     startPromotionsAutoRefresh();
+    await refreshNotifications();
+    startNotificationsAutoRefresh();
     startLiveWinners();
 }
 
