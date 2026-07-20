@@ -24,8 +24,12 @@ function normalizeWalletData(result) {
 function renderWalletUnavailable() {
     const efcTarget = document.getElementById("efcBalance");
     const uzsTarget = document.getElementById("uzsBalance");
+    const lockedEfcTarget = document.getElementById("lockedEfcBalance");
+    const lockedUzsTarget = document.getElementById("lockedUzsBalance");
     if (efcTarget) efcTarget.textContent = "—";
     if (uzsTarget) uzsTarget.textContent = "—";
+    if (lockedEfcTarget) lockedEfcTarget.textContent = "—";
+    if (lockedUzsTarget) lockedUzsTarget.textContent = "—";
 }
 
 async function loadWalletPage() {
@@ -53,9 +57,13 @@ function renderWalletPage() {
 
     const efc = Number(walletData.efc_balance).toLocaleString("uz-UZ");
     const uzs = Number(walletData.uzs_balance).toLocaleString("uz-UZ");
+    const lockedEfc = Number(walletData.locked_efc).toLocaleString("uz-UZ");
+    const lockedUzs = Number(walletData.locked_uzs).toLocaleString("uz-UZ");
 
     document.getElementById("efcBalance").textContent = efc;
     document.getElementById("uzsBalance").textContent = uzs;
+    document.getElementById("lockedEfcBalance").textContent = lockedEfc;
+    document.getElementById("lockedUzsBalance").textContent = lockedUzs;
 
     if (!page) return;
 }
@@ -164,6 +172,9 @@ function showWalletAction(html) {
     const overlay = document.createElement("div");
     overlay.id = "walletActionOverlay";
     overlay.className = "wallet-action-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Wallet amali");
     overlay.innerHTML = `<section class="wallet-action-sheet">${html}</section>`;
     document.body.appendChild(overlay);
 }

@@ -528,7 +528,7 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
     const readyTarget = match.readyDeadlineAt || match.scheduledAt;
     const roomPanel = renderArenaRoomPanel(match);
     const evidencePanel = renderArenaEvidencePanel(match);
-    content.innerHTML = `<article class="arena-v2-detail arena-v2-live"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
+    content.innerHTML = `<article class="arena-v2-detail arena-v2-live status-${arenaEscape(String(match.status).toLowerCase())}"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
         <small>MATCH #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
         <div><span>Status</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
         <div><span>O‘yin</span><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></div>

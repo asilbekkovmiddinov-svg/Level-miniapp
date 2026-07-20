@@ -9,11 +9,12 @@
     <meta name="theme-color" content="#050609">
     <title>LEVEL_GROUP</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="design-tokens.css?v=1.0.0">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="coin-order-chat.css">
-    <link rel="stylesheet" href="splash.css?v=3.1.0">
-    <link rel="stylesheet" href="splash-animations.css?v=3.1.0">
-    <link rel="stylesheet" href="home.css?v=2.1.0">
+    <link rel="stylesheet" href="splash.css?v=4.0.0">
+    <link rel="stylesheet" href="splash-animations.css?v=4.0.0">
+    <link rel="stylesheet" href="home.css?v=3.0.0">
     <link rel="stylesheet" href="referral.css?v=1.0.0">
     <link rel="stylesheet" href="promotions-admin.css?v=1.0.0">
     <link rel="stylesheet" href="promotions-analytics.css?v=1.0.0">
@@ -25,6 +26,13 @@
     <link rel="stylesheet" href="coin-promotion-admin-menu.css?v=1.0.0">
     <link rel="stylesheet" href="wheel-order-admin.css?v=1.0.0">
     <link rel="stylesheet" href="wheel-order-admin-menu.css?v=1.0.0">
+    <link rel="stylesheet" href="design-foundation.css?v=1.0.0">
+    <link rel="stylesheet" href="motion-engine.css?v=1.0.0">
+    <link rel="stylesheet" href="premium-wheel.css?v=1.0.0">
+    <link rel="stylesheet" href="premium-arena.css?v=1.0.0">
+    <link rel="stylesheet" href="premium-wallet.css?v=1.0.0">
+    <link rel="stylesheet" href="premium-referral.css?v=1.0.0">
+    <link rel="stylesheet" href="global-premium-polish.css?v=1.0.0">
 </head>
 <body>
 <div id="app" class="app hidden">
@@ -49,17 +57,26 @@
     </header>
     <main id="pageContent" class="page-content">
         <section id="homePage" class="page active-page">
-            <div class="home-hero">
-                <div class="home-avatar" aria-hidden="true"></div>
-                <div>
-                    <p class="home-eyebrow">Xush kelibsiz</p>
+            <header class="home-header home-reveal" style="--home-order:0">
+                <span class="home-brand"><span class="home-avatar" aria-hidden="true"></span><span><b>LEVEL</b><strong>GROUP</strong></span></span>
+                <span class="home-header-actions">
+                    <button class="home-icon-button home-bell menu-card" data-page="notifications" type="button" aria-label="Bildirishnomalar"><span aria-hidden="true">🔔</span><b id="notificationBellBadge" hidden>0</b></button>
+                    <button class="home-icon-button menu-card" data-page="profile" type="button" aria-label="Profil"><span aria-hidden="true">👤</span></button>
+                </span>
+            </header>
+            <section class="home-hero home-reveal" style="--home-order:1" aria-labelledby="homeName">
+                <span class="home-hero-orbit" aria-hidden="true"></span>
+                <div class="home-hero-copy">
+                    <p class="home-eyebrow">Premium ekotizim</p>
                     <h2 id="homeName">LEVEL_GROUP</h2>
-                    <p class="home-online"><i></i>Platforma faol</p>
+                    <p>O‘ynang, daromad qiling va xavfsiz savdo qiling.</p>
+                    <span class="home-online"><i></i>Platforma faol</span>
                 </div>
-                <button class="home-bell menu-card" data-page="notifications" type="button" aria-label="Bildirishnomalar">🔔<span id="notificationBellBadge" hidden>0</span></button>
-            </div>
-            <section id="homePromotions" class="home-promotions" aria-live="polite"></section>
-            <article class="premium-wallet">
+                <span class="home-hero-mark" aria-hidden="true">LG</span>
+            </section>
+            <section class="home-section home-reveal" style="--home-order:2" aria-labelledby="homeWalletTitle">
+                <div class="home-section-head"><div><small>PORTFEL</small><h3 id="homeWalletTitle">Wallet Summary</h3></div><button class="home-section-link menu-card" data-page="wallet" type="button">Batafsil <span>›</span></button></div>
+            <article class="premium-wallet lg-card lg-card-wallet">
                 <div class="wallet-top">
                     <span class="wallet-label">Umumiy balans</span>
                     <span class="wallet-chip">SECURE WALLET</span>
@@ -73,59 +90,38 @@
                         <span>UZS balans</span><strong id="uzsBalance">—</strong><small>SO‘M</small>
                     </div>
                 </div>
+                <div class="home-locked"><span>🔒 Locked</span><b><span id="lockedEfcBalance">—</span> EFC</b><b><span id="lockedUzsBalance">—</span> UZS</b></div>
                 <div class="wallet-actions">
                     <button class="wallet-action primary" onclick="openDeposit()" type="button">＋ To‘ldirish</button>
                     <button class="wallet-action" onclick="openWithdraw()" type="button">↗ Yechish</button>
                 </div>
             </article>
-            <div class="home-section-head"><h3>Asosiy maydon</h3><span>LEVEL ECOSYSTEM</span></div>
-            <div class="service-grid">
-                <button class="service-card red menu-card" data-page="shop" type="button"><span>🛒</span><strong>COINS</strong><small>Sotib olish</small></button>
-                <button class="service-card purple menu-card" data-page="p2p" type="button"><span>🤝</span><strong>P2P</strong><small>Market</small></button>
-                <button class="service-card blue menu-card" data-page="wallet" type="button"><span>▣</span><strong>HAMYON</strong><small>Balans</small></button>
-                <button class="service-card green menu-card" data-page="wheel" type="button"><span>🎁</span><strong>BONUS</strong><small>Har kuni</small></button>
-            </div>
-            <div class="quick-grid premium-grid">
-                <button class="quick-card featured arena-card menu-card" data-page="arena" type="button">
-                    <span class="card-badge live">● LIVE</span><span class="arena-visual"><i>1</i><b>VS</b><i>1</i></span>
-                    <strong>1vs1 Arena</strong><small>Raqib toping • EFC yuting</small><span class="card-meta">12 ONLINE <i>›</i></span>
-                </button>
-                <button class="quick-card p2p-card menu-card" data-page="p2p" type="button">
-                    <span class="card-badge">MARKET</span><span class="market-visual"><i></i><i></i><i></i><i></i></span>
-                    <strong>P2P Market</strong><small>Xavfsiz EFC savdosi</small><span class="card-meta positive">+2.4% <i>↗</i></span>
-                </button>
-                <button class="quick-card shop-card menu-card" data-page="shop" type="button">
-                    <span class="card-badge gold">PREMIUM</span><span class="coin-visual">E</span>
-                    <strong>Coin Shop</strong><small>Eng yaxshi paketlar</small><span class="card-meta">8 PAKET <i>›</i></span>
-                </button>
-                <button class="quick-card wheel-card menu-card" data-page="wheel" type="button">
-                    <span class="card-badge violet">BONUS</span><span class="wheel-visual"><i>5</i><i>20</i><i>50</i></span>
-                    <strong>Lucky Wheel</strong><small>Har kuni sovrinlar</small><span class="card-meta">1 BEPUL <i>›</i></span>
-                </button>
-                <button class="quick-card orders-card menu-card" data-page="orders" type="button">
-                    <span class="card-badge blue">HISTORY</span><span class="order-visual"><i></i><i></i><i></i></span>
-                    <strong>Buyurtmalar</strong><small>Jarayon va tarix</small><span class="card-meta">BARCHASI <i>›</i></span>
-                </button>
-            </div>
-            <div class="insight-grid">
-                <button class="insight-card order menu-card" data-page="shop" type="button">
-                    <span class="insight-tag">⚡ TEZKOR BUYURTMA</span><strong>750 COINS</strong><small>Android • Global</small><b>90 000 so‘m</b><i>SOTIB OLISH</i>
-                </button>
-                <article class="insight-card trust">
-                    <span class="insight-tag">◆ ISHONCHLI XIZMAT</span><strong>24/7 yordam</strong><small>Himoyalangan tranzaksiya</small><b>Tezkor yetkazib berish</b><i>✓</i>
-                </article>
-            </div>
-            <div class="home-section-head"><h3>Kunlik imkoniyat</h3><span>BUGUN</span></div>
-            <button class="bonus-strip menu-card" data-page="wheel" type="button">
-                <span class="bonus-orb">✦</span>
-                <span class="bonus-copy"><strong>Bonus aylantirish</strong><small>Bepul urinish va reklama mukofotlari</small></span>
-                <span class="bonus-arrow">›</span>
-            </button>
-            <section class="live-winners-section" aria-labelledby="liveWinnersTitle">
+            </section>
+            <section class="home-section home-reveal" style="--home-order:3" aria-labelledby="homeQuickTitle">
+                <div class="home-section-head"><div><small>TEZKOR KIRISH</small><h3 id="homeQuickTitle">Quick Actions</h3></div></div>
+                <div class="home-quick-grid">
+                    <button class="home-quick-card menu-card" data-page="wheel" type="button"><span class="home-quick-icon">✦</span><strong>Wheel</strong><small>Kunlik sovrin</small></button>
+                    <button class="home-quick-card menu-card" data-page="arena" type="button"><span class="home-quick-icon">⚔</span><strong>Arena</strong><small>1 vs 1</small></button>
+                    <button class="home-quick-card menu-card" data-page="wallet" type="button"><span class="home-quick-icon">▣</span><strong>Wallet</strong><small>Balans</small></button>
+                    <button class="home-quick-card menu-card" data-page="referral" type="button"><span class="home-quick-icon">♢</span><strong>Referral</strong><small>Bonus oling</small></button>
+                </div>
+            </section>
+            <section class="home-section home-reveal" style="--home-order:4" aria-labelledby="homePromotionTitle">
+                <div class="home-section-head"><div><small>MAXSUS</small><h3 id="homePromotionTitle">Promotions</h3></div><button class="home-section-link menu-card" data-page="promotions" type="button">Barchasi <span>›</span></button></div>
+                <div class="home-carousel-shell"><section id="homePromotions" class="home-promotions" aria-live="polite"></section></div>
+            </section>
+            <section class="home-section home-reveal live-winners-section" style="--home-order:5" aria-labelledby="liveWinnersTitle">
                 <div class="home-section-head live-winners-head">
-                    <h3 id="liveWinnersTitle">🏆 So‘nggi yutuqlar</h3><span><i></i> LIVE</span>
+                    <div><small>So‘nggi yutuqlar • REAL VAQT</small><h3 id="liveWinnersTitle">Live Statistics</h3></div><span><i></i> LIVE</span>
                 </div>
                 <div id="liveWinnersPanel" class="live-winners-panel" aria-live="polite"></div>
+            </section>
+            <section class="home-section home-reveal" style="--home-order:6" aria-labelledby="homeActivityTitle">
+                <div class="home-section-head"><div><small>OXIRGI HARAKATLAR</small><h3 id="homeActivityTitle">Recent Activity</h3></div><button class="home-section-link menu-card" data-page="orders" type="button">Tarix <span>›</span></button></div>
+                <div class="home-activity-timeline">
+                    <button class="home-activity menu-card" data-page="orders" type="button"><span>↗</span><span><strong>Buyurtmalar tarixi</strong><small>Holat va jarayonlarni kuzating</small></span><i>›</i></button>
+                    <button class="home-activity menu-card" data-page="p2p" type="button"><span>⇄</span><span><strong>P2P savdolari</strong><small>Xavfsiz savdo maydoni</small></span><i>›</i></button>
+                </div>
             </section>
         </section>
         <section id="p2pPage" class="page"></section>
@@ -166,6 +162,8 @@
     </nav>
 </div>
 <script src="config.js"></script>
+<script src="design-system.js?v=1.0.0"></script>
+<script src="motion-engine.js?v=1.0.0"></script>
 <script src="api.js"></script>
 <script src="components/loader.js"></script>
 <script src="components/modal.js"></script>
@@ -197,7 +195,7 @@
 <script src="pages/coin-promotion-admin.js?v=1.0.0"></script>
 <script src="pages/wheel-order-admin-api.js?v=1.0.0"></script>
 <script src="pages/wheel-order-admin.js?v=1.0.0"></script>
-<script src="splash.js?v=3.1.0"></script>
+<script src="splash.js?v=4.0.0"></script>
 <script src="app.js"></script>
 </body>
 </html>
