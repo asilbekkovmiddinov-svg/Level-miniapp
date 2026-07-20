@@ -1,7 +1,7 @@
 const LevelMotionEngine = (() => {
     const CONTROL_SELECTOR = "button,[role='button'],input[type='button'],input[type='submit']";
-    const CARD_SELECTOR = ".lg-card,.home-quick-card,.home-activity,.quick-card,.service-card,.list-card,.orders-card,.pac-card,.cpa-card,.woa-card,.nfc-card-surface,.arena-v2-match,.wallet-history-row,.pux-card";
-    const STAGGER_SELECTOR = ".lg-motion-stagger,.home-quick-grid,.pux-list,.nfc-list,.orders-v2-list,.pac-list,.cpa-list,.woa-list";
+    const CARD_SELECTOR = ".lg-card,.home-quick-card,.home-activity,.quick-card,.service-card,.list-card,.orders-card,.pac-card,.cpa-card,.woa-card,.nfc-card-surface,.arena-v2-match,.wallet-history-row,.referral-stats article,.pux-card";
+    const STAGGER_SELECTOR = ".lg-motion-stagger,.home-quick-grid,.pux-list,.nfc-list,.orders-v2-list,.pac-list,.cpa-list,.woa-list,.wallet-history,.referral-stats";
 
     function enhance(root = document) {
         const scope = root instanceof Element ? root : document;

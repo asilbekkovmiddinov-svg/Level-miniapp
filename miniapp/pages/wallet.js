@@ -172,6 +172,9 @@ function showWalletAction(html) {
     const overlay = document.createElement("div");
     overlay.id = "walletActionOverlay";
     overlay.className = "wallet-action-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Wallet amali");
     overlay.innerHTML = `<section class="wallet-action-sheet">${html}</section>`;
     document.body.appendChild(overlay);
 }
