@@ -277,6 +277,7 @@ const arenaView = {
     tab: "open",
     selectedStake: 100,
     dashboard: [],
+    playerProfile: null,
     leaderboardPeriod: "weekly",
     loading: false,
     mutationPending: false,
@@ -523,6 +524,7 @@ async function loadArenaStats() {
     if (!target) return;
     try {
         const stats = await arenaApiClient.profile();
+        arenaView.playerProfile = stats;
         target.innerHTML = `<b>${arenaEscape(stats.totalMatches)}</b> match · <b>${arenaEscape(stats.wins)}</b> g‘alaba · <b>${arenaEscape(stats.winRate)}%</b> win rate`;
     } catch (_) {
         target.textContent = "Shaxsiy statistika vaqtincha mavjud emas";
@@ -814,6 +816,13 @@ async function loadArenaMatchDetail(matchId) {
     content.innerHTML = arenaSkeleton();
     try {
         const match = await arenaApiClient.match(matchId);
+        if (!arenaView.playerProfile) {
+            try {
+                arenaView.playerProfile = await arenaApiClient.profile();
+            } catch (_) {
+                // Player statistics are presentational; match controls remain available.
+            }
+        }
         renderArenaMatchDetail(match);
         startArenaLiveUpdates(match.id);
     } catch (error) {
@@ -822,6 +831,84 @@ async function loadArenaMatchDetail(matchId) {
     } finally {
         arenaView.loading = false;
     }
+}
+
+function arenaMatchStage(match) {
+    if (match.status === "COMPLETED" || match.status === "CANCELLED") return 5;
+    if (match.status === "WAITING_ADMIN") return 4;
+    if (match.status === "PLAYING" && (match.myScreenshotUploaded || match.myVideoUploaded)) return 3;
+    if (match.status === "PLAYING" || match.status === "ROOM_READY" || match.status === "TECHNICAL_REVIEW") return 2;
+    if (match.status === "WAITING_READY") return 1;
+    return 0;
+}
+
+function arenaPlayerCard({ name, photoUrl = "", isCurrent = false, profile = null }) {
+    const displayName = String(name || "O‘yinchi");
+    const initial = Array.from(displayName.trim())[0]?.toUpperCase() || "L";
+    const safePhoto = arenaSafeAvatarUrl(photoUrl);
+    return `<section class="arena-v6-player ${isCurrent ? "is-current" : ""}">
+        <span class="arena-v6-player-avatar ${safePhoto ? "" : "is-fallback"}">
+            <b>${arenaEscape(initial)}</b>
+            ${safePhoto ? `<img src="${arenaEscape(safePhoto)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
+        </span>
+        <div><strong>${arenaEscape(displayName)}</strong>
+            <small><i></i>${isCurrent ? "ONLINE" : "RAQIB"}</small></div>
+        <dl><div><dt>Win rate</dt><dd>${profile ? `${arenaEscape(profile.winRate)}%` : "—"}</dd></div>
+            <div><dt>Matches</dt><dd>${profile ? arenaEscape(profile.totalMatches) : "—"}</dd></div></dl>
+    </section>`;
+}
+
+function arenaMatchRoomHeader(match) {
+    const role = getArenaRole(match.id);
+    const telegram = arenaTelegramProfile();
+    const creatorCurrent = role === "creator";
+    const opponentCurrent = role === "opponent";
+    const creator = arenaPlayerCard({
+        name: match.creatorName,
+        photoUrl: creatorCurrent ? telegram.photoUrl : "",
+        isCurrent: creatorCurrent,
+        profile: creatorCurrent ? arenaView.playerProfile : null,
+    });
+    const opponent = arenaPlayerCard({
+        name: match.opponentName,
+        photoUrl: opponentCurrent ? telegram.photoUrl : "",
+        isCurrent: opponentCurrent,
+        profile: opponentCurrent ? arenaView.playerProfile : null,
+    });
+    return `<header class="arena-v6-room-header">
+        ${creator}<div class="arena-v6-versus" aria-label="versus"><span>VS</span><i></i></div>${opponent}
+    </header>`;
+}
+
+function arenaMatchTimeline(match) {
+    const activeStage = arenaMatchStage(match);
+    const stages = [
+        ["⌛", "WAITING"], ["✓", "READY"], ["⚔", "PLAYING"],
+        ["⬆", "UPLOAD"], ["⌕", "ADMIN REVIEW"], ["★", "FINISHED"],
+    ];
+    return `<ol class="arena-v6-timeline" aria-label="Match status progress">${stages.map(([icon, label], index) =>
+        `<li class="${index < activeStage ? "is-complete" : ""} ${index === activeStage ? "is-active" : ""}"
+            ${index === activeStage ? 'aria-current="step"' : ""}>
+            <span>${icon}</span><b>${label}</b>
+        </li>`).join("")}</ol>`;
+}
+
+function arenaMatchResult(match) {
+    if (match.status !== "COMPLETED") return "";
+    const role = getArenaRole(match.id);
+    const result = String(match.result || "").toUpperCase();
+    let winner = "G‘olib aniqlandi";
+    if (role && (result === "WIN" || result === "LOSE")) {
+        const currentWon = result === "WIN";
+        const creatorWon = role === "creator" ? currentWon : !currentWon;
+        winner = creatorWon ? match.creatorName : match.opponentName;
+    }
+    return `<section class="arena-v6-result">
+        <header><span>🏆</span><div><small>WINNER</small><h4>${arenaEscape(winner)}</h4></div></header>
+        <div><article><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></article>
+            <article><span>Reward</span><b>${arenaEscape(match.winnerReward)} EFC</b></article>
+            <article><span>Platforma komissiyasi</span><b>5%</b></article></div>
+    </section>`;
 }
 
 function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {}) {
@@ -833,15 +920,17 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
     const readyTarget = match.readyDeadlineAt || match.scheduledAt;
     const roomPanel = renderArenaRoomPanel(match);
     const evidencePanel = renderArenaEvidencePanel(match);
-    content.innerHTML = `<article class="arena-v2-detail arena-v2-live status-${arenaEscape(String(match.status).toLowerCase())}"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
-        <small>ROOM #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
-        <div><span>Status</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
-        <div><span>O‘yin</span><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></div>
-        <div><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></div>
-        <div><span>Jami pot</span><b>${arenaEscape(match.totalPool)} EFC</b></div>
-        <div><span>Platforma komissiyasi</span><b>5%</b></div>
-        <div><span>G‘olib oladi</span><b>${arenaEscape(match.winnerReward)} EFC</b></div>
-        <div><span>Match boshlanishi</span><b>${arenaEscape(arenaDate(match.scheduledAt))}</b></div>
+    content.innerHTML = `<article class="arena-v2-detail arena-v2-live arena-v6-room status-${arenaEscape(String(match.status).toLowerCase())}"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
+        <div class="arena-v6-room-label"><span>ROOM #${match.id}</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
+        ${arenaMatchRoomHeader(match)}
+        ${arenaMatchTimeline(match)}
+        <section class="arena-v6-match-meta">
+            <article><span>O‘yin</span><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></article>
+            <article><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></article>
+            <article><span>Jami pot</span><b>${arenaEscape(match.totalPool)} EFC</b></article>
+            <article><span>Boshlanishi</span><b>${arenaEscape(arenaDate(match.scheduledAt))}</b></article>
+        </section>
+        ${arenaMatchResult(match)}
         <section class="arena-v2-countdown ${readyWindowOpen ? "is-live" : ""}">
             <small>${readyWindowOpen ? "READY OYNASI" : "MATCH BOSHLANISHIGA"}</small>
             <strong id="arenaCountdown" data-target="${arenaEscape(readyTarget || "")}">${arenaCountdown(readyTarget)}</strong>
