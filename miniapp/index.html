@@ -60,11 +60,12 @@
         <section id="homePage" class="page active-page">
             <header class="home-v4-hero home-hero home-header home-reveal" style="--home-order:0" aria-labelledby="homeName">
                 <span class="home-v4-glow" aria-hidden="true"></span>
+                <span class="home-s3-particles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
                 <div class="home-v4-user">
                     <span id="homeTelegramAvatar" class="home-v4-avatar is-fallback" aria-hidden="true">
                         <b>LG</b><i></i>
                     </span>
-                    <span><small>WELCOME BACK</small><h2 id="homeName">LEVEL_GROUP</h2>
+                    <span><small id="homeGreeting">WELCOME BACK</small><h2 id="homeName">LEVEL_GROUP</h2>
                         <em><i></i> Premium member</em></span>
                 </div>
                 <div class="home-v4-actions">
@@ -106,10 +107,10 @@
             <section class="home-section home-reveal" style="--home-order:2" aria-labelledby="homeQuickTitle">
                 <div class="home-section-head"><div><small>TEZKOR KIRISH</small><h3 id="homeQuickTitle">Quick Actions</h3></div></div>
                 <div class="home-v4-quick-grid home-quick-grid">
-                    <button class="home-v4-quick home-quick-card menu-card" data-page="arena" type="button"><span>⚔</span><strong>Arena</strong><small>1 vs 1 battle</small></button>
-                    <button class="home-v4-quick home-quick-card menu-card" data-page="wheel" type="button"><span>🎡</span><strong>Wheel</strong><small>Kunlik sovrin</small></button>
-                    <button class="home-v4-quick home-quick-card menu-card" data-page="wallet" type="button"><span>💰</span><strong>Wallet</strong><small>Balans va tarix</small></button>
-                    <button class="home-v4-quick home-quick-card menu-card" data-page="shop" type="button"><span>🪙</span><strong>Coin Shop</strong><small>Premium coin</small></button>
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="arena" type="button"><b class="home-s3-quick-badge" data-home-smart-badge="arena" hidden></b><span>⚔</span><strong>Arena</strong><small>1 vs 1 battle</small></button>
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="wheel" type="button"><b class="home-s3-quick-badge" data-home-smart-badge="wheel" hidden></b><span>🎡</span><strong>Wheel</strong><small>Kunlik sovrin</small></button>
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="wallet" type="button"><b class="home-s3-quick-badge" data-home-smart-badge="wallet" hidden></b><span>💰</span><strong>Wallet</strong><small>Balans va tarix</small></button>
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="shop" type="button"><b class="home-s3-quick-badge" data-home-smart-badge="shop" hidden></b><span>🪙</span><strong>Coin Shop</strong><small>Premium coin</small></button>
                 </div>
             </section>
 
@@ -155,6 +156,22 @@
                     <button class="home-section-link menu-card" data-page="orders" type="button">Tarix <span>›</span></button></div>
                 <div id="homeRecentActivity" class="home-activity-timeline" aria-live="polite"></div>
             </section>
+
+            <section class="home-section home-reveal" style="--home-order:9" aria-labelledby="homeDashboardTitle">
+                <div class="home-section-head"><div><small>SHAXSIY NATIJALAR</small><h3 id="homeDashboardTitle">Personal Dashboard</h3></div></div>
+                <div id="homePersonalDashboard" class="home-s3-dashboard" aria-live="polite"></div>
+            </section>
+
+            <section class="home-section home-reveal" style="--home-order:10" aria-labelledby="homeNewsTitle">
+                <div class="home-section-head"><div><small>NEWS & EVENTS</small><h3 id="homeNewsTitle">Upcoming · Live · Ending Soon</h3></div>
+                    <button class="home-section-link menu-card" data-page="promotions" type="button">Barchasi <span>›</span></button></div>
+                <div id="homeNewsEvents" class="home-s3-news" aria-live="polite"></div>
+            </section>
+
+            <footer class="home-s3-footer home-reveal" style="--home-order:11">
+                <div><strong>LEVEL_GROUP</strong><small>Premium MiniApp</small></div>
+                <nav aria-label="Ilova ma’lumotlari"><span>Version V2</span><span>Build Premium Home</span><span>Support</span><span>Community</span></nav>
+            </footer>
         </section>
         <section id="p2pPage" class="page"></section>
         <section id="arenaPage" class="page"></section>
@@ -222,6 +239,7 @@
 <script src="pages/promotions-user-api.js?v=1.0.0"></script>
 <script src="pages/promotions-user.js?v=1.0.0"></script>
 <script src="home-premium-s2.js?v=1.0.0"></script>
+<script src="home-premium-s3.js?v=1.0.0"></script>
 <script src="pages/notifications-core.js?v=1.0.0"></script>
 <script src="pages/notifications-api.js?v=1.0.0"></script>
 <script src="pages/notifications.js?v=1.0.0"></script>
