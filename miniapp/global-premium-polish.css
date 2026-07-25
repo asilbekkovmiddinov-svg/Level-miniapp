@@ -1,0 +1,16 @@
+/* LEVEL_GROUP V2 — final cross-surface visual rhythm. */
+html{scroll-behavior:smooth;overscroll-behavior:none;-webkit-text-size-adjust:100%}body{overflow-x:hidden;overscroll-behavior-y:none}body,.page,.wallet-action-sheet,.arena-v2-sheet{-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(255,64,95,.3) transparent}::selection{background:rgba(255,64,95,.28);color:var(--lg-color-ice)}
+.page-content{padding-top:var(--lg-space-4)}.page.active-page{min-height:calc(100dvh - 60px - var(--lg-safe-top));padding-bottom:var(--lg-safe-bottom)}
+:where(.home-section,.wheel-stats,.arena-v2-match,.wallet-v2-balances article,.wallet-history-row,.referral-link-card,.referral-stats article,.referral-bonuses,.referral-rules){border-color:var(--lg-border-glass);box-shadow:var(--lg-shadow-glass)}
+:where(.wallet-v2-actions button,.wallet-pagination button,.referral-link-card button,.referral-empty button,.arena-v2 button,.wheel-spin-button,.wheel-result-card button){min-height:var(--lg-control-height);border-radius:var(--lg-radius-md);line-height:1.15}
+:where(.home-icon-button,.wheel-stats article i,.arena-v2-match section>strong,.wallet-v2-balances article::before,.referral-stats span){line-height:1;text-align:center;vertical-align:middle}
+:where(.wallet-action-sheet,.arena-v2-sheet,.wheel-result-card,.pac-form-sheet,.orders-detail-overlay>section,.cpa-modal>form,.referral-modal-card){border-radius:var(--lg-modal-radius);box-shadow:var(--lg-shadow-modal)}
+:where(.wallet-action-overlay,.arena-v2-overlay,.wheel-result-modal,.pac-form-overlay,.orders-detail-overlay,.cpa-modal,.referral-modal){padding-right:max(var(--lg-space-3),var(--lg-safe-right));padding-bottom:max(var(--lg-space-3),var(--lg-safe-bottom));padding-left:max(var(--lg-space-3),var(--lg-safe-left))}
+:where(.wallet-empty,.referral-empty,.referral-state,.wheel-state-card,.arena-v2-empty,.live-winners-state){border-radius:var(--lg-radius-xl);box-shadow:var(--lg-shadow-glass)}
+:where(.pac-toast,.nfc-toast,.lg-toast){z-index:1200;right:auto;left:50%;width:min(calc(100% - var(--lg-space-6)),420px);max-width:calc(100% - var(--lg-safe-left) - var(--lg-safe-right) - var(--lg-space-6));min-height:44px;padding:var(--lg-space-3) var(--lg-space-4);line-height:var(--lg-leading-body);text-align:center}
+:where(button,[role="button"],a[href],input,select,textarea):focus-visible{outline:2px solid var(--lg-color-info);outline-offset:3px;box-shadow:var(--lg-focus-ring)}
+:where(button,[role="button"]):disabled{cursor:not-allowed}.app-header,.bottom-nav{border-color:var(--lg-border-glass)}
+@media(hover:none){:where(.lg-motion-card,.wallet-v2-balances article,.wallet-history-row,.referral-stats article):hover{transform:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.page.active-page{filter:none!important}:where(.pac-toast,.nfc-toast,.lg-toast){transition-duration:.01ms!important}}
+html.design-low-motion :where(.wallet-action-sheet,.arena-v2-sheet,.referral-link-card,.referral-stats article,.bottom-nav,.app-header){backdrop-filter:none;-webkit-backdrop-filter:none}
+@media(forced-colors:active){:where(button,[role="button"],a[href],input,select,textarea):focus-visible{outline:2px solid Highlight;box-shadow:none}.app-header,.bottom-nav,:where(.wallet-action-sheet,.arena-v2-sheet,.wheel-result-card){border:1px solid CanvasText}}

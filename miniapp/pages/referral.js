@@ -114,14 +114,21 @@ async function referralClipboardWrite(text, environment = {}) {
     return copied;
 }
 
-async function copyReferralLink() {
+async function copyReferralLink(button) {
     if (!referralData?.referralLink) {
         Modal.error("Referral havolasi hali tayyor emas.");
         return;
     }
     const copied = await referralClipboardWrite(referralData.referralLink);
-    if (copied) Modal.success("Referral havolasi nusxalandi.");
-    else Modal.error("Havolani nusxalab bo‘lmadi. Qayta urinib ko‘ring.");
+    if (copied) {
+        button?.classList?.add("is-copied");
+        button?.setAttribute?.("aria-label", "Referral havolasi nusxalandi");
+        setTimeout(() => {
+            button?.classList?.remove("is-copied");
+            button?.setAttribute?.("aria-label", "Referral havolasini nusxalash");
+        }, 1600);
+        Modal.success("Referral havolasi nusxalandi.");
+    } else Modal.error("Havolani nusxalab bo‘lmadi. Qayta urinib ko‘ring.");
 }
 
 function referralSkeleton() {
@@ -133,7 +140,7 @@ function referralSkeleton() {
 function renderReferralPage(data) {
     const page = document.getElementById("referralPage");
     const empty = data.totalReferrals === 0
-        ? `<div class="referral-empty"><span>👥</span><b>Hali referalingiz yo‘q</b><p>Havolangizni do‘stlaringiz bilan ulashing.</p></div>`
+        ? `<div class="referral-empty"><span aria-hidden="true">👥</span><b>Hali referalingiz yo‘q</b><p>Havolangizni do‘stlaringiz bilan ulashing.</p><button class="referral-invite-button" type="button" onclick="shareReferralLink()">Birinchi do‘stni taklif qilish</button></div>`
         : "";
     page.innerHTML = `<div class="referral-v1">
         <header class="referral-hero">
@@ -143,17 +150,17 @@ function renderReferralPage(data) {
         </header>
         <section class="referral-link-card">
             <span>SHAXSIY REFERRAL HAVOLANGIZ</span>
-            <div><code>${data.referralLink}</code></div>
+            <div><code aria-label="Shaxsiy referral havolasi">${data.referralLink}</code></div>
             <div class="referral-link-actions">
-                <button type="button" onclick="copyReferralLink()">📋 Nusxalash</button>
-                <button type="button" onclick="shareReferralLink()">✈️ Ulashish</button>
+                <button class="referral-copy-button" type="button" aria-label="Referral havolasini nusxalash" onclick="copyReferralLink(this)"><span aria-hidden="true">📋</span><b>Nusxalash</b></button>
+                <button class="referral-share-button" type="button" onclick="shareReferralLink()"><span aria-hidden="true">✈️</span><b>Ulashish</b></button>
             </div>
             <small>Havola faqat sizga tegishli va har bir yangi foydalanuvchi bir marta hisoblanadi.</small>
         </section>
         <section class="referral-stats">
-            <article><span>👥</span><small>Jami referallar</small><strong>${data.totalReferrals}</strong></article>
-            <article><span>🛒</span><small>Coin Shop xarid qilganlar</small><strong>${data.coinShopBuyers}</strong></article>
-            <article class="wide"><span>◆</span><small>Jami ishlangan bonus</small><strong>${referralMoney(data.totalEarnedUzs)}</strong></article>
+            <article><span aria-hidden="true">👥</span><small>Jami referallar</small><strong class="referral-counter">${data.totalReferrals}</strong></article>
+            <article><span aria-hidden="true">🛒</span><small>Coin Shop xarid qilganlar</small><strong class="referral-counter">${data.coinShopBuyers}</strong></article>
+            <article class="wide"><span aria-hidden="true">◆</span><small>Jami ishlangan bonus</small><strong class="referral-counter">${referralMoney(data.totalEarnedUzs)}</strong></article>
         </section>
         ${empty}
         <section class="referral-bonuses">
