@@ -58,7 +58,14 @@ class ArenaApiClient {
                 if (!response.ok) {
                     const retryable = transientStatuses.has(response.status);
                     if (retryable && attempt < maxAttempts) continue;
-                    throw new ArenaApiError(arenaHttpMessage(response.status), {
+                    const detail = typeof payload?.detail === "string"
+                        ? payload.detail.trim()
+                        : "";
+                    const safeDetail = response.status === 409
+                        && detail === "Foydalanuvchida faol Arena match mavjud"
+                        ? detail
+                        : "";
+                    throw new ArenaApiError(safeDetail || arenaHttpMessage(response.status), {
                         status: response.status,
                         retryable,
                     });
