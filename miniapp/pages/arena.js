@@ -554,8 +554,8 @@ async function loadArenaTab(tab) {
         } else if (tab === "history") {
             const matches = await arenaApiClient.myMatches({ limit: 100 });
             content.innerHTML = matches.length
-                ? `<div class="arena-v4-history">${matches.map(arenaHistoryCard).join("")}</div>`
-                : arenaState("Tarix bo‘sh", "Sizda hali Arena matchlari yo‘q.", false);
+                ? `<div class="arena-v7-history" aria-label="Arena match history timeline">${matches.map(arenaHistoryCard).join("")}</div>`
+                : arenaPremiumEmpty("history");
         } else if (tab === "create") {
             renderArenaCreateForm();
         } else if (tab === "rating") {
@@ -563,6 +563,7 @@ async function loadArenaTab(tab) {
         } else if (tab === "profile") {
             const profile = await arenaApiClient.profile();
             content.innerHTML = arenaProfileView(profile);
+            arenaAnimateCounters(content);
         } else {
             const guide = await arenaApiClient.guide();
             content.innerHTML = `<article class="arena-v2-guide"><h3>Arena qo‘llanmasi</h3><p>${arenaEscape(guide.description || guide.guide || "Arena qoidalariga rioya qiling.")}</p></article>`;
@@ -574,49 +575,153 @@ async function loadArenaTab(tab) {
     }
 }
 
-function arenaHistoryCard(match) {
-    const result = match.result || "—";
-    return `<article class="arena-v4-history-card result-${result.toLowerCase()}">
-        <header><div><small>ROOM #${match.id}</small><h3>${arenaEscape(match.gameType.replaceAll("_", " "))}</h3></div>
-            <strong>${arenaEscape(result)}</strong></header>
-        <div><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></div>
-        <div><span>Mukofot</span><b>${arenaEscape(match.reward)} EFC</b></div>
-        <div><span>Status</span><b>${arenaEscape(arenaStatus(match.status))}</b></div>
-        <div><span>Yaratilgan</span><b>${arenaEscape(arenaDate(match.createdAt))}</b></div>
-        <div><span>Yakunlangan</span><b>${arenaEscape(arenaDate(match.completedAt))}</b></div>
+function arenaIsCurrentPlayer(displayName) {
+    const current = arenaTelegramProfile().displayName.trim().toLocaleLowerCase("uz-UZ");
+    return Boolean(current && String(displayName || "").trim().toLocaleLowerCase("uz-UZ") === current);
+}
+
+function arenaAvatar(displayName, { current = false, size = "md" } = {}) {
+    const name = String(displayName || "O‘yinchi");
+    const initial = Array.from(name.trim())[0]?.toLocaleUpperCase("uz-UZ") || "L";
+    const photoUrl = current ? arenaTelegramProfile().photoUrl : "";
+    return `<span class="arena-v7-avatar is-${arenaEscape(size)} ${photoUrl ? "" : "is-fallback"}">
+        <b>${arenaEscape(initial)}</b>
+        ${photoUrl ? `<img src="${arenaEscape(photoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer"
+            onerror="this.remove();this.parentElement.classList.add('is-fallback')">` : ""}
+    </span>`;
+}
+
+function arenaPremiumEmpty(kind) {
+    const states = {
+        leaderboard: ["♛", "Reyting hali ochilmadi", "Birinchi g‘alaba podium sari ilk qadam."],
+        history: ["⚔", "Arena tarixingizni boshlang", "Birinchi matchni o‘ynang va natijangizni shu yerda kuzating."],
+        achievements: ["✦", "Badge’lar sizni kutmoqda", "Arena’da o‘ynang, g‘alaba qozoning va premium badge’larni oching."],
+    };
+    const [icon, title, message] = states[kind] || states.history;
+    return `<section class="arena-v7-empty is-${arenaEscape(kind)}"><span aria-hidden="true">${icon}</span>
+        <h3>${arenaEscape(title)}</h3><p>${arenaEscape(message)}</p>
+        ${kind === "history" ? '<button type="button" onclick="loadArenaTab(\'open\')">Arena boshlash</button>' : ""}
+    </section>`;
+}
+
+function arenaHistoryCard(match, index = 0) {
+    const result = String(match.result || "PENDING").toUpperCase();
+    const current = arenaTelegramProfile();
+    const opponent = match.opponentName === "Raqib kutilmoqda" ? match.creatorName : match.opponentName;
+    const statusClass = ["WIN", "LOSE"].includes(result) ? result.toLowerCase() : "pending";
+    return `<article class="arena-v7-history-card result-${statusClass}" style="--arena-order:${index}">
+        <i class="arena-v7-history-dot" aria-hidden="true"></i>
+        <header><small>ROOM #${match.id}</small><strong class="arena-v7-result-badge">${arenaEscape(result)}</strong></header>
+        <section class="arena-v7-history-versus">
+            <div>${arenaAvatar(current.displayName, { current: true })}<b>${arenaEscape(current.displayName)}</b></div>
+            <span>VS</span>
+            <div>${arenaAvatar(opponent)}<b>${arenaEscape(opponent)}</b></div>
+        </section>
+        <div class="arena-v7-history-meta">
+            <span><small>GAME</small><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></span>
+            <span><small>STAKE</small><b>${arenaEscape(match.stakeEfc)} EFC</b></span>
+            <span><small>REWARD</small><b>${arenaEscape(match.reward)} EFC</b></span>
+        </div>
+        <footer><span>${arenaEscape(arenaDate(match.completedAt || match.createdAt))}</span>
+            <b>${arenaEscape(arenaStatus(match.status))}</b></footer>
     </article>`;
+}
+
+function arenaAchievementItems(profile) {
+    return [
+        { icon: "🏆", title: "First Win", note: "Birinchi g‘alaba", unlocked: profile.wins >= 1 },
+        { icon: "🔥", title: "Win Streak", note: "3 ta ketma-ket g‘alaba", unlocked: profile.bestStreak >= 3 },
+        { icon: "💎", title: "Arena Master", note: "50 ta g‘alaba", unlocked: profile.wins >= 50 },
+        { icon: "⭐", title: "Top 100", note: "Leaderboard elitasi", unlocked: false },
+    ];
 }
 
 function arenaProfileView(profile) {
     const items = [
-        ["Total Matches", profile.totalMatches],
-        ["Wins", profile.wins],
-        ["Losses", profile.losses],
-        ["Win Rate", `${profile.winRate}%`],
-        ["Total EFC Won", `${profile.totalEfcWon} EFC`],
-        ["Current Streak", profile.currentStreak],
-        ["Best Streak", profile.bestStreak],
+        ["◎", "Total Matches", profile.totalMatches, ""],
+        ["🏆", "Wins", profile.wins, ""],
+        ["✕", "Losses", profile.losses, ""],
+        ["↗", "Win Rate", profile.winRate, "%"],
+        ["◆", "Total EFC Won", Number(profile.totalEfcWon) || 0, " EFC"],
+        ["🔥", "Current Streak", profile.currentStreak, ""],
+        ["♛", "Best Streak", profile.bestStreak, ""],
     ];
-    return `<section class="arena-v4-profile"><header><small>PLAYER PROFILE</small><h3>Arena statistikasi</h3></header>
-        <div>${items.map(([label, value]) => `<article><span>${arenaEscape(label)}</span><b>${arenaEscape(value)}</b></article>`).join("")}</div></section>`;
+    const achievements = arenaAchievementItems(profile);
+    const unlocked = achievements.filter((item) => item.unlocked).length;
+    return `<section class="arena-v7-profile">
+        <header><small>PLAYER PERFORMANCE</small><h3>Arena statistikasi</h3><p>Natijalaringiz real vaqt statistikasi asosida.</p></header>
+        <div class="arena-v7-stat-grid">${items.map(([icon, label, value, suffix], index) =>
+            `<article style="--arena-order:${index}"><span>${icon}</span><small>${arenaEscape(label)}</small>
+                <b data-arena-counter="${arenaEscape(value)}" data-arena-suffix="${arenaEscape(suffix)}">0${arenaEscape(suffix)}</b></article>`).join("")}</div>
+        <section class="arena-v7-achievements"><header><div><small>ACHIEVEMENTS</small><h3>Badge showcase</h3></div>
+            <b>${unlocked} / ${achievements.length}</b></header>
+            ${unlocked ? `<div>${achievements.map((item, index) => `<article class="${item.unlocked ? "is-unlocked" : "is-locked"}" style="--arena-order:${index}">
+                <span>${item.icon}</span><b>${arenaEscape(item.title)}</b><small>${arenaEscape(item.note)}</small>
+                <em>${item.unlocked ? "UNLOCKED" : "LOCKED"}</em></article>`).join("")}</div>`
+                : arenaPremiumEmpty("achievements")}
+        </section>
+    </section>`;
+}
+
+function arenaAnimateCounters(root) {
+    if (!root || typeof requestAnimationFrame !== "function") return;
+    const reduceMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    root.querySelectorAll("[data-arena-counter]").forEach((element) => {
+        const target = Math.max(0, Number(element.dataset.arenaCounter) || 0);
+        const suffix = element.dataset.arenaSuffix || "";
+        if (reduceMotion) {
+            element.textContent = `${target.toLocaleString("uz-UZ")}${suffix}`;
+            return;
+        }
+        const startedAt = performance.now();
+        const tick = (now) => {
+            const progress = Math.min(1, (now - startedAt) / 700);
+            const value = Math.round(target * (1 - Math.pow(1 - progress, 3)));
+            element.textContent = `${value.toLocaleString("uz-UZ")}${suffix}`;
+            if (progress < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    });
 }
 
 async function loadArenaLeaderboard() {
     const content = document.getElementById("arenaV2Content");
     if (!content) return;
     const data = await arenaApiClient.v4Leaderboard({ period: arenaView.leaderboardPeriod, limit: 100 });
-    content.innerHTML = `<section class="arena-v4-leaderboard">
+    const podium = data.users.slice(0, 3);
+    const remaining = data.users.slice(3);
+    content.innerHTML = `<section class="arena-v7-leaderboard">
+        <header><small>HALL OF CHAMPIONS</small><h3>Arena Leaderboard</h3></header>
         <nav>${[["weekly", "Weekly"], ["monthly", "Monthly"], ["all", "All Time"]].map(([period, label]) =>
             `<button type="button" class="${period === arenaView.leaderboardPeriod ? "active" : ""}" onclick="selectArenaLeaderboardPeriod('${period}')">${label}</button>`).join("")}</nav>
-        ${data.users.length ? `<div>${data.users.map(arenaLeaderboardRow).join("")}</div>`
-            : arenaState("Leaderboard bo‘sh", "Bu davr uchun natijalar hali mavjud emas.", false)}
+        ${data.users.length ? `<section class="arena-v7-podium">${podium.map(arenaLeaderboardPodium).join("")}</section>
+            <div class="arena-v7-ranking-list">${remaining.map(arenaLeaderboardRow).join("")}</div>`
+            : arenaPremiumEmpty("leaderboard")}
     </section>`;
 }
 
-function arenaLeaderboardRow(user) {
-    return `<article><strong>#${arenaEscape(user.rank)}</strong><div><b>${arenaEscape(user.displayName)}</b>
-        <span>${arenaEscape(user.wins)}W · ${arenaEscape(user.losses)}L · ${arenaEscape(user.totalMatches)} match</span></div>
-        <aside><b>${arenaEscape(user.winRate)}%</b><span>${arenaEscape(user.totalEfcWon)} EFC</span></aside></article>`;
+function arenaLeaderboardPodium(user, index) {
+    const current = arenaIsCurrentPlayer(user.displayName);
+    const medals = ["🥇", "🥈", "🥉"];
+    const tiers = ["gold", "silver", "bronze"];
+    return `<article class="is-${tiers[index]} ${current ? "is-current" : ""}" style="--arena-order:${index}">
+        <em>${medals[index]}</em>${arenaAvatar(user.displayName, { current, size: "lg" })}
+        <b>${arenaEscape(user.displayName)}</b><small>#${arenaEscape(user.rank)}</small>
+        <dl><div><dt>WIN RATE</dt><dd>${arenaEscape(user.winRate)}%</dd></div>
+            <div><dt>TOTAL WINS</dt><dd>${arenaEscape(user.wins)}</dd></div></dl>
+        ${current ? "<strong>YOU</strong>" : ""}
+    </article>`;
+}
+
+function arenaLeaderboardRow(user, index = 0) {
+    const current = arenaIsCurrentPlayer(user.displayName);
+    return `<article class="${current ? "is-current" : ""}" style="--arena-order:${index}">
+        <strong>#${arenaEscape(user.rank)}</strong>${arenaAvatar(user.displayName, { current })}
+        <div><b>${arenaEscape(user.displayName)}</b><span>${arenaEscape(user.wins)}W · ${arenaEscape(user.losses)}L · ${arenaEscape(user.totalMatches)} match · ${arenaEscape(user.winRate)}% Win Rate</span></div>
+        <dl><div><dt>MATCHES</dt><dd>${arenaEscape(user.totalMatches)}</dd></div>
+            <div><dt>EFC WON</dt><dd>${arenaEscape(user.totalEfcWon)} EFC</dd></div></dl>
+        ${current ? "<em>YOU</em>" : ""}
+    </article>`;
 }
 
 async function selectArenaLeaderboardPeriod(period) {
@@ -1150,6 +1255,10 @@ if (typeof module !== "undefined") {
         arenaHistoryCard,
         arenaProfileView,
         arenaLeaderboardRow,
+        arenaLeaderboardPodium,
+        arenaPremiumEmpty,
+        arenaAchievementItems,
+        arenaAnimateCounters,
         arenaQuickMatchLoading,
         arenaQuickPlayRipple,
         arenaToast,
