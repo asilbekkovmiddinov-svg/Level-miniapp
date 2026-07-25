@@ -405,11 +405,25 @@ function arenaEntranceOverlay() {
     </div>`;
 }
 
+const arenaEntranceState = { cleanupTimer: null };
+
+function arenaCleanupEntranceOverlay(page = document.getElementById("arenaPage")) {
+    clearTimeout(arenaEntranceState.cleanupTimer);
+    arenaEntranceState.cleanupTimer = null;
+    page?.querySelectorAll(".arena-v8-entry").forEach((overlay) => overlay.remove());
+}
+
+function arenaScheduleEntranceOverlayCleanup(page) {
+    clearTimeout(arenaEntranceState.cleanupTimer);
+    globalThis.requestAnimationFrame?.(() => page?.querySelector(".arena-v8-entry")?.classList.add("is-ready"));
+    arenaEntranceState.cleanupTimer = setTimeout(() => arenaCleanupEntranceOverlay(page), 1450);
+}
+
 function arenaInitializePremiumUi(page) {
-    if (!page || page.dataset.arenaPremiumUi === "1") return;
+    if (!page) return;
+    arenaScheduleEntranceOverlayCleanup(page);
+    if (page.dataset.arenaPremiumUi === "1") return;
     page.dataset.arenaPremiumUi = "1";
-    globalThis.requestAnimationFrame?.(() => page.querySelector(".arena-v8-entry")?.classList.add("is-ready"));
-    setTimeout(() => page.querySelector(".arena-v8-entry")?.remove(), 1450);
     page.addEventListener("pointerdown", (event) => {
         const button = event.target.closest("button");
         if (!button || button.disabled) return;
@@ -565,8 +579,12 @@ async function loadArenaPage() {
         button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
     });
     arenaInitializePremiumUi(page);
-    loadArenaDashboard().finally(() => loadArenaStats());
-    await loadArenaTab(arenaView.tab);
+    try {
+        loadArenaDashboard().finally(() => loadArenaStats());
+        await loadArenaTab(arenaView.tab);
+    } finally {
+        arenaCleanupEntranceOverlay(page);
+    }
 }
 
 async function loadArenaDashboard() {
@@ -1344,6 +1362,7 @@ function retryArenaView() {
 
 Object.assign(globalThis, {
     loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
+    arenaCleanupEntranceOverlay,
     selectArenaStake, startArenaQuickMatch,
     selectArenaLeaderboardPeriod,
     arenaToast,
@@ -1382,6 +1401,8 @@ if (typeof module !== "undefined") {
         ARENA_UI_HOOKS,
         arenaEmitUiHook,
         arenaEntranceOverlay,
+        arenaCleanupEntranceOverlay,
+        arenaScheduleEntranceOverlayCleanup,
         arenaLiveBadge,
         arenaPlayerLevel,
         arenaPremiumModal,
