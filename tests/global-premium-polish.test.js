@@ -8,7 +8,7 @@ const tokens = read("design-tokens.css");
 const polish = read("global-premium-polish.css");
 const motion = read("motion-engine.css");
 const runtime = read("motion-engine.js");
-const wallet = read("pages/wallet.js");
+const dialogs = read("dialog-foundation.js");
 const html = read("index.html");
 
 test("global polish resolves shared typography, motion and surface tokens", () => {
@@ -44,6 +44,7 @@ test("global experience preserves safe area, reduced motion, contrast and dialog
     assert.match(polish, /forced-colors:active/);
     assert.match(polish, /focus-visible/);
     assert.match(polish, /lg-safe-bottom/);
-    assert.match(wallet, /setAttribute\("role", "dialog"\)/);
+    assert.match(dialogs, /setAttribute\("role", "dialog"\)/);
+    assert.match(dialogs, /setAttribute\("aria-modal", "true"\)/);
     assert.ok(html.indexOf("premium-referral.css") < html.indexOf("global-premium-polish.css"));
 });

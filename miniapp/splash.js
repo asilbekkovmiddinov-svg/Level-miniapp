@@ -69,8 +69,13 @@ const SplashScreen = (() => {
         if (!webApp) return;
         try {
             webApp.ready(); webApp.expand();
-            webApp.setHeaderColor?.("#030305");
-            webApp.setBackgroundColor?.("#030305");
+            document.documentElement.dataset.telegramTheme = webApp.colorScheme || "dark";
+            const splashChrome = getComputedStyle(document.documentElement)
+                .getPropertyValue("--lg-splash-chrome").trim();
+            if (splashChrome) {
+                webApp.setHeaderColor?.(splashChrome);
+                webApp.setBackgroundColor?.(splashChrome);
+            }
             webApp.disableVerticalSwipes?.();
         } catch (error) { console.warn("Telegram WebApp splash warning:", error); }
     }

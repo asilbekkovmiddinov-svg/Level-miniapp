@@ -26,11 +26,24 @@ const LevelDesignSystem = (() => {
         return null;
     }
 
+    function telegramChromeColor() {
+        const token = document.body?.classList.contains("splash-active")
+            ? "--lg-splash-chrome" : "--lg-telegram-chrome";
+        return getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    }
+
     function applyRuntimeMode() {
         const lowCore = (navigator.hardwareConcurrency || 8) <= 4;
         const saveData = navigator.connection?.saveData === true;
         document.documentElement.classList.toggle("design-low-motion", lowCore || saveData);
         document.documentElement.dataset.telegramTheme = window.Telegram?.WebApp?.colorScheme || "dark";
+        const chromeColor = telegramChromeColor();
+        if (chromeColor) {
+            try {
+                window.Telegram?.WebApp?.setHeaderColor?.(chromeColor);
+                window.Telegram?.WebApp?.setBackgroundColor?.(chromeColor);
+            } catch (_error) { /* Older Telegram clients may reject custom colors. */ }
+        }
     }
 
     function init() {
@@ -41,9 +54,10 @@ const LevelDesignSystem = (() => {
             const kind = hapticKind(target); if (kind) haptic(kind);
         }, { passive: true });
         window.Telegram?.WebApp?.onEvent?.("themeChanged", applyRuntimeMode);
+        window.addEventListener("levelgroup:splash-complete", applyRuntimeMode);
     }
 
-    return Object.freeze({ init, haptic, HAPTIC_SELECTORS });
+    return Object.freeze({ init, haptic, applyRuntimeMode, HAPTIC_SELECTORS });
 })();
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", LevelDesignSystem.init, { once: true });

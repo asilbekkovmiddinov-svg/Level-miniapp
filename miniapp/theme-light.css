@@ -1,0 +1,17 @@
+/* Telegram Light Theme overrides. Every value resolves through the shared token contract. */
+:root[data-telegram-theme="light"] body,
+:root[data-telegram-theme="light"] .app{background:var(--lg-surface-canvas);color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.page,.home-v2,.wallet-v2-page,.referral-v1,.arena-v2){color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.lg-glass,.home-section,.wallet-v2-balances article,.wallet-history-row,.referral-link-card,.referral-stats article,.referral-bonuses,.referral-rules,.arena-v2-match,.wheel-stats article){border-color:var(--lg-border-glass);background-color:var(--lg-surface-card);color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.app-header,.bottom-nav){color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.home-hero,.wallet-v2-page>header,.referral-hero,.arena-v2>header,.wheel-hero){color:var(--lg-on-brand)}
+:root[data-telegram-theme="light"] :where(.home-hero,.wallet-v2-page>header,.referral-hero,.arena-v2>header,.wheel-hero) :where(h1,h2,h3,strong,b){color:var(--lg-on-brand)}
+:root[data-telegram-theme="light"] :where(.home-hero,.wallet-v2-page>header,.referral-hero,.arena-v2>header,.wheel-hero) :where(p,small,span){color:var(--lg-on-brand-muted)}
+:root[data-telegram-theme="light"] :where(.wallet-action-overlay,.arena-v2-overlay,.wheel-result-modal,.wheel-wizard-modal,.pac-form-overlay,.pac-crop-overlay,.orders-detail-overlay,.p2p-create-overlay,.p2p-trade-overlay,.cpa-modal,.referral-modal){background-color:var(--lg-surface-overlay)}
+:root[data-telegram-theme="light"] :where(.wallet-action-sheet,.arena-v2-sheet,.wheel-result-card,.wheel-wizard-card,.pac-form-sheet,.pac-crop-sheet,.orders-detail-overlay>section,.p2p-create-overlay>section,.p2p-trade-overlay>section,.cpa-modal>form,.referral-modal-card){background:var(--lg-gradient-surface);color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.wallet-action-sheet input,.wallet-action-sheet select,.arena-v2-sheet input,.arena-v2-sheet select,.wheel-wizard-card input,.pac-form-sheet input,.pac-form-sheet select,.p2p-create-overlay input,.p2p-trade-overlay input){border-color:var(--lg-border-soft);background:var(--lg-surface-input);color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.referral-link-card code,.deposit-detail-row){background:var(--lg-surface-code);color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.arena-v2-match section span::before,.arena-v2-detail,.wheel-center,.wheel-last-win){color:var(--lg-text-primary)}
+:root[data-telegram-theme="light"] :where(.nav-btn,.home-icon-button,.wallet-v2-title button,.referral-copy-button){color:var(--lg-text-primary)}
+
+@media(forced-colors:active){:root[data-telegram-theme="light"] :where(.lg-glass,.home-section,.wallet-v2-balances article,.arena-v2-match,.referral-link-card){border:1px solid CanvasText}}

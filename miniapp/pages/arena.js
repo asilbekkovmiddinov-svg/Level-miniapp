@@ -328,14 +328,15 @@ function arenaState(title, message, retry = true) {
 
 function arenaMatchCard(match, mode = "open") {
     const join = mode === "open" && match.status === "WAITING_PLAYER"
-        ? `<button class="arena-v2-join" onclick="event.stopPropagation();showArenaJoinConfirm(${match.id})">Qo‘shilish</button>`
+        ? `<button class="arena-v2-join" type="button" onclick="showArenaJoinConfirm(${match.id})">Qo‘shilish</button>`
         : "";
-    return `<article class="arena-v2-match" data-match-card="${match.id}" onclick="loadArenaMatchDetail(${match.id})">
+    return `<article class="arena-v2-match-shell" data-match-card="${match.id}">
+        <button class="arena-v2-match" type="button" aria-label="${arenaEscape(match.gameType.replaceAll("_", " "))} match tafsilotlari" onclick="loadArenaMatchDetail(${match.id})">
         <div><small>${arenaEscape(match.gameType.replaceAll("_", " "))}</small>
         <em>${arenaEscape(arenaStatus(match.status))}</em></div>
         <section><span><b>${arenaEscape(match.creatorName)}</b><small>PLAYER 1</small></span>
         <strong>VS</strong><span><b>${arenaEscape(match.opponentName)}</b><small>PLAYER 2</small></span></section>
-        <footer><span>${arenaEscape(arenaDate(match.scheduledAt))}</span><b>${arenaEscape(match.stakeEfc)} EFC</b></footer>
+        <footer><span>${arenaEscape(arenaDate(match.scheduledAt))}</span><b>${arenaEscape(match.stakeEfc)} EFC</b></footer></button>
         ${join}</article>`;
 }
 
