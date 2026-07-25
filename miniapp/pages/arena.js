@@ -408,7 +408,7 @@ function arenaEntranceOverlay() {
 function arenaInitializePremiumUi(page) {
     if (!page || page.dataset.arenaPremiumUi === "1") return;
     page.dataset.arenaPremiumUi = "1";
-    requestAnimationFrame?.(() => page.querySelector(".arena-v8-entry")?.classList.add("is-ready"));
+    globalThis.requestAnimationFrame?.(() => page.querySelector(".arena-v8-entry")?.classList.add("is-ready"));
     setTimeout(() => page.querySelector(".arena-v8-entry")?.remove(), 1450);
     page.addEventListener("pointerdown", (event) => {
         const button = event.target.closest("button");
