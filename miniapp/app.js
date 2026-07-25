@@ -1,3 +1,5 @@
+const navigationState = { pending: false, page: null };
+
 window.addEventListener("load", async () => {
     Loader.show();
 
@@ -89,54 +91,84 @@ function bindHeaderButtons() {
     }
 }
 
-async function openPage(page) {
-    if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
-    if (page !== "coin-promotions-admin") document.body.classList.remove("coin-promotion-admin-open");
-    if (page !== "promotions-admin") {
-        document.body.classList.remove("promotions-admin-open");
+function setNavigationTriggerState(page, disabled) {
+    document.querySelectorAll("button[data-page]").forEach((button) => {
+        if (button.dataset.page !== page) return;
+        button.disabled = disabled;
+        button.classList.toggle("is-navigation-pending", disabled);
+        button.setAttribute("aria-busy", String(disabled));
+    });
+}
+
+function cleanupNavigationOverlay(page) {
+    if (page !== "arena") return;
+    if (typeof arenaCleanupEntranceOverlay === "function") {
+        arenaCleanupEntranceOverlay(document.getElementById("arenaPage"));
+        return;
     }
-    switch (page) {
-        case "shop":
-            await loadShopPage();
-            break;
-        case "p2p":
-            await loadP2PPage();
-            break;
-        case "wheel":
-            await loadWheelPage();
-            break;
-        case "arena":
-            await loadArenaPage();
-            break;
-        case "orders":
-            await loadOrdersPage();
-            break;
-        case "profile":
-            await loadProfilePage();
-            break;
-        case "referral":
-            await loadReferralPage();
-            break;
-        case "wallet":
-            await loadDedicatedWalletPage();
-            break;
-        case "promotions-admin":
-            await loadPromotionsAdminPage();
-            break;
-        case "coin-promotions-admin":
-            await loadCoinPromotionAdminPage();
-            break;
-        case "wheel-orders-admin":
-            await loadWheelOrderAdminPage();
-            break;
-        case "promotions":
-            await loadPromotionsPage();
-            break;
-        case "notifications":
-            await loadNotificationsPage();
-            break;
-        default:
-            await loadHome();
+    document.querySelectorAll(".arena-v8-entry").forEach((overlay) => overlay.remove());
+}
+
+async function openPage(page) {
+    if (navigationState.pending) return false;
+    navigationState.pending = true;
+    navigationState.page = page;
+    setNavigationTriggerState(page, true);
+    try {
+        if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
+        if (page !== "coin-promotions-admin") document.body.classList.remove("coin-promotion-admin-open");
+        if (page !== "promotions-admin") {
+            document.body.classList.remove("promotions-admin-open");
+        }
+        switch (page) {
+            case "shop":
+                await loadShopPage();
+                break;
+            case "p2p":
+                await loadP2PPage();
+                break;
+            case "wheel":
+                await loadWheelPage();
+                break;
+            case "arena":
+                await loadArenaPage();
+                break;
+            case "orders":
+                await loadOrdersPage();
+                break;
+            case "profile":
+                await loadProfilePage();
+                break;
+            case "referral":
+                await loadReferralPage();
+                break;
+            case "wallet":
+                await loadDedicatedWalletPage();
+                break;
+            case "promotions-admin":
+                await loadPromotionsAdminPage();
+                break;
+            case "coin-promotions-admin":
+                await loadCoinPromotionAdminPage();
+                break;
+            case "wheel-orders-admin":
+                await loadWheelOrderAdminPage();
+                break;
+            case "promotions":
+                await loadPromotionsPage();
+                break;
+            case "notifications":
+                await loadNotificationsPage();
+                break;
+            default:
+                await loadHome();
+        }
+        return true;
+    } finally {
+        cleanupNavigationOverlay(page);
+        setNavigationTriggerState(page, false);
+        navigationState.pending = false;
+        navigationState.page = null;
     }
 }
 
