@@ -44,19 +44,28 @@ async function openCoinOrderDeepLink() {
 }
 
 function showPage(pageId, title) {
-    document.querySelectorAll(".page").forEach((page) => {
-        page.classList.remove("active-page");
+    const pageContent = document.getElementById("pageContent");
+    const pages = pageContent?.querySelectorAll(":scope > .page") || [];
+    const nextPage = document.getElementById(pageId);
+    if (!nextPage || !nextPage.matches("#pageContent > .page")) return false;
+
+    pages.forEach((page) => {
+        const active = page === nextPage;
+        page.classList.toggle("active-page", active);
+        page.hidden = !active;
+        page.inert = !active;
+        page.setAttribute("aria-hidden", String(!active));
     });
 
-    const page = document.getElementById(pageId);
-    if (page) {
-        page.classList.add("active-page");
-    }
+    nextPage.scrollTop = 0;
+    if (pageContent) pageContent.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
 
     const pageTitle = document.getElementById("pageTitle");
     if (pageTitle) {
         pageTitle.textContent = title || "LEVEL_GROUP";
     }
+    return true;
 }
 
 function bindMenuButtons() {

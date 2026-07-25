@@ -18,38 +18,7 @@ const Navbar = {
     },
 
     async open(page) {
-        switch (page) {
-            case "home":
-                await loadHome();
-                break;
-
-            case "shop":
-                await loadShopPage();
-                break;
-
-            case "p2p":
-                await loadP2PPage();
-                break;
-
-            case "arena":
-                await loadArenaPage();
-                break;
-
-            case "wheel":
-                await loadWheelPage();
-                break;
-
-            case "orders":
-                await loadOrdersPage();
-                break;
-
-            case "profile":
-                await loadProfilePage();
-                break;
-
-            default:
-                tg.showAlert("Bo'lim topilmadi.");
-        }
+        await openPage(page);
     },
 
     init() {
