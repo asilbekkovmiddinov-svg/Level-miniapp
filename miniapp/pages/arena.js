@@ -97,6 +97,29 @@ class ArenaApiClient {
         return await this.request("/matches/stats/me");
     }
 
+    async dashboard() {
+        const payload = await this.request("/arena/dashboard");
+        if (!payload || !Array.isArray(payload.stakes)) {
+            throw new ArenaApiError("Arena dashboard javobi noto‘g‘ri formatda.");
+        }
+        return payload.stakes.map(normalizeArenaStakeMetrics);
+    }
+
+    async profile() {
+        return normalizeArenaProfile(await this.request("/arena/profile"));
+    }
+
+    async v4Leaderboard({ period = "all", limit = 100 } = {}) {
+        const payload = await this.request("/arena/leaderboard", { query: { period, limit } });
+        if (!payload || !Array.isArray(payload.users)) {
+            throw new ArenaApiError("Arena leaderboard javobi noto‘g‘ri formatda.");
+        }
+        return {
+            period: payload.period,
+            users: payload.users.map(normalizeArenaLeaderboardUser),
+        };
+    }
+
     async leaderboard({ period = "all", limit = 20 } = {}) {
         const payload = await this.request("/matches/leaderboard", { query: { period, limit } });
         if (!payload || !Array.isArray(payload.users)) {
@@ -194,6 +217,10 @@ function normalizeMatch(value) {
         myVideoUploaded: Boolean(value.my_video_uploaded),
         roomCode: value.room_code || null,
         resultType: value.result_type || null,
+        result: value.result || null,
+        reward: String(value.reward ?? "0"),
+        createdAt: value.created_at || null,
+        completedAt: value.completed_at || value.resolved_at || null,
     };
 }
 
@@ -204,11 +231,53 @@ function normalizeMatchList(value) {
     return value.matches.map(normalizeMatch);
 }
 
+function normalizeArenaStakeMetrics(value) {
+    const stake = Number(value?.stake);
+    if (!ARENA_V3_STAKES.includes(stake)) {
+        throw new ArenaApiError("Arena stake statistikasi noto‘g‘ri formatda.");
+    }
+    return {
+        stake,
+        onlinePlayers: Math.max(0, Number(value.online_players) || 0),
+        openRooms: Math.max(0, Number(value.open_rooms) || 0),
+        averageWaitTime: Math.max(0, Number(value.average_wait_time) || 0),
+    };
+}
+
+function normalizeArenaProfile(value) {
+    if (!value || typeof value !== "object") {
+        throw new ArenaApiError("Arena profil javobi noto‘g‘ri formatda.");
+    }
+    return {
+        totalMatches: Number(value.total_matches) || 0,
+        wins: Number(value.wins) || 0,
+        losses: Number(value.losses) || 0,
+        winRate: Number(value.win_rate) || 0,
+        totalEfcWon: String(value.total_efc_won ?? "0"),
+        currentStreak: Number(value.current_streak) || 0,
+        bestStreak: Number(value.best_streak) || 0,
+    };
+}
+
+function normalizeArenaLeaderboardUser(value) {
+    return {
+        rank: Number(value?.rank) || 0,
+        displayName: value?.display_name || "O‘yinchi",
+        wins: Number(value?.wins) || 0,
+        losses: Number(value?.losses) || 0,
+        winRate: Number(value?.win_rate) || 0,
+        totalMatches: Number(value?.total_matches) || 0,
+        totalEfcWon: String(value?.total_efc_won ?? "0"),
+    };
+}
+
 const arenaApiClient = new ArenaApiClient();
 const ARENA_V3_STAKES = Object.freeze([100, 500, 1000, 5000, 10000]);
 const arenaView = {
     tab: "open",
     selectedStake: 100,
+    dashboard: [],
+    leaderboardPeriod: "weekly",
     loading: false,
     mutationPending: false,
     createDraft: null,
@@ -268,15 +337,27 @@ function arenaMatchesForStake(matches, stake = arenaView.selectedStake) {
 }
 
 function arenaStakeNavigation() {
+    const metrics = new Map(arenaView.dashboard.map((item) => [item.stake, item]));
     return `<section class="arena-v3-lobby" aria-label="Arena stake xonalari">
         <header><div><small>STAKE LOBBY</small><h3>${arenaEscape(arenaView.selectedStake)} EFC xonalari</h3></div>
             <button class="arena-v3-quick" type="button" onclick="startArenaQuickMatch()">⚡ Tez o‘yin</button></header>
-        <div class="arena-v3-stake-grid">${ARENA_V3_STAKES.map((stake) =>
+        <div class="arena-v3-stake-grid">${ARENA_V3_STAKES.map((stake) => {
+            const item = metrics.get(stake);
+            return (
             `<button type="button" data-arena-stake="${stake}" class="${stake === arenaView.selectedStake ? "active" : ""}"
                 aria-pressed="${stake === arenaView.selectedStake}" onclick="selectArenaStake(${stake})">
-                <span>${stake.toLocaleString("uz-UZ")}</span><small>EFC</small></button>`).join("")}</div>
+                <strong>${stake.toLocaleString("uz-UZ")} <small>EFC</small></strong>
+                ${item ? `<span>● ${item.onlinePlayers} online</span><span>▣ ${item.openRooms} xona</span>
+                    <span>◷ ${arenaWaitTime(item.averageWaitTime)}</span>` : '<i class="arena-v4-metric-loading"></i>'}
+            </button>`); }).join("")}</div>
         <p>Tez o‘yin tanlangan stake bo‘yicha ochiq xonaga qo‘shadi. Xona bo‘lmasa eFootball xonasi yaratiladi. Bosish orqali Arena qoidalarini qabul qilasiz.</p>
     </section>`;
+}
+
+function arenaWaitTime(seconds) {
+    const value = Math.max(0, Number(seconds) || 0);
+    if (value < 60) return `${Math.round(value)} soniya`;
+    return `${Math.round(value / 60)} daqiqa`;
 }
 
 function arenaCountdown(target, now = Date.now()) {
@@ -373,23 +454,35 @@ async function loadArenaPage() {
         <header><small>LEVEL_GROUP</small><h2>Battle Arena</h2><p>Raqobat. Mahorat. G‘alaba.</p>
             <div id="arenaV2Stats">Statistika yuklanmoqda...</div></header>
         ${arenaStakeNavigation()}
-        <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="my">Mening</button>
+        <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="history">Tarix</button>
             <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
-            <button data-arena-tab="guide">Qo‘llanma</button></nav>
+            <button data-arena-tab="profile">Profil</button></nav>
         <main id="arenaV2Content">${arenaSkeleton()}</main></div>`;
     page.querySelectorAll("[data-arena-tab]").forEach((button) => {
         button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
     });
+    loadArenaDashboard();
     loadArenaStats();
     await loadArenaTab(arenaView.tab);
+}
+
+async function loadArenaDashboard() {
+    try {
+        arenaView.dashboard = await arenaApiClient.dashboard();
+        const lobby = document.querySelector(".arena-v3-lobby");
+        if (lobby) lobby.outerHTML = arenaStakeNavigation();
+    } catch (_) {
+        const lobby = document.querySelector(".arena-v3-lobby");
+        if (lobby) lobby.classList.add("has-metric-error");
+    }
 }
 
 async function loadArenaStats() {
     const target = document.getElementById("arenaV2Stats");
     if (!target) return;
     try {
-        const stats = await arenaApiClient.stats();
-        target.innerHTML = `<b>${arenaEscape(stats.total_matches ?? 0)}</b> match · <b>${arenaEscape(stats.wins ?? 0)}</b> g‘alaba · <b>${arenaEscape(stats.rating ?? 0)}</b> reyting`;
+        const stats = await arenaApiClient.profile();
+        target.innerHTML = `<b>${arenaEscape(stats.totalMatches)}</b> match · <b>${arenaEscape(stats.wins)}</b> g‘alaba · <b>${arenaEscape(stats.winRate)}%</b> win rate`;
     } catch (_) {
         target.textContent = "Shaxsiy statistika vaqtincha mavjud emas";
     }
@@ -409,23 +502,24 @@ async function loadArenaTab(tab) {
         button.classList.toggle("active", button.dataset.arenaTab === tab));
     content.innerHTML = arenaSkeleton();
     try {
-        if (tab === "open" || tab === "my") {
-            const matches = tab === "open"
-                ? await arenaApiClient.openMatches()
-                : await arenaApiClient.myMatches();
-            const visibleMatches = tab === "open" ? arenaMatchesForStake(matches) : matches;
+        if (tab === "open") {
+            const matches = await arenaApiClient.openMatches();
+            const visibleMatches = arenaMatchesForStake(matches);
             content.innerHTML = visibleMatches.length
                 ? `<div class="arena-v2-list">${visibleMatches.map((match) => arenaMatchCard(match, tab)).join("")}</div>`
-                : arenaState("Matchlar topilmadi", tab === "open"
-                    ? `${arenaView.selectedStake} EFC uchun hozircha ochiq xona yo‘q. Tez o‘yin yangi xona yaratishi mumkin.`
-                    : "Sizda hali Arena matchlari yo‘q.", false);
+                : arenaState("Xonalar topilmadi", `${arenaView.selectedStake} EFC uchun hozircha ochiq xona yo‘q. Tez o‘yin yangi xona yaratishi mumkin.`, false);
+        } else if (tab === "history") {
+            const matches = await arenaApiClient.myMatches({ limit: 100 });
+            content.innerHTML = matches.length
+                ? `<div class="arena-v4-history">${matches.map(arenaHistoryCard).join("")}</div>`
+                : arenaState("Tarix bo‘sh", "Sizda hali Arena matchlari yo‘q.", false);
         } else if (tab === "create") {
             renderArenaCreateForm();
         } else if (tab === "rating") {
-            const data = await arenaApiClient.leaderboard();
-            content.innerHTML = data.users.length
-                ? `<div class="arena-v2-ranking">${data.users.map((user, index) => `<div><b>#${index + 1}</b><span>${arenaEscape(user.display_name || "O‘yinchi")}</span><strong>${arenaEscape(user.rating ?? 0)}</strong></div>`).join("")}</div>`
-                : arenaState("Reyting bo‘sh", "Hali reyting ma’lumotlari yo‘q.", false);
+            await loadArenaLeaderboard();
+        } else if (tab === "profile") {
+            const profile = await arenaApiClient.profile();
+            content.innerHTML = arenaProfileView(profile);
         } else {
             const guide = await arenaApiClient.guide();
             content.innerHTML = `<article class="arena-v2-guide"><h3>Arena qo‘llanmasi</h3><p>${arenaEscape(guide.description || guide.guide || "Arena qoidalariga rioya qiling.")}</p></article>`;
@@ -434,6 +528,63 @@ async function loadArenaTab(tab) {
         content.innerHTML = arenaState("Arena yuklanmadi", error.message);
     } finally {
         arenaView.loading = false;
+    }
+}
+
+function arenaHistoryCard(match) {
+    const result = match.result || "—";
+    return `<article class="arena-v4-history-card result-${result.toLowerCase()}">
+        <header><div><small>ROOM #${match.id}</small><h3>${arenaEscape(match.gameType.replaceAll("_", " "))}</h3></div>
+            <strong>${arenaEscape(result)}</strong></header>
+        <div><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></div>
+        <div><span>Mukofot</span><b>${arenaEscape(match.reward)} EFC</b></div>
+        <div><span>Status</span><b>${arenaEscape(arenaStatus(match.status))}</b></div>
+        <div><span>Yaratilgan</span><b>${arenaEscape(arenaDate(match.createdAt))}</b></div>
+        <div><span>Yakunlangan</span><b>${arenaEscape(arenaDate(match.completedAt))}</b></div>
+    </article>`;
+}
+
+function arenaProfileView(profile) {
+    const items = [
+        ["Total Matches", profile.totalMatches],
+        ["Wins", profile.wins],
+        ["Losses", profile.losses],
+        ["Win Rate", `${profile.winRate}%`],
+        ["Total EFC Won", `${profile.totalEfcWon} EFC`],
+        ["Current Streak", profile.currentStreak],
+        ["Best Streak", profile.bestStreak],
+    ];
+    return `<section class="arena-v4-profile"><header><small>PLAYER PROFILE</small><h3>Arena statistikasi</h3></header>
+        <div>${items.map(([label, value]) => `<article><span>${arenaEscape(label)}</span><b>${arenaEscape(value)}</b></article>`).join("")}</div></section>`;
+}
+
+async function loadArenaLeaderboard() {
+    const content = document.getElementById("arenaV2Content");
+    if (!content) return;
+    const data = await arenaApiClient.v4Leaderboard({ period: arenaView.leaderboardPeriod, limit: 100 });
+    content.innerHTML = `<section class="arena-v4-leaderboard">
+        <nav>${[["weekly", "Weekly"], ["monthly", "Monthly"], ["all", "All Time"]].map(([period, label]) =>
+            `<button type="button" class="${period === arenaView.leaderboardPeriod ? "active" : ""}" onclick="selectArenaLeaderboardPeriod('${period}')">${label}</button>`).join("")}</nav>
+        ${data.users.length ? `<div>${data.users.map(arenaLeaderboardRow).join("")}</div>`
+            : arenaState("Leaderboard bo‘sh", "Bu davr uchun natijalar hali mavjud emas.", false)}
+    </section>`;
+}
+
+function arenaLeaderboardRow(user) {
+    return `<article><strong>#${arenaEscape(user.rank)}</strong><div><b>${arenaEscape(user.displayName)}</b>
+        <span>${arenaEscape(user.wins)}W · ${arenaEscape(user.losses)}L · ${arenaEscape(user.totalMatches)} match</span></div>
+        <aside><b>${arenaEscape(user.winRate)}%</b><span>${arenaEscape(user.totalEfcWon)} EFC</span></aside></article>`;
+}
+
+async function selectArenaLeaderboardPeriod(period) {
+    if (!["weekly", "monthly", "all"].includes(period)) return;
+    arenaView.leaderboardPeriod = period;
+    const content = document.getElementById("arenaV2Content");
+    if (content) content.innerHTML = arenaSkeleton();
+    try {
+        await loadArenaLeaderboard();
+    } catch (error) {
+        if (content) content.innerHTML = arenaState("Leaderboard yuklanmadi", error.message);
     }
 }
 
@@ -449,7 +600,7 @@ async function startArenaQuickMatch() {
     const stake = arenaView.selectedStake;
     const content = document.getElementById("arenaV2Content");
     if (!content) return;
-    content.innerHTML = arenaSkeleton();
+    content.innerHTML = arenaQuickMatchLoading(stake);
     try {
         const result = await runArenaMutation(async () => {
             const open = arenaMatchesForStake(await arenaApiClient.openMatches(), stake)
@@ -480,6 +631,13 @@ async function startArenaQuickMatch() {
     } catch (error) {
         renderArenaMutationError(error.message, "startArenaQuickMatch()");
     }
+}
+
+function arenaQuickMatchLoading(stake) {
+    return `<section class="arena-v4-matchmaking" role="status" aria-live="polite">
+        <div><i></i><i></i><i></i><strong>⚡</strong></div>
+        <h3>Raqib qidirilmoqda</h3><p>${arenaEscape(stake)} EFC · Eng mos ochiq xona tekshirilmoqda</p>
+    </section>`;
 }
 
 function renderArenaCreateForm(draft = arenaView.createDraft || {}) {
@@ -801,6 +959,7 @@ function retryArenaView() {
 Object.assign(globalThis, {
     loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
     selectArenaStake, startArenaQuickMatch,
+    selectArenaLeaderboardPeriod,
     prepareArenaCreate, confirmArenaCreate, renderArenaCreateForm,
     showArenaJoinConfirm, confirmArenaJoin,
     submitArenaReady, updateArenaCountdown,
@@ -818,6 +977,14 @@ if (typeof module !== "undefined") {
         arenaStakeValue,
         arenaMatchesForStake,
         arenaStakeNavigation,
+        arenaWaitTime,
+        normalizeArenaStakeMetrics,
+        normalizeArenaProfile,
+        normalizeArenaLeaderboardUser,
+        arenaHistoryCard,
+        arenaProfileView,
+        arenaLeaderboardRow,
+        arenaQuickMatchLoading,
         arenaSkeleton,
         arenaState,
         runArenaMutation,
