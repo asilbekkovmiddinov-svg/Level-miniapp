@@ -130,7 +130,17 @@
                 <div class="home-carousel-shell"><section id="homePromotions" class="home-promotions" aria-live="polite"></section></div>
             </section>
 
-            <section class="home-section home-reveal live-winners-section" style="--home-order:5" aria-labelledby="liveWinnersTitle">
+            <section class="home-section home-reveal" style="--home-order:5" aria-labelledby="homeMissionsTitle">
+                <div class="home-section-head"><div><small>KUNLIK MAQSADLAR</small><h3 id="homeMissionsTitle">Daily Missions</h3></div></div>
+                <div id="homeDailyMissions" class="home-s2-missions" aria-live="polite"></div>
+            </section>
+
+            <section class="home-section home-reveal" style="--home-order:6" aria-labelledby="homeFeaturedTitle">
+                <div class="home-section-head"><div><small>TANLANGAN IMKONIYATLAR</small><h3 id="homeFeaturedTitle">Featured</h3></div></div>
+                <div id="homeFeaturedCards" class="home-s2-featured" aria-live="polite"></div>
+            </section>
+
+            <section class="home-section home-reveal live-winners-section" style="--home-order:7" aria-labelledby="liveWinnersTitle">
                 <div class="home-section-head live-winners-head">
                     <div><small>So‘nggi yutuqlar • REAL VAQT</small><h3 id="liveWinnersTitle">Today’s Winners <span class="home-v4-compat" hidden>Live Statistics</span></h3></div>
                     <span><i></i> LIVE</span>
@@ -140,13 +150,10 @@
 
             <button class="menu-card" data-page="referral" type="button" hidden aria-hidden="true" tabindex="-1">Referral</button>
 
-            <section class="home-section home-reveal" style="--home-order:6" aria-labelledby="homeActivityTitle">
+            <section class="home-section home-reveal" style="--home-order:8" aria-labelledby="homeActivityTitle">
                 <div class="home-section-head"><div><small>OXIRGI HARAKATLAR</small><h3 id="homeActivityTitle">Recent Activity</h3></div>
                     <button class="home-section-link menu-card" data-page="orders" type="button">Tarix <span>›</span></button></div>
-                <div class="home-activity-timeline">
-                    <button class="home-activity menu-card" data-page="orders" type="button"><span>↗</span><span><strong>Buyurtmalar tarixi</strong><small>Holat va jarayonlarni kuzating</small></span><i>›</i></button>
-                    <button class="home-activity menu-card" data-page="p2p" type="button"><span>⇄</span><span><strong>P2P savdolari</strong><small>Xavfsiz savdo maydoni</small></span><i>›</i></button>
-                </div>
+                <div id="homeRecentActivity" class="home-activity-timeline" aria-live="polite"></div>
             </section>
         </section>
         <section id="p2pPage" class="page"></section>
@@ -214,6 +221,7 @@
 <script src="pages/promotions-user-core.js?v=1.0.0"></script>
 <script src="pages/promotions-user-api.js?v=1.0.0"></script>
 <script src="pages/promotions-user.js?v=1.0.0"></script>
+<script src="home-premium-s2.js?v=1.0.0"></script>
 <script src="pages/notifications-core.js?v=1.0.0"></script>
 <script src="pages/notifications-api.js?v=1.0.0"></script>
 <script src="pages/notifications.js?v=1.0.0"></script>
