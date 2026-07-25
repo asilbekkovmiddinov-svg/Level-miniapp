@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="coin-order-chat.css">
     <link rel="stylesheet" href="splash.css?v=4.0.0">
     <link rel="stylesheet" href="splash-animations.css?v=4.0.0">
-    <link rel="stylesheet" href="home.css?v=3.0.0">
+    <link rel="stylesheet" href="home.css?v=4.0.0">
     <link rel="stylesheet" href="referral.css?v=1.0.0">
     <link rel="stylesheet" href="promotions-admin.css?v=1.0.0">
     <link rel="stylesheet" href="promotions-analytics.css?v=1.0.0">
@@ -58,67 +58,91 @@
     </header>
     <main id="pageContent" class="page-content">
         <section id="homePage" class="page active-page">
-            <header class="home-header home-reveal" style="--home-order:0">
-                <span class="home-brand"><span class="home-avatar" aria-hidden="true"></span><span><b>LEVEL</b><strong>GROUP</strong></span></span>
-                <span class="home-header-actions">
-                    <button class="home-icon-button home-bell menu-card" data-page="notifications" type="button" aria-label="Bildirishnomalar"><span aria-hidden="true">🔔</span><b id="notificationBellBadge" hidden>0</b></button>
-                    <button class="home-icon-button menu-card" data-page="profile" type="button" aria-label="Profil"><span aria-hidden="true">👤</span></button>
-                </span>
+            <header class="home-v4-hero home-hero home-header home-reveal" style="--home-order:0" aria-labelledby="homeName">
+                <span class="home-v4-glow" aria-hidden="true"></span>
+                <div class="home-v4-user">
+                    <span id="homeTelegramAvatar" class="home-v4-avatar is-fallback" aria-hidden="true">
+                        <b>LG</b><i></i>
+                    </span>
+                    <span><small>WELCOME BACK</small><h2 id="homeName">LEVEL_GROUP</h2>
+                        <em><i></i> Premium member</em></span>
+                </div>
+                <div class="home-v4-actions">
+                    <button class="home-v4-icon home-bell menu-card" data-page="notifications" type="button" aria-label="Bildirishnomalar">
+                        <span aria-hidden="true">🔔</span><b id="notificationBellBadge" hidden>0</b>
+                    </button>
+                    <button class="home-v4-icon menu-card" data-page="profile" type="button" aria-label="Sozlamalar">
+                        <span aria-hidden="true">⚙</span>
+                    </button>
+                </div>
+                <section class="home-v4-intro">
+                    <small>LEVEL_GROUP ECOSYSTEM</small>
+                    <strong>Play. Win. Level Up.</strong>
+                    <p>Premium gaming va mukofotlar markazi.</p>
+                </section>
             </header>
-            <section class="home-hero home-reveal" style="--home-order:1" aria-labelledby="homeName">
-                <span class="home-hero-orbit" aria-hidden="true"></span>
-                <div class="home-hero-copy">
-                    <p class="home-eyebrow">Premium ekotizim</p>
-                    <h2 id="homeName">LEVEL_GROUP</h2>
-                    <p>O‘ynang, daromad qiling va xavfsiz savdo qiling.</p>
-                    <span class="home-online"><i></i>Platforma faol</span>
-                </div>
-                <span class="home-hero-mark" aria-hidden="true">LG</span>
-            </section>
-            <section class="home-section home-reveal" style="--home-order:2" aria-labelledby="homeWalletTitle">
-                <div class="home-section-head"><div><small>PORTFEL</small><h3 id="homeWalletTitle">Wallet Summary</h3></div><button class="home-section-link menu-card" data-page="wallet" type="button">Batafsil <span>›</span></button></div>
-            <article class="premium-wallet lg-card lg-card-wallet">
-                <div class="wallet-top">
-                    <span class="wallet-label">Umumiy balans</span>
-                    <span class="wallet-chip">SECURE WALLET</span>
-                </div>
-                <div class="wallet-values">
-                    <div class="home-balance">
-                        <span>EFC balans</span><strong id="efcBalance">—</strong><small>EFC</small>
+
+            <section class="home-section home-reveal" style="--home-order:1" aria-labelledby="homeWalletTitle">
+                <div class="home-section-head"><div><small>PREMIUM WALLET</small><h3 id="homeWalletTitle">Wallet Overview <span class="home-v4-compat" hidden>Wallet Summary</span></h3></div>
+                    <button class="home-section-link menu-card" data-page="wallet" type="button">Batafsil <span>›</span></button></div>
+                <article class="home-v4-wallet premium-wallet lg-card lg-card-wallet">
+                    <header><span><small>TOTAL PORTFOLIO</small><strong>LEVEL WALLET</strong></span><b>SECURE</b></header>
+                    <div class="home-v4-balances">
+                        <article><span>EFC BALANCE</span><strong id="efcBalance" data-home-balance>—</strong><small>EFC</small></article>
+                        <i></i>
+                        <article><span>UZS BALANCE</span><strong id="uzsBalance" data-home-balance>—</strong><small>SO‘M</small></article>
                     </div>
-                    <i class="balance-divider"></i>
-                    <div class="home-balance">
-                        <span>UZS balans</span><strong id="uzsBalance">—</strong><small>SO‘M</small>
+                    <div class="home-v4-locked"><span>🔒 LOCKED FUNDS</span>
+                        <b><strong id="lockedEfcBalance" data-home-balance>—</strong> EFC</b>
+                        <b><strong id="lockedUzsBalance" data-home-balance>—</strong> UZS</b>
                     </div>
-                </div>
-                <div class="home-locked"><span>🔒 Locked</span><b><span id="lockedEfcBalance">—</span> EFC</b><b><span id="lockedUzsBalance">—</span> UZS</b></div>
-                <div class="wallet-actions">
-                    <button class="wallet-action primary" onclick="openDeposit()" type="button">＋ To‘ldirish</button>
-                    <button class="wallet-action" onclick="openWithdraw()" type="button">↗ Yechish</button>
-                </div>
-            </article>
+                    <div class="wallet-actions">
+                        <button class="wallet-action primary" onclick="openDeposit()" type="button">＋ To‘ldirish</button>
+                        <button class="wallet-action" onclick="openWithdraw()" type="button">↗ Yechish</button>
+                    </div>
+                </article>
             </section>
-            <section class="home-section home-reveal" style="--home-order:3" aria-labelledby="homeQuickTitle">
+
+            <section class="home-section home-reveal" style="--home-order:2" aria-labelledby="homeQuickTitle">
                 <div class="home-section-head"><div><small>TEZKOR KIRISH</small><h3 id="homeQuickTitle">Quick Actions</h3></div></div>
-                <div class="home-quick-grid">
-                    <button class="home-quick-card menu-card" data-page="wheel" type="button"><span class="home-quick-icon">✦</span><strong>Wheel</strong><small>Kunlik sovrin</small></button>
-                    <button class="home-quick-card menu-card" data-page="arena" type="button"><span class="home-quick-icon">⚔</span><strong>Arena</strong><small>1 vs 1</small></button>
-                    <button class="home-quick-card menu-card" data-page="wallet" type="button"><span class="home-quick-icon">▣</span><strong>Wallet</strong><small>Balans</small></button>
-                    <button class="home-quick-card menu-card" data-page="referral" type="button"><span class="home-quick-icon">♢</span><strong>Referral</strong><small>Bonus oling</small></button>
+                <div class="home-v4-quick-grid home-quick-grid">
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="arena" type="button"><span>⚔</span><strong>Arena</strong><small>1 vs 1 battle</small></button>
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="wheel" type="button"><span>🎡</span><strong>Wheel</strong><small>Kunlik sovrin</small></button>
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="wallet" type="button"><span>💰</span><strong>Wallet</strong><small>Balans va tarix</small></button>
+                    <button class="home-v4-quick home-quick-card menu-card" data-page="shop" type="button"><span>🪙</span><strong>Coin Shop</strong><small>Premium coin</small></button>
                 </div>
             </section>
+
+            <section class="home-section home-reveal" style="--home-order:3" aria-labelledby="homeLiveInfoTitle">
+                <div class="home-section-head"><div><small>LIVE PLATFORM</small><h3 id="homeLiveInfoTitle">Live Info</h3></div>
+                    <span class="home-v4-live-label"><i></i> LIVE</span></div>
+                <div class="home-v4-live-strip" aria-live="polite">
+                    <article><span>●</span><small>ONLINE USERS</small><strong id="homeOnlineUsers" data-home-counter>—</strong></article>
+                    <article><span>⚔</span><small>ACTIVE MATCHES</small><strong id="homeActiveMatches" data-home-counter>—</strong></article>
+                    <article><span>◆</span><small>WEEKLY PRIZE</small><strong id="homeWeeklyPrize" data-home-counter>—</strong></article>
+                    <article><span>♛</span><small>TODAY’S WINNERS</small><strong id="homeTodayWinners" data-home-counter>—</strong></article>
+                </div>
+            </section>
+
             <section class="home-section home-reveal" style="--home-order:4" aria-labelledby="homePromotionTitle">
-                <div class="home-section-head"><div><small>MAXSUS</small><h3 id="homePromotionTitle">Promotions</h3></div><button class="home-section-link menu-card" data-page="promotions" type="button">Barchasi <span>›</span></button></div>
+                <div class="home-section-head"><div><small>MAXSUS</small><h3 id="homePromotionTitle">Promotions</h3></div>
+                    <button class="home-section-link menu-card" data-page="promotions" type="button">Barchasi <span>›</span></button></div>
                 <div class="home-carousel-shell"><section id="homePromotions" class="home-promotions" aria-live="polite"></section></div>
             </section>
+
             <section class="home-section home-reveal live-winners-section" style="--home-order:5" aria-labelledby="liveWinnersTitle">
                 <div class="home-section-head live-winners-head">
-                    <div><small>So‘nggi yutuqlar • REAL VAQT</small><h3 id="liveWinnersTitle">Live Statistics</h3></div><span><i></i> LIVE</span>
+                    <div><small>So‘nggi yutuqlar • REAL VAQT</small><h3 id="liveWinnersTitle">Today’s Winners <span class="home-v4-compat" hidden>Live Statistics</span></h3></div>
+                    <span><i></i> LIVE</span>
                 </div>
                 <div id="liveWinnersPanel" class="live-winners-panel" aria-live="polite"></div>
             </section>
+
+            <button class="menu-card" data-page="referral" type="button" hidden aria-hidden="true" tabindex="-1">Referral</button>
+
             <section class="home-section home-reveal" style="--home-order:6" aria-labelledby="homeActivityTitle">
-                <div class="home-section-head"><div><small>OXIRGI HARAKATLAR</small><h3 id="homeActivityTitle">Recent Activity</h3></div><button class="home-section-link menu-card" data-page="orders" type="button">Tarix <span>›</span></button></div>
+                <div class="home-section-head"><div><small>OXIRGI HARAKATLAR</small><h3 id="homeActivityTitle">Recent Activity</h3></div>
+                    <button class="home-section-link menu-card" data-page="orders" type="button">Tarix <span>›</span></button></div>
                 <div class="home-activity-timeline">
                     <button class="home-activity menu-card" data-page="orders" type="button"><span>↗</span><span><strong>Buyurtmalar tarixi</strong><small>Holat va jarayonlarni kuzating</small></span><i>›</i></button>
                     <button class="home-activity menu-card" data-page="p2p" type="button"><span>⇄</span><span><strong>P2P savdolari</strong><small>Xavfsiz savdo maydoni</small></span><i>›</i></button>
@@ -170,6 +194,7 @@
 <script src="components/loader.js"></script>
 <script src="components/modal.js"></script>
 <script src="components/user-avatar.js"></script>
+<script src="home-premium.js?v=1.0.0"></script>
 <script src="components/navbar.js"></script>
 <script src="pages/wallet.js"></script>
 <script src="pages/coin-promotion-core.js?v=1.0.0"></script>

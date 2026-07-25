@@ -92,6 +92,9 @@ function renderLiveWinners(payload) {
     const panel = document.getElementById("liveWinnersPanel");
     if (!panel) return;
     const data = normalizeLiveWinners(payload);
+    if (typeof updateHomePremiumLiveInfo === "function") {
+        updateHomePremiumLiveInfo(data, payload);
+    }
     if (!data.winners.length) {
         panel.innerHTML = `<div class="live-winners-state"><i>🏆</i><strong>Bugungi g‘olib siz bo‘lishingiz mumkin</strong><small>Yangi yutuqlar shu yerda jonli ko‘rinadi.</small></div>${liveWinnersMeta(data)}`;
         liveWinnersLoaded = true;
