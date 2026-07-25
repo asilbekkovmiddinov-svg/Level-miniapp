@@ -1,5 +1,6 @@
 /* LEVEL_GROUP V2 — final cross-surface visual rhythm. */
 html{scroll-behavior:smooth;overscroll-behavior:none;-webkit-text-size-adjust:100%}body{overflow-x:hidden;overscroll-behavior-y:none}body,.page,.wallet-action-sheet,.arena-v2-sheet{-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(255,64,95,.3) transparent}::selection{background:rgba(255,64,95,.28);color:var(--lg-color-ice)}
+.page[hidden]{display:none!important}.page.active-page:not([hidden]){visibility:visible}.page:not(.active-page){visibility:hidden}
 .page-content{padding-top:var(--lg-space-4)}.page.active-page{min-height:calc(100dvh - 60px - var(--lg-safe-top));padding-bottom:var(--lg-safe-bottom)}
 :where(.home-section,.wheel-stats,.arena-v2-match,.wallet-v2-balances article,.wallet-history-row,.referral-link-card,.referral-stats article,.referral-bonuses,.referral-rules){border-color:var(--lg-border-glass);box-shadow:var(--lg-shadow-glass)}
 :where(.wallet-v2-actions button,.wallet-pagination button,.referral-link-card button,.referral-empty button,.arena-v2 button,.wheel-spin-button,.wheel-result-card button){min-height:var(--lg-control-height);border-radius:var(--lg-radius-md);line-height:1.15}
