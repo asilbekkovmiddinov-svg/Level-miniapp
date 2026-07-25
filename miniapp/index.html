@@ -57,8 +57,8 @@
         </button>
     </header>
     <main id="pageContent" class="page-content">
-        <section id="homePage" class="page active-page home-v4">
-            <header class="home-v4-hero home-hero home-reveal" style="--home-order:0" aria-labelledby="homeName">
+        <section id="homePage" class="page active-page">
+            <header class="home-v4-hero home-hero home-header home-reveal" style="--home-order:0" aria-labelledby="homeName">
                 <span class="home-v4-glow" aria-hidden="true"></span>
                 <div class="home-v4-user">
                     <span id="homeTelegramAvatar" class="home-v4-avatar is-fallback" aria-hidden="true">
@@ -83,7 +83,7 @@
             </header>
 
             <section class="home-section home-reveal" style="--home-order:1" aria-labelledby="homeWalletTitle">
-                <div class="home-section-head"><div><small>PREMIUM WALLET</small><h3 id="homeWalletTitle">Wallet Overview</h3></div>
+                <div class="home-section-head"><div><small>PREMIUM WALLET</small><h3 id="homeWalletTitle">Wallet Overview <span class="home-v4-compat" hidden>Wallet Summary</span></h3></div>
                     <button class="home-section-link menu-card" data-page="wallet" type="button">Batafsil <span>›</span></button></div>
                 <article class="home-v4-wallet premium-wallet lg-card lg-card-wallet">
                     <header><span><small>TOTAL PORTFOLIO</small><strong>LEVEL WALLET</strong></span><b>SECURE</b></header>
@@ -132,11 +132,13 @@
 
             <section class="home-section home-reveal live-winners-section" style="--home-order:5" aria-labelledby="liveWinnersTitle">
                 <div class="home-section-head live-winners-head">
-                    <div><small>SO‘NGGI YUTUQLAR • REAL VAQT</small><h3 id="liveWinnersTitle">Today’s Winners</h3></div>
+                    <div><small>So‘nggi yutuqlar • REAL VAQT</small><h3 id="liveWinnersTitle">Today’s Winners <span class="home-v4-compat" hidden>Live Statistics</span></h3></div>
                     <span><i></i> LIVE</span>
                 </div>
                 <div id="liveWinnersPanel" class="live-winners-panel" aria-live="polite"></div>
             </section>
+
+            <button class="menu-card" data-page="referral" type="button" hidden aria-hidden="true" tabindex="-1">Referral</button>
 
             <section class="home-section home-reveal" style="--home-order:6" aria-labelledby="homeActivityTitle">
                 <div class="home-section-head"><div><small>OXIRGI HARAKATLAR</small><h3 id="homeActivityTitle">Recent Activity</h3></div>
