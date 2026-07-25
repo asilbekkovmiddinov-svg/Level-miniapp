@@ -719,7 +719,7 @@ function arenaLeaderboardRow(user, index = 0) {
         <strong>#${arenaEscape(user.rank)}</strong>${arenaAvatar(user.displayName, { current })}
         <div><b>${arenaEscape(user.displayName)}</b><span>${arenaEscape(user.wins)}W · ${arenaEscape(user.losses)}L · ${arenaEscape(user.totalMatches)} match · ${arenaEscape(user.winRate)}% Win Rate</span></div>
         <dl><div><dt>MATCHES</dt><dd>${arenaEscape(user.totalMatches)}</dd></div>
-            <div><dt>EFC WON</dt><dd>${arenaEscape(user.totalEfcWon)}</dd></div></dl>
+            <div><dt>EFC WON</dt><dd>${arenaEscape(user.totalEfcWon)} EFC</dd></div></dl>
         ${current ? "<em>YOU</em>" : ""}
     </article>`;
 }
