@@ -381,6 +381,66 @@ function arenaTelegramProfile() {
     };
 }
 
+const ARENA_UI_HOOKS = Object.freeze({
+    BUTTON_CLICK: "button-click",
+    MATCH_FOUND: "match-found",
+    VICTORY: "victory",
+});
+
+function arenaEmitUiHook(name, detail = {}) {
+    if (typeof document === "undefined" || typeof CustomEvent !== "function") return false;
+    document.dispatchEvent(new CustomEvent("arena:ui-hook", {
+        detail: { name, ...detail },
+    }));
+    return true;
+}
+
+function arenaEntranceOverlay() {
+    const particles = Array.from({ length: 14 }, (_, index) =>
+        `<i style="--particle:${index}" aria-hidden="true"></i>`).join("");
+    return `<div class="arena-v8-entry" role="status" aria-label="Arena yuklanmoqda">
+        <div class="arena-v8-entry-particles">${particles}</div>
+        <span class="arena-v8-entry-logo"><b>LEVEL</b><strong>GROUP</strong></span>
+        <small>ENTERING ARENA</small>
+    </div>`;
+}
+
+function arenaInitializePremiumUi(page) {
+    if (!page || page.dataset.arenaPremiumUi === "1") return;
+    page.dataset.arenaPremiumUi = "1";
+    globalThis.requestAnimationFrame?.(() => page.querySelector(".arena-v8-entry")?.classList.add("is-ready"));
+    setTimeout(() => page.querySelector(".arena-v8-entry")?.remove(), 1450);
+    page.addEventListener("pointerdown", (event) => {
+        const button = event.target.closest("button");
+        if (!button || button.disabled) return;
+        arenaEmitUiHook(ARENA_UI_HOOKS.BUTTON_CLICK, { action: button.dataset.arenaAction || "button" });
+        const ripple = document.createElement("i");
+        ripple.className = "arena-v8-button-ripple";
+        const bounds = button.getBoundingClientRect();
+        ripple.style.setProperty("--x", `${event.clientX - bounds.left}px`);
+        ripple.style.setProperty("--y", `${event.clientY - bounds.top}px`);
+        button.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 620);
+    });
+}
+
+function arenaLiveBadge(status) {
+    const states = {
+        PLAYING: ["live", "● LIVE"],
+        ROOM_READY: ["playing", "PLAYING"],
+        WAITING_PLAYER: ["waiting", "WAITING"],
+        WAITING_READY: ["waiting", "READY"],
+        WAITING_ADMIN: ["review", "REVIEW"],
+    };
+    const state = states[status];
+    return state ? `<span class="arena-v8-live is-${state[0]}">${state[1]}</span>` : "";
+}
+
+function arenaPlayerLevel(matches) {
+    const value = Math.max(0, Number(matches) || 0);
+    return Math.max(1, Math.min(99, Math.floor(value / 5) + 1));
+}
+
 function arenaHeroHeader() {
     const profile = arenaTelegramProfile();
     const onlinePlayers = arenaView.dashboard.reduce((total, item) => total + item.onlinePlayers, 0);
@@ -478,6 +538,7 @@ function arenaMatchCard(match, mode = "open") {
         <button class="arena-v2-match" type="button" aria-label="Room ${match.id}, ${arenaEscape(match.gameType.replaceAll("_", " "))} tafsilotlari" onclick="loadArenaMatchDetail(${match.id})">
         <div><small>${arenaEscape(match.gameType.replaceAll("_", " "))}</small>
         <em>ROOM #${match.id} · ${arenaEscape(arenaStatus(match.status))}</em></div>
+        ${arenaLiveBadge(match.status)}
         <section><span><b>${arenaEscape(match.creatorName)}</b><small>PLAYER 1</small></span>
         <strong>VS</strong><span><b>${arenaEscape(match.opponentName)}</b><small>PLAYER 2</small></span></section>
         <footer><span>${arenaEscape(arenaDate(match.scheduledAt))}</span><b>${arenaEscape(match.stakeEfc)} EFC</b></footer></button>
@@ -489,7 +550,8 @@ async function loadArenaPage() {
     showPage("arenaPage", "Arena");
     const page = document.getElementById("arenaPage");
     if (!page) return;
-    page.innerHTML = `<div class="arena-v2">
+    page.innerHTML = `<div class="arena-v2 arena-v8">
+        ${arenaEntranceOverlay()}
         ${arenaHeroHeader()}
         <button id="arenaQuickPlay" class="arena-v5-quick-play" type="button" onclick="startArenaQuickMatch(event)">
             <span>⚡</span><strong>Quick Play</strong><small>${arenaEscape(arenaView.selectedStake)} EFC</small>
@@ -502,6 +564,7 @@ async function loadArenaPage() {
     page.querySelectorAll("[data-arena-tab]").forEach((button) => {
         button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
     });
+    arenaInitializePremiumUi(page);
     loadArenaDashboard().finally(() => loadArenaStats());
     await loadArenaTab(arenaView.tab);
 }
@@ -580,14 +643,20 @@ function arenaIsCurrentPlayer(displayName) {
     return Boolean(current && String(displayName || "").trim().toLocaleLowerCase("uz-UZ") === current);
 }
 
-function arenaAvatar(displayName, { current = false, size = "md" } = {}) {
+function arenaAvatar(displayName, {
+    current = false, size = "md", online = false, winner = false, mvp = false, level = null,
+} = {}) {
     const name = String(displayName || "O‘yinchi");
     const initial = Array.from(name.trim())[0]?.toLocaleUpperCase("uz-UZ") || "L";
     const photoUrl = current ? arenaTelegramProfile().photoUrl : "";
-    return `<span class="arena-v7-avatar is-${arenaEscape(size)} ${photoUrl ? "" : "is-fallback"}">
+    return `<span class="arena-v7-avatar is-${arenaEscape(size)} ${photoUrl ? "" : "is-fallback"} ${winner ? "is-winner" : ""}">
         <b>${arenaEscape(initial)}</b>
         ${photoUrl ? `<img src="${arenaEscape(photoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer"
             onerror="this.remove();this.parentElement.classList.add('is-fallback')">` : ""}
+        ${online ? '<i class="arena-v8-avatar-online" aria-label="Online"></i>' : ""}
+        ${winner ? '<em class="arena-v8-avatar-crown" aria-label="Winner">♛</em>' : ""}
+        ${mvp ? '<strong class="arena-v8-avatar-mvp">MVP</strong>' : ""}
+        ${level !== null ? `<small class="arena-v8-avatar-level">LVL ${arenaEscape(level)}</small>` : ""}
     </span>`;
 }
 
@@ -705,7 +774,10 @@ function arenaLeaderboardPodium(user, index) {
     const medals = ["🥇", "🥈", "🥉"];
     const tiers = ["gold", "silver", "bronze"];
     return `<article class="is-${tiers[index]} ${current ? "is-current" : ""}" style="--arena-order:${index}">
-        <em>${medals[index]}</em>${arenaAvatar(user.displayName, { current, size: "lg" })}
+        <em>${medals[index]}</em>${arenaAvatar(user.displayName, {
+            current, size: "lg", online: current, winner: index === 0, mvp: index === 0,
+            level: arenaPlayerLevel(user.totalMatches),
+        })}
         <b>${arenaEscape(user.displayName)}</b><small>#${arenaEscape(user.rank)}</small>
         <dl><div><dt>WIN RATE</dt><dd>${arenaEscape(user.winRate)}%</dd></div>
             <div><dt>TOTAL WINS</dt><dd>${arenaEscape(user.wins)}</dd></div></dl>
@@ -716,7 +788,9 @@ function arenaLeaderboardPodium(user, index) {
 function arenaLeaderboardRow(user, index = 0) {
     const current = arenaIsCurrentPlayer(user.displayName);
     return `<article class="${current ? "is-current" : ""}" style="--arena-order:${index}">
-        <strong>#${arenaEscape(user.rank)}</strong>${arenaAvatar(user.displayName, { current })}
+        <strong>#${arenaEscape(user.rank)}</strong>${arenaAvatar(user.displayName, {
+            current, online: current, level: arenaPlayerLevel(user.totalMatches),
+        })}
         <div><b>${arenaEscape(user.displayName)}</b><span>${arenaEscape(user.wins)}W · ${arenaEscape(user.losses)}L · ${arenaEscape(user.totalMatches)} match · ${arenaEscape(user.winRate)}% Win Rate</span></div>
         <dl><div><dt>MATCHES</dt><dd>${arenaEscape(user.totalMatches)}</dd></div>
             <div><dt>EFC WON</dt><dd>${arenaEscape(user.totalEfcWon)} EFC</dd></div></dl>
@@ -947,14 +1021,21 @@ function arenaMatchStage(match) {
     return 0;
 }
 
-function arenaPlayerCard({ name, photoUrl = "", isCurrent = false, profile = null }) {
+function arenaPlayerCard({
+    name, photoUrl = "", isCurrent = false, profile = null, winner = false, mvp = false,
+}) {
     const displayName = String(name || "O‘yinchi");
     const initial = Array.from(displayName.trim())[0]?.toUpperCase() || "L";
     const safePhoto = arenaSafeAvatarUrl(photoUrl);
-    return `<section class="arena-v6-player ${isCurrent ? "is-current" : ""}">
+    const level = profile ? arenaPlayerLevel(profile.totalMatches) : null;
+    return `<section class="arena-v6-player ${isCurrent ? "is-current" : ""} ${winner ? "is-winner" : ""}">
         <span class="arena-v6-player-avatar ${safePhoto ? "" : "is-fallback"}">
             <b>${arenaEscape(initial)}</b>
             ${safePhoto ? `<img src="${arenaEscape(safePhoto)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
+            ${isCurrent ? '<i class="arena-v8-avatar-online" aria-label="Online"></i>' : ""}
+            ${winner ? '<em class="arena-v8-avatar-crown" aria-label="Winner">♛</em>' : ""}
+            ${mvp ? '<strong class="arena-v8-avatar-mvp">MVP</strong>' : ""}
+            ${level ? `<small class="arena-v8-avatar-level">LVL ${level}</small>` : ""}
         </span>
         <div><strong>${arenaEscape(displayName)}</strong>
             <small><i></i>${isCurrent ? "ONLINE" : "RAQIB"}</small></div>
@@ -968,17 +1049,25 @@ function arenaMatchRoomHeader(match) {
     const telegram = arenaTelegramProfile();
     const creatorCurrent = role === "creator";
     const opponentCurrent = role === "opponent";
+    const result = String(match.result || "").toUpperCase();
+    const currentWon = match.status === "COMPLETED" && result === "WIN";
+    const creatorWinner = currentWon ? creatorCurrent : result === "LOSE" && opponentCurrent;
+    const opponentWinner = currentWon ? opponentCurrent : result === "LOSE" && creatorCurrent;
     const creator = arenaPlayerCard({
         name: match.creatorName,
         photoUrl: creatorCurrent ? telegram.photoUrl : "",
         isCurrent: creatorCurrent,
         profile: creatorCurrent ? arenaView.playerProfile : null,
+        winner: creatorWinner,
+        mvp: creatorWinner,
     });
     const opponent = arenaPlayerCard({
         name: match.opponentName,
         photoUrl: opponentCurrent ? telegram.photoUrl : "",
         isCurrent: opponentCurrent,
         profile: opponentCurrent ? arenaView.playerProfile : null,
+        winner: opponentWinner,
+        mvp: opponentWinner,
     });
     return `<header class="arena-v6-room-header">
         ${creator}<div class="arena-v6-versus" aria-label="versus"><span>VS</span><i></i></div>${opponent}
@@ -1016,6 +1105,35 @@ function arenaMatchResult(match) {
     </section>`;
 }
 
+function arenaPremiumModal(match, { selfReady = false } = {}) {
+    let type = "";
+    let icon = "⌛";
+    let title = "";
+    let message = "";
+    const result = String(match.result || "").toUpperCase();
+    if (match.status === "COMPLETED" && result === "WIN") {
+        [type, icon, title, message] = ["victory", "♛", "VICTORY", "Arena g‘alabasi sizniki."];
+    } else if (match.status === "COMPLETED" && result === "LOSE") {
+        [type, icon, title, message] = ["defeat", "◆", "DEFEAT", "Keyingi jang uchun kuchliroq qayting."];
+    } else if (match.status === "WAITING_READY" && !selfReady) {
+        [type, icon, title, message] = ["ready", "⚡", "READY?", "Matchga tayyor ekaningizni tasdiqlang."];
+    } else if (match.status === "WAITING_PLAYER" || match.status === "WAITING_ADMIN") {
+        [type, icon, title, message] = ["waiting", "⌛", "WAITING", match.status === "WAITING_ADMIN"
+            ? "Admin natijani tekshirmoqda." : "Raqib ulanmoqda."];
+    }
+    if (!type) return "";
+    return `<section class="arena-v8-modal is-${type}" role="dialog" aria-modal="false" aria-label="${title}">
+        <button type="button" class="arena-v8-modal-close" aria-label="Yopish" onclick="closeArenaPremiumModal(this)">×</button>
+        <span>${icon}</span><small>LEVEL_GROUP ARENA</small><h3>${title}</h3><p>${message}</p>
+        ${type === "ready" ? `<button type="button" onclick="submitArenaReady(${match.id})">TAYYORMAN</button>` : ""}
+    </section>`;
+}
+
+function closeArenaPremiumModal(button) {
+    button?.closest(".arena-v8-modal")?.classList.add("is-closing");
+    setTimeout(() => button?.closest(".arena-v8-modal")?.remove(), 240);
+}
+
 function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {}) {
     const content = document.getElementById("arenaV2Content");
     if (!content) return;
@@ -1026,7 +1144,8 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
     const roomPanel = renderArenaRoomPanel(match);
     const evidencePanel = renderArenaEvidencePanel(match);
     content.innerHTML = `<article class="arena-v2-detail arena-v2-live arena-v6-room status-${arenaEscape(String(match.status).toLowerCase())}"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
-        <div class="arena-v6-room-label"><span>ROOM #${match.id}</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
+        <div class="arena-v6-room-label"><span>ROOM #${match.id}</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b>${arenaLiveBadge(match.status)}</div>
+        ${arenaPremiumModal(match, { selfReady })}
         ${arenaMatchRoomHeader(match)}
         ${arenaMatchTimeline(match)}
         <section class="arena-v6-match-meta">
@@ -1233,6 +1352,7 @@ Object.assign(globalThis, {
     submitArenaReady, updateArenaCountdown,
     submitArenaRoomCode, copyArenaRoomCode,
     openArenaEvidenceBot,
+    closeArenaPremiumModal,
 });
 
 if (typeof module !== "undefined") {
@@ -1259,6 +1379,12 @@ if (typeof module !== "undefined") {
         arenaPremiumEmpty,
         arenaAchievementItems,
         arenaAnimateCounters,
+        ARENA_UI_HOOKS,
+        arenaEmitUiHook,
+        arenaEntranceOverlay,
+        arenaLiveBadge,
+        arenaPlayerLevel,
+        arenaPremiumModal,
         arenaQuickMatchLoading,
         arenaQuickPlayRipple,
         arenaToast,
