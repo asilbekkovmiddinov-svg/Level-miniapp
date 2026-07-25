@@ -405,12 +405,33 @@ function arenaEntranceOverlay() {
     </div>`;
 }
 
-const arenaEntranceState = { cleanupTimer: null };
+const arenaEntranceState = { cleanupTimer: null, navigationPending: false };
 
 function arenaCleanupEntranceOverlay(page = document.getElementById("arenaPage")) {
     clearTimeout(arenaEntranceState.cleanupTimer);
     arenaEntranceState.cleanupTimer = null;
     page?.querySelectorAll(".arena-v8-entry").forEach((overlay) => overlay.remove());
+}
+
+function arenaSetNavigationPending(disabled) {
+    document.querySelectorAll('button[data-page="arena"]').forEach((button) => {
+        button.disabled = disabled;
+        button.classList.toggle("is-navigation-pending", disabled);
+        button.setAttribute("aria-busy", String(disabled));
+    });
+}
+
+function arenaBeginNavigation() {
+    if (arenaEntranceState.navigationPending) return false;
+    arenaEntranceState.navigationPending = true;
+    arenaSetNavigationPending(true);
+    return true;
+}
+
+function arenaFinishNavigation(page) {
+    arenaCleanupEntranceOverlay(page);
+    arenaSetNavigationPending(false);
+    arenaEntranceState.navigationPending = false;
 }
 
 function arenaScheduleEntranceOverlayCleanup(page) {
@@ -560,30 +581,32 @@ function arenaMatchCard(match, mode = "open") {
 }
 
 async function loadArenaPage() {
-    Navbar.setActive("arena");
-    showPage("arenaPage", "Arena");
+    if (!arenaBeginNavigation()) return false;
     const page = document.getElementById("arenaPage");
-    if (!page) return;
-    page.innerHTML = `<div class="arena-v2 arena-v8">
-        ${arenaEntranceOverlay()}
-        ${arenaHeroHeader()}
-        <button id="arenaQuickPlay" class="arena-v5-quick-play" type="button" onclick="startArenaQuickMatch(event)">
-            <span>⚡</span><strong>Quick Play</strong><small>${arenaEscape(arenaView.selectedStake)} EFC</small>
-        </button>
-        ${arenaStakeNavigation()}
-        <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="history">Tarix</button>
-            <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
-            <button data-arena-tab="profile">Profil</button></nav>
-        <main id="arenaV2Content">${arenaSkeleton()}</main></div>`;
-    page.querySelectorAll("[data-arena-tab]").forEach((button) => {
-        button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
-    });
-    arenaInitializePremiumUi(page);
     try {
+        Navbar.setActive("arena");
+        showPage("arenaPage", "Arena");
+        if (!page) return false;
+        page.innerHTML = `<div class="arena-v2 arena-v8">
+            ${arenaEntranceOverlay()}
+            ${arenaHeroHeader()}
+            <button id="arenaQuickPlay" class="arena-v5-quick-play" type="button" onclick="startArenaQuickMatch(event)">
+                <span>⚡</span><strong>Quick Play</strong><small>${arenaEscape(arenaView.selectedStake)} EFC</small>
+            </button>
+            ${arenaStakeNavigation()}
+            <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="history">Tarix</button>
+                <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
+                <button data-arena-tab="profile">Profil</button></nav>
+            <main id="arenaV2Content">${arenaSkeleton()}</main></div>`;
+        page.querySelectorAll("[data-arena-tab]").forEach((button) => {
+            button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
+        });
+        arenaInitializePremiumUi(page);
         loadArenaDashboard().finally(() => loadArenaStats());
         await loadArenaTab(arenaView.tab);
+        return true;
     } finally {
-        arenaCleanupEntranceOverlay(page);
+        arenaFinishNavigation(page);
     }
 }
 
@@ -1362,7 +1385,7 @@ function retryArenaView() {
 
 Object.assign(globalThis, {
     loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
-    arenaCleanupEntranceOverlay,
+    arenaCleanupEntranceOverlay, arenaBeginNavigation, arenaFinishNavigation,
     selectArenaStake, startArenaQuickMatch,
     selectArenaLeaderboardPeriod,
     arenaToast,
@@ -1403,6 +1426,8 @@ if (typeof module !== "undefined") {
         arenaEntranceOverlay,
         arenaCleanupEntranceOverlay,
         arenaScheduleEntranceOverlayCleanup,
+        arenaBeginNavigation,
+        arenaFinishNavigation,
         arenaLiveBadge,
         arenaPlayerLevel,
         arenaPremiumModal,
