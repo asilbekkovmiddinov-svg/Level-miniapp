@@ -47,6 +47,7 @@ function renderPremiumHomeIdentity() {
 
 function parseHomeMetric(value) {
     const normalized = String(value ?? "").replaceAll(/[^\d.-]/g, "");
+    if (!normalized || normalized === "." || normalized === "-") return null;
     const number = Number(normalized);
     return Number.isFinite(number) ? number : null;
 }
