@@ -9,7 +9,7 @@ function promotionImage(item, className = "") {
 
 function promotionsHomeMarkup() {
     if (promotionsUserState.loading && !promotionsUserState.items.length) return `<div class="pux-carousel pux-skeleton" aria-label="Promotions yuklanmoqda"></div>`;
-    if (!promotionsUserState.items.length) return "";
+    if (!promotionsUserState.items.length) return `<article class="home-s2-empty home-s2-promotion-empty"><span aria-hidden="true">◇</span><strong>Yangi takliflar tayyorlanmoqda</strong><p>Faol premium aksiyalar paydo bo‘lganda shu yerda ko‘rsatiladi.</p><button type="button" data-open-promotions>Takliflarni ko‘rish</button></article>`;
     const slides = promotionsUserState.items.map((item, index) => `<article class="pux-slide ${index === promotionsUserState.index ? "is-active" : ""}" data-promotion-id="${item.id}" data-slide="${index}">
         ${promotionImage(item)}<div class="pux-shade"></div><div class="pux-slide-copy">${item.badge ? `<em>${promotionsEscape(item.badge)}</em>` : ""}<h3>${promotionsEscape(item.title)}</h3><p>${promotionsEscape(item.subtitle || "")}</p><button type="button" data-open-promotions>Ko‘rish <i>›</i></button></div>
     </article>`).join("");
@@ -30,6 +30,7 @@ function movePromotionSlide(index) {
 }
 
 function bindPromotionsHome() {
+    document.querySelector("#homePromotions [data-open-promotions]")?.addEventListener("click", () => openPage("promotions"));
     const carousel = document.getElementById("promotionsCarousel"); if (!carousel) return;
     carousel.querySelectorAll("[data-carousel-index]").forEach((button) => button.onclick = () => movePromotionSlide(Number(button.dataset.carouselIndex)));
     carousel.querySelector("[data-open-promotions]")?.addEventListener("click", () => openPage("promotions"));
