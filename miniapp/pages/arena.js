@@ -405,11 +405,46 @@ function arenaEntranceOverlay() {
     </div>`;
 }
 
+const arenaEntranceState = { cleanupTimer: null, navigationPending: false };
+
+function arenaCleanupEntranceOverlay(page = document.getElementById("arenaPage")) {
+    clearTimeout(arenaEntranceState.cleanupTimer);
+    arenaEntranceState.cleanupTimer = null;
+    page?.querySelectorAll(".arena-v8-entry").forEach((overlay) => overlay.remove());
+}
+
+function arenaSetNavigationPending(disabled) {
+    document.querySelectorAll('button[data-page="arena"]').forEach((button) => {
+        button.disabled = disabled;
+        button.classList.toggle("is-navigation-pending", disabled);
+        button.setAttribute("aria-busy", String(disabled));
+    });
+}
+
+function arenaBeginNavigation() {
+    if (arenaEntranceState.navigationPending) return false;
+    arenaEntranceState.navigationPending = true;
+    arenaSetNavigationPending(true);
+    return true;
+}
+
+function arenaFinishNavigation(page) {
+    arenaCleanupEntranceOverlay(page);
+    arenaSetNavigationPending(false);
+    arenaEntranceState.navigationPending = false;
+}
+
+function arenaScheduleEntranceOverlayCleanup(page) {
+    clearTimeout(arenaEntranceState.cleanupTimer);
+    globalThis.requestAnimationFrame?.(() => page?.querySelector(".arena-v8-entry")?.classList.add("is-ready"));
+    arenaEntranceState.cleanupTimer = setTimeout(() => arenaCleanupEntranceOverlay(page), 1450);
+}
+
 function arenaInitializePremiumUi(page) {
-    if (!page || page.dataset.arenaPremiumUi === "1") return;
+    if (!page) return;
+    arenaScheduleEntranceOverlayCleanup(page);
+    if (page.dataset.arenaPremiumUi === "1") return;
     page.dataset.arenaPremiumUi = "1";
-    globalThis.requestAnimationFrame?.(() => page.querySelector(".arena-v8-entry")?.classList.add("is-ready"));
-    setTimeout(() => page.querySelector(".arena-v8-entry")?.remove(), 1450);
     page.addEventListener("pointerdown", (event) => {
         const button = event.target.closest("button");
         if (!button || button.disabled) return;
@@ -546,27 +581,33 @@ function arenaMatchCard(match, mode = "open") {
 }
 
 async function loadArenaPage() {
-    Navbar.setActive("arena");
-    showPage("arenaPage", "Arena");
+    if (!arenaBeginNavigation()) return false;
     const page = document.getElementById("arenaPage");
-    if (!page) return;
-    page.innerHTML = `<div class="arena-v2 arena-v8">
-        ${arenaEntranceOverlay()}
-        ${arenaHeroHeader()}
-        <button id="arenaQuickPlay" class="arena-v5-quick-play" type="button" onclick="startArenaQuickMatch(event)">
-            <span>⚡</span><strong>Quick Play</strong><small>${arenaEscape(arenaView.selectedStake)} EFC</small>
-        </button>
-        ${arenaStakeNavigation()}
-        <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="history">Tarix</button>
-            <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
-            <button data-arena-tab="profile">Profil</button></nav>
-        <main id="arenaV2Content">${arenaSkeleton()}</main></div>`;
-    page.querySelectorAll("[data-arena-tab]").forEach((button) => {
-        button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
-    });
-    arenaInitializePremiumUi(page);
-    loadArenaDashboard().finally(() => loadArenaStats());
-    await loadArenaTab(arenaView.tab);
+    try {
+        Navbar.setActive("arena");
+        showPage("arenaPage", "Arena");
+        if (!page) return false;
+        page.innerHTML = `<div class="arena-v2 arena-v8">
+            ${arenaEntranceOverlay()}
+            ${arenaHeroHeader()}
+            <button id="arenaQuickPlay" class="arena-v5-quick-play" type="button" onclick="startArenaQuickMatch(event)">
+                <span>⚡</span><strong>Quick Play</strong><small>${arenaEscape(arenaView.selectedStake)} EFC</small>
+            </button>
+            ${arenaStakeNavigation()}
+            <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="history">Tarix</button>
+                <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
+                <button data-arena-tab="profile">Profil</button></nav>
+            <main id="arenaV2Content">${arenaSkeleton()}</main></div>`;
+        page.querySelectorAll("[data-arena-tab]").forEach((button) => {
+            button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
+        });
+        arenaInitializePremiumUi(page);
+        loadArenaDashboard().finally(() => loadArenaStats());
+        await loadArenaTab(arenaView.tab);
+        return true;
+    } finally {
+        arenaFinishNavigation(page);
+    }
 }
 
 async function loadArenaDashboard() {
@@ -1344,6 +1385,7 @@ function retryArenaView() {
 
 Object.assign(globalThis, {
     loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
+    arenaCleanupEntranceOverlay, arenaBeginNavigation, arenaFinishNavigation,
     selectArenaStake, startArenaQuickMatch,
     selectArenaLeaderboardPeriod,
     arenaToast,
@@ -1382,6 +1424,10 @@ if (typeof module !== "undefined") {
         ARENA_UI_HOOKS,
         arenaEmitUiHook,
         arenaEntranceOverlay,
+        arenaCleanupEntranceOverlay,
+        arenaScheduleEntranceOverlayCleanup,
+        arenaBeginNavigation,
+        arenaFinishNavigation,
         arenaLiveBadge,
         arenaPlayerLevel,
         arenaPremiumModal,
