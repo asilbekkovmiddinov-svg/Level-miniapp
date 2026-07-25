@@ -360,6 +360,44 @@ function arenaWaitTime(seconds) {
     return `${Math.round(value / 60)} daqiqa`;
 }
 
+function arenaSafeAvatarUrl(value) {
+    try {
+        const url = new URL(String(value || ""));
+        return url.protocol === "https:" ? url.href : "";
+    } catch (_) {
+        return "";
+    }
+}
+
+function arenaTelegramProfile() {
+    const user = globalThis.Telegram?.WebApp?.initDataUnsafe?.user || {};
+    const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim()
+        || user.username || "O‘yinchi";
+    return {
+        displayName,
+        photoUrl: arenaSafeAvatarUrl(user.photo_url),
+        initial: Array.from(displayName.trim())[0]?.toLocaleUpperCase("uz-UZ") || "L",
+    };
+}
+
+function arenaHeroHeader() {
+    const profile = arenaTelegramProfile();
+    const onlinePlayers = arenaView.dashboard.reduce((total, item) => total + item.onlinePlayers, 0);
+    const avatar = profile.photoUrl
+        ? `<img src="${arenaEscape(profile.photoUrl)}" alt="" loading="eager" decoding="async"
+            onerror="this.remove();this.parentElement.classList.add('is-fallback')">`
+        : "";
+    return `<header id="arenaPremiumHero" class="arena-v5-hero">
+        <div class="arena-v5-identity"><span class="arena-v5-avatar ${avatar ? "" : "is-fallback"}">
+            <b>${arenaEscape(profile.initial)}</b>${avatar}</span>
+            <span><small>WELCOME BACK</small><strong>${arenaEscape(profile.displayName)}</strong></span></div>
+        <span class="arena-v5-online"><i></i>${arenaEscape(onlinePlayers)} ONLINE</span>
+        <section><small>LEVEL_GROUP ARENA</small><h2>Ready to Battle</h2>
+            <p>Stake tanlang. Raqib toping. G‘alaba qozoning.</p></section>
+        <div id="arenaV2Stats">Statistika yuklanmoqda...</div>
+    </header>`;
+}
+
 function arenaCountdown(target, now = Date.now()) {
     const targetTime = new Date(target).getTime();
     if (!target || Number.isNaN(targetTime)) return "--:--";
@@ -451,8 +489,10 @@ async function loadArenaPage() {
     const page = document.getElementById("arenaPage");
     if (!page) return;
     page.innerHTML = `<div class="arena-v2">
-        <header><small>LEVEL_GROUP</small><h2>Battle Arena</h2><p>Raqobat. Mahorat. G‘alaba.</p>
-            <div id="arenaV2Stats">Statistika yuklanmoqda...</div></header>
+        ${arenaHeroHeader()}
+        <button id="arenaQuickPlay" class="arena-v5-quick-play" type="button" onclick="startArenaQuickMatch(event)">
+            <span>⚡</span><strong>Quick Play</strong><small>${arenaEscape(arenaView.selectedStake)} EFC</small>
+        </button>
         ${arenaStakeNavigation()}
         <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="history">Tarix</button>
             <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
@@ -461,14 +501,15 @@ async function loadArenaPage() {
     page.querySelectorAll("[data-arena-tab]").forEach((button) => {
         button.addEventListener("click", () => loadArenaTab(button.dataset.arenaTab));
     });
-    loadArenaDashboard();
-    loadArenaStats();
+    loadArenaDashboard().finally(() => loadArenaStats());
     await loadArenaTab(arenaView.tab);
 }
 
 async function loadArenaDashboard() {
     try {
         arenaView.dashboard = await arenaApiClient.dashboard();
+        const hero = document.getElementById("arenaPremiumHero");
+        if (hero) hero.outerHTML = arenaHeroHeader();
         const lobby = document.querySelector(".arena-v3-lobby");
         if (lobby) lobby.outerHTML = arenaStakeNavigation();
     } catch (_) {
@@ -590,13 +631,16 @@ async function selectArenaLeaderboardPeriod(period) {
 
 async function selectArenaStake(stake) {
     arenaView.selectedStake = arenaStakeValue(stake);
+    const quickStake = document.querySelector("#arenaQuickPlay small");
+    if (quickStake) quickStake.textContent = `${arenaView.selectedStake} EFC`;
     const lobby = document.querySelector(".arena-v3-lobby");
     if (lobby) lobby.outerHTML = arenaStakeNavigation();
     await loadArenaTab("open");
 }
 
-async function startArenaQuickMatch() {
+async function startArenaQuickMatch(event) {
     if (arenaView.mutationPending) return;
+    arenaQuickPlayRipple(event);
     const stake = arenaView.selectedStake;
     const content = document.getElementById("arenaV2Content");
     if (!content) return;
@@ -625,12 +669,41 @@ async function startArenaQuickMatch() {
         });
         if (!result) return;
         rememberArenaRole(result.match.id, result.role);
+        arenaToast(result.role === "opponent" ? "Ochiq xonaga qo‘shildingiz." : "Yangi xona yaratildi.");
         content.innerHTML = `<div class="arena-v2-success"><span>⚡</span><h3>Tez o‘yin tayyor</h3>
             <p>Room #${result.match.id} · ${arenaEscape(stake)} EFC</p>
             <button onclick="loadArenaMatchDetail(${result.match.id})">Xonani ochish</button></div>`;
     } catch (error) {
+        arenaToast(error.message, "error");
         renderArenaMutationError(error.message, "startArenaQuickMatch()");
     }
+}
+
+function arenaQuickPlayRipple(event) {
+    const button = event?.currentTarget;
+    if (!button || typeof document === "undefined") return;
+    const ripple = document.createElement("i");
+    ripple.className = "arena-v5-ripple";
+    const bounds = button.getBoundingClientRect();
+    ripple.style.setProperty("--ripple-x", `${(event.clientX || bounds.left + bounds.width / 2) - bounds.left}px`);
+    ripple.style.setProperty("--ripple-y", `${(event.clientY || bounds.top + bounds.height / 2) - bounds.top}px`);
+    button.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 650);
+}
+
+function arenaToast(message, type = "success") {
+    if (typeof document === "undefined") return;
+    document.querySelector(".arena-v5-toast")?.remove();
+    const toast = document.createElement("div");
+    toast.className = `arena-v5-toast ${type}`;
+    toast.setAttribute("role", type === "error" ? "alert" : "status");
+    toast.textContent = `${type === "error" ? "!" : "✓"} ${String(message || "")}`;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add("show"));
+    setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => toast.remove(), 250);
+    }, 2400);
 }
 
 function arenaQuickMatchLoading(stake) {
@@ -960,6 +1033,7 @@ Object.assign(globalThis, {
     loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
     selectArenaStake, startArenaQuickMatch,
     selectArenaLeaderboardPeriod,
+    arenaToast,
     prepareArenaCreate, confirmArenaCreate, renderArenaCreateForm,
     showArenaJoinConfirm, confirmArenaJoin,
     submitArenaReady, updateArenaCountdown,
@@ -978,6 +1052,9 @@ if (typeof module !== "undefined") {
         arenaMatchesForStake,
         arenaStakeNavigation,
         arenaWaitTime,
+        arenaSafeAvatarUrl,
+        arenaTelegramProfile,
+        arenaHeroHeader,
         normalizeArenaStakeMetrics,
         normalizeArenaProfile,
         normalizeArenaLeaderboardUser,
@@ -985,6 +1062,8 @@ if (typeof module !== "undefined") {
         arenaProfileView,
         arenaLeaderboardRow,
         arenaQuickMatchLoading,
+        arenaQuickPlayRipple,
+        arenaToast,
         arenaSkeleton,
         arenaState,
         runArenaMutation,
