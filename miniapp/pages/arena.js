@@ -205,8 +205,10 @@ function normalizeMatchList(value) {
 }
 
 const arenaApiClient = new ArenaApiClient();
+const ARENA_V3_STAKES = Object.freeze([100, 500, 1000, 5000, 10000]);
 const arenaView = {
     tab: "open",
+    selectedStake: 100,
     loading: false,
     mutationPending: false,
     createDraft: null,
@@ -253,6 +255,28 @@ function arenaDate(value) {
     return Number.isNaN(date.getTime())
         ? "Vaqt noto‘g‘ri"
         : date.toLocaleString("uz-UZ", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function arenaStakeValue(value) {
+    const stake = Number(value);
+    return ARENA_V3_STAKES.includes(stake) ? stake : ARENA_V3_STAKES[0];
+}
+
+function arenaMatchesForStake(matches, stake = arenaView.selectedStake) {
+    const selected = arenaStakeValue(stake);
+    return matches.filter((match) => Number(match.stakeEfc) === selected);
+}
+
+function arenaStakeNavigation() {
+    return `<section class="arena-v3-lobby" aria-label="Arena stake xonalari">
+        <header><div><small>STAKE LOBBY</small><h3>${arenaEscape(arenaView.selectedStake)} EFC xonalari</h3></div>
+            <button class="arena-v3-quick" type="button" onclick="startArenaQuickMatch()">⚡ Tez o‘yin</button></header>
+        <div class="arena-v3-stake-grid">${ARENA_V3_STAKES.map((stake) =>
+            `<button type="button" data-arena-stake="${stake}" class="${stake === arenaView.selectedStake ? "active" : ""}"
+                aria-pressed="${stake === arenaView.selectedStake}" onclick="selectArenaStake(${stake})">
+                <span>${stake.toLocaleString("uz-UZ")}</span><small>EFC</small></button>`).join("")}</div>
+        <p>Tez o‘yin tanlangan stake bo‘yicha ochiq xonaga qo‘shadi. Xona bo‘lmasa eFootball xonasi yaratiladi. Bosish orqali Arena qoidalarini qabul qilasiz.</p>
+    </section>`;
 }
 
 function arenaCountdown(target, now = Date.now()) {
@@ -331,9 +355,9 @@ function arenaMatchCard(match, mode = "open") {
         ? `<button class="arena-v2-join" type="button" onclick="showArenaJoinConfirm(${match.id})">Qo‘shilish</button>`
         : "";
     return `<article class="arena-v2-match-shell" data-match-card="${match.id}">
-        <button class="arena-v2-match" type="button" aria-label="${arenaEscape(match.gameType.replaceAll("_", " "))} match tafsilotlari" onclick="loadArenaMatchDetail(${match.id})">
+        <button class="arena-v2-match" type="button" aria-label="Room ${match.id}, ${arenaEscape(match.gameType.replaceAll("_", " "))} tafsilotlari" onclick="loadArenaMatchDetail(${match.id})">
         <div><small>${arenaEscape(match.gameType.replaceAll("_", " "))}</small>
-        <em>${arenaEscape(arenaStatus(match.status))}</em></div>
+        <em>ROOM #${match.id} · ${arenaEscape(arenaStatus(match.status))}</em></div>
         <section><span><b>${arenaEscape(match.creatorName)}</b><small>PLAYER 1</small></span>
         <strong>VS</strong><span><b>${arenaEscape(match.opponentName)}</b><small>PLAYER 2</small></span></section>
         <footer><span>${arenaEscape(arenaDate(match.scheduledAt))}</span><b>${arenaEscape(match.stakeEfc)} EFC</b></footer></button>
@@ -348,6 +372,7 @@ async function loadArenaPage() {
     page.innerHTML = `<div class="arena-v2">
         <header><small>LEVEL_GROUP</small><h2>Battle Arena</h2><p>Raqobat. Mahorat. G‘alaba.</p>
             <div id="arenaV2Stats">Statistika yuklanmoqda...</div></header>
+        ${arenaStakeNavigation()}
         <nav><button data-arena-tab="open">Ochiq</button><button data-arena-tab="my">Mening</button>
             <button data-arena-tab="create">Yaratish</button><button data-arena-tab="rating">Reyting</button>
             <button data-arena-tab="guide">Qo‘llanma</button></nav>
@@ -388,9 +413,12 @@ async function loadArenaTab(tab) {
             const matches = tab === "open"
                 ? await arenaApiClient.openMatches()
                 : await arenaApiClient.myMatches();
-            content.innerHTML = matches.length
-                ? `<div class="arena-v2-list">${matches.map((match) => arenaMatchCard(match, tab)).join("")}</div>`
-                : arenaState("Matchlar topilmadi", tab === "open" ? "Hozircha ochiq match yo‘q." : "Sizda hali Arena matchlari yo‘q.", false);
+            const visibleMatches = tab === "open" ? arenaMatchesForStake(matches) : matches;
+            content.innerHTML = visibleMatches.length
+                ? `<div class="arena-v2-list">${visibleMatches.map((match) => arenaMatchCard(match, tab)).join("")}</div>`
+                : arenaState("Matchlar topilmadi", tab === "open"
+                    ? `${arenaView.selectedStake} EFC uchun hozircha ochiq xona yo‘q. Tez o‘yin yangi xona yaratishi mumkin.`
+                    : "Sizda hali Arena matchlari yo‘q.", false);
         } else if (tab === "create") {
             renderArenaCreateForm();
         } else if (tab === "rating") {
@@ -409,6 +437,51 @@ async function loadArenaTab(tab) {
     }
 }
 
+async function selectArenaStake(stake) {
+    arenaView.selectedStake = arenaStakeValue(stake);
+    const lobby = document.querySelector(".arena-v3-lobby");
+    if (lobby) lobby.outerHTML = arenaStakeNavigation();
+    await loadArenaTab("open");
+}
+
+async function startArenaQuickMatch() {
+    if (arenaView.mutationPending) return;
+    const stake = arenaView.selectedStake;
+    const content = document.getElementById("arenaV2Content");
+    if (!content) return;
+    content.innerHTML = arenaSkeleton();
+    try {
+        const result = await runArenaMutation(async () => {
+            const open = arenaMatchesForStake(await arenaApiClient.openMatches(), stake)
+                .find((match) => match.status === "WAITING_PLAYER");
+            if (open) {
+                try {
+                    return { match: await arenaApiClient.acceptMatch(open.id, { rulesAccepted: true }), role: "opponent" };
+                } catch (error) {
+                    if (error.status !== 409) throw error;
+                }
+            }
+            const scheduledAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+            return {
+                match: await arenaApiClient.createMatch({
+                    gameType: "EFOOTBALL",
+                    stakeEfc: stake,
+                    scheduledAt,
+                    rulesAccepted: true,
+                }),
+                role: "creator",
+            };
+        });
+        if (!result) return;
+        rememberArenaRole(result.match.id, result.role);
+        content.innerHTML = `<div class="arena-v2-success"><span>⚡</span><h3>Tez o‘yin tayyor</h3>
+            <p>Room #${result.match.id} · ${arenaEscape(stake)} EFC</p>
+            <button onclick="loadArenaMatchDetail(${result.match.id})">Xonani ochish</button></div>`;
+    } catch (error) {
+        renderArenaMutationError(error.message, "startArenaQuickMatch()");
+    }
+}
+
 function renderArenaCreateForm(draft = arenaView.createDraft || {}) {
     const content = document.getElementById("arenaV2Content");
     if (!content) return;
@@ -421,8 +494,8 @@ function renderArenaCreateForm(draft = arenaView.createDraft || {}) {
             <option value="PUBG_MOBILE" ${draft.gameType === "PUBG_MOBILE" ? "selected" : ""}>PUBG Mobile</option>
             <option value="FC_MOBILE" ${draft.gameType === "FC_MOBILE" ? "selected" : ""}>FC Mobile</option>
         </select></label>
-        <label>EFC stake<input name="stakeEfc" type="number" inputmode="decimal" min="1" step="1" value="${arenaEscape(draft.stakeEfc || "100")}" required></label>
-        <div class="arena-v2-stakes">${[50, 100, 250, 500].map((value) => `<button type="button" onclick="this.form.stakeEfc.value=${value}">${value} EFC</button>`).join("")}</div>
+        <label>EFC stake<select name="stakeEfc" required>${ARENA_V3_STAKES.map((value) =>
+            `<option value="${value}" ${arenaStakeValue(draft.stakeEfc || arenaView.selectedStake) === value ? "selected" : ""}>${value.toLocaleString("uz-UZ")} EFC</option>`).join("")}</select></label>
         <label>Match vaqti<input name="scheduledAt" type="datetime-local" value="${arenaEscape(draft.localTime || defaultTime)}" required></label>
         <label class="arena-v2-rules"><input name="rulesAccepted" type="checkbox" ${draft.rulesAccepted ? "checked" : ""} required><span>Screenshot va video evidence majburiyligini hamda Arena qoidalarini qabul qilaman.</span></label>
         <button class="arena-v2-submit" type="submit">Davom etish</button></form>`;
@@ -438,7 +511,7 @@ function prepareArenaCreate(event) {
         scheduledAt: new Date(form.scheduledAt.value).toISOString(),
         rulesAccepted: form.rulesAccepted.checked,
     };
-    if (!draft.rulesAccepted || !Number.isFinite(draft.stakeEfc) || draft.stakeEfc <= 0) {
+    if (!draft.rulesAccepted || !ARENA_V3_STAKES.includes(draft.stakeEfc)) {
         renderArenaMutationError("Stake va qoidalar tasdig‘ini tekshiring.", "renderArenaCreateForm()", draft);
         return;
     }
@@ -462,7 +535,7 @@ async function confirmArenaCreate() {
         if (!match) return;
         rememberArenaRole(match.id, "creator");
         arenaView.createDraft = null;
-        content.innerHTML = `<div class="arena-v2-success"><span>✓</span><h3>Match yaratildi</h3><p>Match #${match.id} raqib kutmoqda.</p><button onclick="loadArenaTab('my')">Mening matchlarim</button></div>`;
+        content.innerHTML = `<div class="arena-v2-success"><span>✓</span><h3>Xona yaratildi</h3><p>Room #${match.id} raqib kutmoqda.</p><button onclick="loadArenaTab('my')">Mening matchlarim</button></div>`;
     } catch (error) {
         renderArenaMutationError(error.message, "confirmArenaCreate()", draft);
     }
@@ -530,11 +603,13 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
     const roomPanel = renderArenaRoomPanel(match);
     const evidencePanel = renderArenaEvidencePanel(match);
     content.innerHTML = `<article class="arena-v2-detail arena-v2-live status-${arenaEscape(String(match.status).toLowerCase())}"><button onclick="loadArenaTab('${arenaView.tab}')">← Orqaga</button>
-        <small>MATCH #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
+        <small>ROOM #${match.id}</small><h3>${arenaEscape(match.creatorName)} <i>VS</i> ${arenaEscape(match.opponentName)}</h3>
         <div><span>Status</span><b class="arena-v2-status-live">${arenaEscape(arenaStatus(match.status))}</b></div>
         <div><span>O‘yin</span><b>${arenaEscape(match.gameType.replaceAll("_", " "))}</b></div>
         <div><span>Stake</span><b>${arenaEscape(match.stakeEfc)} EFC</b></div>
-        <div><span>Mukofot</span><b>${arenaEscape(match.winnerReward)} EFC</b></div>
+        <div><span>Jami pot</span><b>${arenaEscape(match.totalPool)} EFC</b></div>
+        <div><span>Platforma komissiyasi</span><b>5%</b></div>
+        <div><span>G‘olib oladi</span><b>${arenaEscape(match.winnerReward)} EFC</b></div>
         <div><span>Match boshlanishi</span><b>${arenaEscape(arenaDate(match.scheduledAt))}</b></div>
         <section class="arena-v2-countdown ${readyWindowOpen ? "is-live" : ""}">
             <small>${readyWindowOpen ? "READY OYNASI" : "MATCH BOSHLANISHIGA"}</small>
@@ -569,7 +644,7 @@ function renderArenaEvidencePanel(match) {
             ${match.myScreenshotUploaded ? '<em class="is-done">✓</em>' : `<button onclick="openArenaEvidenceBot(${match.id}, 'screenshot')">Botga yuborish</button>`}</article>
         <article><span>🎥</span><div><b>Video</b><small>${match.myVideoUploaded ? "Yuborildi" : "Kutilyapti"}</small></div>
             ${match.myVideoUploaded ? '<em class="is-done">✓</em>' : `<button onclick="openArenaEvidenceBot(${match.id}, 'video')">Botga yuborish</button>`}</article>
-        <p>${done ? "Admin tekshiradi." : completed === 1 ? "Yana bitta evidence qoldi." : "Screenshot va video majburiy."}</p>
+        <p>${done ? "Sizning dalillaringiz to‘liq. Har ikki o‘yinchi topshirgach status WAITING_ADMIN bo‘ladi va Admin tekshiradi." : completed === 1 ? "Yana bitta evidence qoldi." : "Screenshot va video majburiy — har bir o‘yinchi ikkalasini ham topshiradi."}</p>
     </section>`;
 }
 
@@ -725,6 +800,7 @@ function retryArenaView() {
 
 Object.assign(globalThis, {
     loadArenaPage, loadArenaTab, loadArenaMatchDetail, retryArenaView,
+    selectArenaStake, startArenaQuickMatch,
     prepareArenaCreate, confirmArenaCreate, renderArenaCreateForm,
     showArenaJoinConfirm, confirmArenaJoin,
     submitArenaReady, updateArenaCountdown,
@@ -738,6 +814,10 @@ if (typeof module !== "undefined") {
         ArenaApiError,
         normalizeMatch,
         normalizeMatchList,
+        ARENA_V3_STAKES,
+        arenaStakeValue,
+        arenaMatchesForStake,
+        arenaStakeNavigation,
         arenaSkeleton,
         arenaState,
         runArenaMutation,
