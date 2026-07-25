@@ -220,6 +220,32 @@ test("create mutation uses authenticated production contract without identity fi
     assert.equal("username" in body, false);
 });
 
+test("create exposes the backend conflict reason instead of masking every 409", async () => {
+    const client = new ArenaApiClient({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "fresh-user-init-data",
+        retries: 0,
+        fetchImpl: async () => response(
+            { detail: "Foydalanuvchida faol Arena match mavjud" },
+            409,
+        ),
+    });
+
+    await assert.rejects(
+        client.createMatch({
+            gameType: "EFOOTBALL",
+            stakeEfc: 100,
+            scheduledAt: "2030-01-01T12:00:00.000Z",
+            rulesAccepted: true,
+        }),
+        (error) => {
+            assert.equal(error.status, 409);
+            assert.equal(error.message, "Foydalanuvchida faol Arena match mavjud");
+            return true;
+        },
+    );
+});
+
 test("join mutation sends only rules acceptance and verified initData", async () => {
     let call;
     const client = new ArenaApiClient({
