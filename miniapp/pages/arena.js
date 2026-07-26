@@ -185,6 +185,12 @@ class ArenaApiClient {
             body: { room_code: normalized },
         }));
     }
+
+    async cancelCreatorMatch(matchId) {
+        return normalizeMatch(await this.request(`/matches/${Number(matchId)}/creator-cancel`, {
+            method: "POST",
+        }));
+    }
 }
 
 function arenaHttpMessage(status) {
@@ -220,6 +226,7 @@ function normalizeMatch(value) {
         readyDeadlineAt: value.ready_deadline_at || null,
         creatorReady: Boolean(value.creator_ready),
         opponentReady: Boolean(value.opponent_ready),
+        canCancel: Boolean(value.can_cancel),
         myScreenshotUploaded: Boolean(value.my_screenshot_uploaded),
         myVideoUploaded: Boolean(value.my_video_uploaded),
         roomCode: value.room_code || null,
@@ -1198,6 +1205,47 @@ function closeArenaPremiumModal(button) {
     setTimeout(() => button?.closest(".arena-v8-modal")?.remove(), 240);
 }
 
+function arenaCreatorCancelModal(matchId, { pending = false } = {}) {
+    return `<section id="arenaCreatorCancelModal" class="arena-v8-modal is-defeat arena-v8-cancel-confirm"
+        role="dialog" aria-modal="true" aria-labelledby="arenaCreatorCancelTitle">
+        <span aria-hidden="true">🗑</span><small>ROOM #${Number(matchId)}</small>
+        <h3 id="arenaCreatorCancelTitle">Room bekor qilinsinmi?</h3>
+        <p>Lock qilingan EFC qaytariladi.</p>
+        <div><button type="button" class="arena-v2-cancel" ${pending ? "disabled" : ""}
+                onclick="closeArenaPremiumModal(this)">Yo‘q</button>
+            <button type="button" class="arena-v8-cancel-action" ${pending ? "disabled" : ""}
+                onclick="confirmArenaCreatorCancel(${Number(matchId)})">${pending ? "Bekor qilinmoqda..." : "Ha, bekor qilish"}</button></div>
+    </section>`;
+}
+
+function showArenaCreatorCancel(matchId) {
+    if (arenaView.mutationPending || typeof document === "undefined") return;
+    document.getElementById("arenaCreatorCancelModal")?.remove();
+    document.body.insertAdjacentHTML("beforeend", arenaCreatorCancelModal(matchId));
+}
+
+async function confirmArenaCreatorCancel(matchId) {
+    if (arenaView.mutationPending) return;
+    const modal = document.getElementById("arenaCreatorCancelModal");
+    if (modal) modal.outerHTML = arenaCreatorCancelModal(matchId, { pending: true });
+    try {
+        const match = await runArenaMutation(() => arenaApiClient.cancelCreatorMatch(matchId));
+        if (!match) return;
+        document.getElementById("arenaCreatorCancelModal")?.remove();
+        stopArenaLiveUpdates();
+        arenaView.detailMatchId = null;
+        await Promise.all([
+            loadArenaTab("history"),
+            typeof loadWalletPage === "function" ? loadWalletPage() : Promise.resolve(),
+        ]);
+        arenaToast("Room bekor qilindi. Lock qilingan EFC qaytarildi.");
+    } catch (error) {
+        const currentModal = document.getElementById("arenaCreatorCancelModal");
+        if (currentModal) currentModal.outerHTML = arenaCreatorCancelModal(matchId);
+        arenaToast(error.message, "error");
+    }
+}
+
 function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {}) {
     const content = document.getElementById("arenaV2Content");
     if (!content) return;
@@ -1235,6 +1283,8 @@ function renderArenaMatchDetail(match, { readyPending = false, notice = "" } = {
         ${match.status === "WAITING_ADMIN" ? `<section class="arena-v2-admin-wait">
             <span>✓</span><div><b>Evidence qabul qilindi</b><p>Admin natijani tekshirmoqda.</p></div>
         </section>` : ""}
+        ${match.canCancel ? `<button type="button" class="arena-v8-creator-cancel"
+            onclick="showArenaCreatorCancel(${match.id})">🗑 Cancel Match</button>` : ""}
         ${notice ? `<p class="arena-v2-live-notice">${arenaEscape(notice)}</p>` : ""}
     </article>`;
     updateArenaCountdown();
@@ -1418,6 +1468,8 @@ Object.assign(globalThis, {
     submitArenaRoomCode, copyArenaRoomCode,
     openArenaEvidenceBot,
     closeArenaPremiumModal,
+    showArenaCreatorCancel,
+    confirmArenaCreatorCancel,
 });
 
 if (typeof module !== "undefined") {
@@ -1455,6 +1507,7 @@ if (typeof module !== "undefined") {
         arenaLiveBadge,
         arenaPlayerLevel,
         arenaPremiumModal,
+        arenaCreatorCancelModal,
         arenaQuickMatchLoading,
         arenaQuickPlayRipple,
         arenaToast,
