@@ -16,6 +16,11 @@
             const audit = (event, detail = {}) => {
                 console.info(`[MonetagSDK] ${event}`, detail);
             };
+            const originalConsoleError = console.error.bind(console);
+            console.error = (...args) => {
+                audit("console_error", { args });
+                originalConsoleError(...args);
+            };
             const resourceStatus = () => {
                 const entry = performance.getEntriesByName(sdkUrl, "resource").at(-1);
                 return entry ? {
