@@ -74,6 +74,15 @@ function renderProfile() {
                 <b>›</b>
             </button>
 
+            <button class="profile-support-cta" type="button" onclick="openPage('support')">
+                <span>🎧</span>
+                <span>
+                    <strong>Support Center</strong>
+                    <small>Xatolik, taklif, sharh yoki savol uchun yordam oling</small>
+                </span>
+                <b>›</b>
+            </button>
+
             ${profileAdminAccess ? `
                 <button class="profile-admin-cta" type="button" onclick="openAdminPanelFromProfile()">
                     <span>🛠</span>

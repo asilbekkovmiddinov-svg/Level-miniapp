@@ -114,6 +114,9 @@ async function openPage(page) {
         case "profile":
             await loadProfilePage();
             break;
+        case "support":
+            await loadSupportPage();
+            break;
         case "referral":
             await loadReferralPage();
             break;
