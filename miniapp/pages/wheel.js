@@ -546,13 +546,33 @@ function wheelNextSpinHint(state, now = wheelNow()) {
         : "Spin mavjud emas";
 }
 
+function registerWheelAdsgramNoFillDiagnostics(controller) {
+    controller?.addEventListener?.("onBannerNotFound", (event) => {
+        console.info("[WheelAds] adsgram_banner_not_found", {
+            blockId: WHEEL_ADSGRAM_BLOCK_ID,
+            description: event?.description || null,
+        });
+    });
+    return controller;
+}
+
+function showWheelNoAdsAvailableDialog() {
+    const message = "Oops! No ads available at the moment";
+    const webApp = globalThis.Telegram?.WebApp;
+    if (typeof webApp?.showAlert === "function") {
+        webApp.showAlert(message);
+        return;
+    }
+    globalThis.alert?.(message);
+}
+
 function getWheelAdsgramController() {
     if (wheelAdsgramController) return wheelAdsgramController;
     if (!globalThis.Adsgram?.init) throw new Error("Adsgram SDK yuklanmadi.");
-    wheelAdsgramController = globalThis.Adsgram.init({
+    wheelAdsgramController = registerWheelAdsgramNoFillDiagnostics(globalThis.Adsgram.init({
         blockId: WHEEL_ADSGRAM_BLOCK_ID,
         debug: false,
-    });
+    }));
     return wheelAdsgramController;
 }
 
@@ -632,6 +652,7 @@ async function watchWheelRewardedAdSlot(slotId) {
         await refreshWheelState();
     } catch (error) {
         if (hint) hint.textContent = error?.message || "Reklama yakunlanmadi";
+        if (error?.code === "REWARDED_FALLBACK_EXHAUSTED") showWheelNoAdsAvailableDialog();
         await refreshWheelState();
     } finally {
         wheelAdsgramPending = false;
@@ -1027,6 +1048,8 @@ if (typeof module !== "undefined") {
         wheelDiscMarkup,
         wheelPageMarkup,
         getWheelAdsgramController,
+        registerWheelAdsgramNoFillDiagnostics,
+        showWheelNoAdsAvailableDialog,
         claimAdsgramRewardWithRetry,
         runAdsgramRewardedFlow,
         wheelRewardedSlotState,
