@@ -4,9 +4,8 @@
     if (root) root.WheelRewardedAds = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, (root) => {
     const slots = Object.freeze([
-        Object.freeze({ id: "1", label: "Watch Ad #1", provider: "ADSGRAM", fallbackProviders: Object.freeze(["MONETAG"]) }),
-        Object.freeze({ id: "2", label: "Watch Ad #2", provider: "ADSGRAM", fallbackProviders: Object.freeze(["MONETAG"]) }),
-        Object.freeze({ id: "3", label: "Watch Ad #3", provider: "ADSGRAM", fallbackProviders: Object.freeze(["MONETAG"]) }),
+        Object.freeze({ id: "1", label: "Watch Ad", subtitle: "Get 1 Spin", provider: "ADSGRAM" }),
+        Object.freeze({ id: "2", label: "Watch Ad", subtitle: "Get 1 Spin", provider: "MONETAG" }),
     ]);
 
     function providerLog(level, event, detail = {}) {
@@ -71,37 +70,27 @@
         const slot = getSlot(slotId);
         if (!slot) throw new Error("Rewarded reklama sloti topilmadi.");
 
-        const providerNames = [slot.provider, ...(slot.fallbackProviders || [])];
-        let lastError = null;
-
-        for (const providerName of providerNames) {
-            const provider = providers[providerName];
-            if (!provider?.isAvailable(adapters)) {
-                providerLog("warn", "provider_unavailable", { provider: providerName, slotId: slot.id });
-                continue;
-            }
-
-            providerLog("info", "provider_attempt", { provider: providerName, slotId: slot.id });
-            try {
-                const result = await provider.showRewarded(adapters);
-                providerLog("info", "provider_success", { provider: providerName, slotId: slot.id });
-                return result;
-            } catch (error) {
-                lastError = error;
-                providerLog("warn", "provider_failed", {
-                    provider: providerName,
-                    slotId: slot.id,
-                    error: providerError(error),
-                });
-            }
+        const provider = providers[slot.provider];
+        if (!provider?.isAvailable(adapters)) {
+            const error = new Error("Tanlangan reklama hozircha mavjud emas.");
+            error.code = "REWARDED_PROVIDER_UNAVAILABLE";
+            providerLog("warn", "provider_unavailable", { provider: slot.provider, slotId: slot.id });
+            throw error;
         }
 
-        const error = new Error(lastError?.message || "Rewarded reklama provideri mavjud emas.");
-        error.name = "RewardedFallbackExhaustedError";
-        error.code = "REWARDED_FALLBACK_EXHAUSTED";
-        if (lastError) error.cause = lastError;
-        providerLog("error", "fallback_exhausted", { slotId: slot.id, error: providerError(error) });
-        throw error;
+        providerLog("info", "provider_attempt", { provider: slot.provider, slotId: slot.id });
+        try {
+            const result = await provider.showRewarded(adapters);
+            providerLog("info", "provider_success", { provider: slot.provider, slotId: slot.id });
+            return result;
+        } catch (error) {
+            providerLog("warn", "provider_failed", {
+                provider: slot.provider,
+                slotId: slot.id,
+                error: providerError(error),
+            });
+            throw error;
+        }
     }
 
     return Object.freeze({
