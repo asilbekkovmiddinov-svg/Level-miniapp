@@ -96,7 +96,10 @@
             }
         }
 
-        const error = lastError || new Error("Rewarded reklama provideri mavjud emas.");
+        const error = new Error(lastError?.message || "Rewarded reklama provideri mavjud emas.");
+        error.name = "RewardedFallbackExhaustedError";
+        error.code = "REWARDED_FALLBACK_EXHAUSTED";
+        if (lastError) error.cause = lastError;
         providerLog("error", "fallback_exhausted", { slotId: slot.id, error: providerError(error) });
         throw error;
     }
