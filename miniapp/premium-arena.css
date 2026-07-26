@@ -85,3 +85,7 @@ html.design-low-motion .arena-v2::before,html.design-low-motion .arena-v2-ready-
 .result-waiting .arena-v7-result-badge{border-color:rgba(251,191,36,.4);background:rgba(245,158,11,.14);color:#fbbf24}
 .result-review .arena-v7-result-badge{border-color:rgba(196,181,253,.4);background:rgba(124,58,237,.16);color:#c4b5fd}
 .result-completed .arena-v7-result-badge{border-color:rgba(203,213,225,.3);background:rgba(148,163,184,.12);color:#e2e8f0}
+
+/* Creator-only WAITING_PLAYER cancellation */
+.arena-v8-creator-cancel{width:100%;min-height:44px;border-color:rgba(248,113,113,.45)!important;background:linear-gradient(rgba(100,116,139,.14),rgba(100,116,139,.14)) padding-box,linear-gradient(135deg,rgba(148,163,184,.4),rgba(239,68,68,.68)) border-box!important;color:#fca5a5!important;font-size:10px;font-weight:900}
+.arena-v8-cancel-confirm>div{display:grid;width:100%;grid-template-columns:1fr 1.35fr;gap:8px;margin-top:16px}.arena-v8-cancel-confirm>div button{min-height:43px;border-radius:var(--lg-radius-pill);font-size:9px;font-weight:900}.arena-v8-cancel-action{background:linear-gradient(135deg,#ef4444,#991b1b)!important;color:#fff!important}
