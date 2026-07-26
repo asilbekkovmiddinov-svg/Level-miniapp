@@ -20,6 +20,7 @@ function walletHttpMessage(status) {
         403: "Bu amalni bajarishga ruxsat yo‘q.",
         404: "Hamyon topilmadi.",
         409: "So‘rov holati o‘zgargan. Qayta urinib ko‘ring.",
+        425: "Reward tasdig‘i kutilmoqda.",
         422: "Kiritilgan ma’lumotlar formati noto‘g‘ri.",
     };
     return status >= 500
@@ -51,7 +52,9 @@ async function walletRequest(path, { method = "GET", body = null, idempotencyKey
     }
 
     if (!response.ok) {
-        throw new Error(walletHttpMessage(response.status));
+        const error = new Error(walletHttpMessage(response.status));
+        error.status = response.status;
+        throw error;
     }
 
     return payload;
@@ -271,9 +274,20 @@ async function getWheelStatus() {
 async function spinProductionWheel(spinType) {
     const type = String(spinType || "").toUpperCase();
     if (!["FREE", "AD", "BONUS"].includes(type)) throw new Error("Wheel spin turi noto‘g‘ri.");
-    return await walletRequest("/wheel/spin", {
+    return await walletRequest(type === "AD" ? "/wheel/spin/ad" : "/wheel/spin", {
         method: "POST",
-        body: { telegram_id: TELEGRAM_ID, spin_type: type },
+        body: type === "AD" ? null : { telegram_id: TELEGRAM_ID, spin_type: type },
+    });
+}
+
+async function createAdsgramRewardSession() {
+    return await walletRequest("/wheel/adsgram/session", { method: "POST" });
+}
+
+async function claimAdsgramReward(token) {
+    return await walletRequest("/wheel/adsgram/claim", {
+        method: "POST",
+        body: { token: String(token || "") },
     });
 }
 
