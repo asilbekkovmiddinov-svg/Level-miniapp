@@ -80,29 +80,23 @@ test("Adsgram SDK and backend endpoints use the production rewarded contract", (
 });
 
 
-test("three rewarded slots are independently selectable through the provider registry", async () => {
+test("two rewarded cards select independent providers without exposing provider names", async () => {
     assert.deepEqual(
-        WHEEL_REWARDED_ADS.slots.map(({ id, label, provider }) => ({ id, label, provider })),
+        WHEEL_REWARDED_ADS.slots.map(({ id, label, subtitle, provider }) => ({ id, label, subtitle, provider })),
         [
-            { id: "1", label: "Watch Ad #1", provider: "ADSGRAM" },
-            { id: "2", label: "Watch Ad #2", provider: "ADSGRAM" },
-            { id: "3", label: "Watch Ad #3", provider: "ADSGRAM" },
+            { id: "1", label: "Watch Ad", subtitle: "Get 1 Spin", provider: "ADSGRAM" },
+            { id: "2", label: "Watch Ad", subtitle: "Get 1 Spin", provider: "MONETAG" },
         ],
     );
 
-    const selected = [];
-    for (const slot of WHEEL_REWARDED_ADS.slots) {
-        await WHEEL_REWARDED_ADS.run(slot.id, {
-            ADSGRAM: async () => {
-                selected.push(slot.id);
-                return { done: true, error: false };
-            },
-        });
-    }
-    assert.deepEqual(selected, ["1", "2", "3"]);
+    const markup = wheelRewardedSlotsMarkup({ adRewardReady: true });
+    assert.equal((markup.match(/data-wheel-ad-slot=/g) || []).length, 2);
+    assert.equal((markup.match(/Watch Ad/g) || []).length, 2);
+    assert.equal((markup.match(/Get 1 Spin/g) || []).length, 2);
+    assert.doesNotMatch(markup, /Adsgram|Monetag/i);
 });
 
-test("all rewarded slots share one server-based cooldown state", () => {
+test("both rewarded cards share one server-based cooldown state", () => {
     const now = Date.parse("2026-07-27T12:00:00Z");
     const cooldown = {
         adRewardReady: false,
@@ -118,14 +112,12 @@ test("all rewarded slots share one server-based cooldown state", () => {
     }
 
     const markup = wheelRewardedSlotsMarkup(cooldown, now);
-    assert.equal((markup.match(/data-wheel-ad-slot=/g) || []).length, 3);
-    assert.match(markup, /Watch Ad #1/);
-    assert.match(markup, /Watch Ad #2/);
-    assert.match(markup, /Watch Ad #3/);
-    assert.equal((markup.match(/00:59:48/g) || []).length, 3);
+    assert.equal((markup.match(/data-wheel-ad-slot=/g) || []).length, 2);
+    assert.equal((markup.match(/Watch Ad/g) || []).length, 2);
+    assert.equal((markup.match(/00:59:48/g) || []).length, 2);
 });
 
-test("one claimed rewarded spin blocks all three slots", () => {
+test("one claimed rewarded spin blocks both cards", () => {
     const state = {
         adRewardReady: false,
         adReady: true,
@@ -154,19 +146,32 @@ test("Monetag SDK uses the production zone and secure URL", () => {
     assert.match(html, /data-sdk="show_11422269"/);
 });
 
-test("Adsgram remains the first rewarded provider when available", async () => {
-    const selected = [];
-    await WHEEL_REWARDED_ADS.run("1", {
-        ADSGRAM_AVAILABLE: true,
-        ADSGRAM: async () => {
-            selected.push("ADSGRAM");
-            return { done: true, error: false };
-        },
-    });
-    assert.deepEqual(selected, ["ADSGRAM"]);
+test("Adsgram card runs only Adsgram", async () => {
+    const previous = globalThis.show_11422269;
+    let adsgramCalls = 0;
+    let monetagCalls = 0;
+    globalThis.show_11422269 = async () => {
+        monetagCalls += 1;
+    };
+
+    try {
+        const result = await WHEEL_REWARDED_ADS.run("1", {
+            ADSGRAM_AVAILABLE: true,
+            ADSGRAM: async () => {
+                adsgramCalls += 1;
+                return { done: true, error: false, provider: "ADSGRAM" };
+            },
+        });
+        assert.equal(result.provider, "ADSGRAM");
+        assert.equal(adsgramCalls, 1);
+        assert.equal(monetagCalls, 0);
+    } finally {
+        if (previous === undefined) delete globalThis.show_11422269;
+        else globalThis.show_11422269 = previous;
+    }
 });
 
-test("Monetag uses the official object API when Adsgram is unavailable", async () => {
+test("Monetag card runs only Monetag with the official object API", async () => {
     const previous = globalThis.show_11422269;
     const selected = [];
     globalThis.show_11422269 = async (format) => {
@@ -176,9 +181,8 @@ test("Monetag uses the official object API when Adsgram is unavailable", async (
 
     try {
         await WHEEL_REWARDED_ADS.run("2", {
-            ADSGRAM_AVAILABLE: false,
+            ADSGRAM_AVAILABLE: true,
             ADSGRAM: async () => selected.push("ADSGRAM"),
-            MONETAG: () => WHEEL_REWARDED_ADS.MonetagProvider.showRewarded(),
         });
         assert.deepEqual(selected, ["MONETAG"]);
         assert.equal(WHEEL_REWARDED_ADS.MonetagProvider.getName(), "MONETAG");
@@ -245,66 +249,49 @@ test("Monetag rejection never claims a reward", async () => {
 });
 
 
-const ADSGRAM_FALLBACK_FAILURES = [
-    ["no fill", async () => ({ done: false, error: false })],
-    ["cancel", async () => { throw new Error("cancel"); }],
-    ["reject", async () => Promise.reject(new Error("reject"))],
-    ["exception", async () => { throw new TypeError("exception"); }],
-    ["sdk error", async () => { const error = new Error("sdk error"); error.code = "ADSGRAM_SDK_ERROR"; throw error; }],
-];
-
-for (const [failureName, adsgramFailure] of ADSGRAM_FALLBACK_FAILURES) {
-    test(`Adsgram ${failureName} falls back to Monetag`, async () => {
-        const previous = globalThis.show_11422269;
-        let monetagCalls = 0;
-        globalThis.show_11422269 = async (format) => {
-            assert.deepEqual(format, { type: "pop" });
-            monetagCalls += 1;
-        };
-
-        try {
-            const result = await WHEEL_REWARDED_ADS.run("1", {
-                ADSGRAM_AVAILABLE: true,
-                ADSGRAM: adsgramFailure,
-            });
-            assert.equal(result.provider, "MONETAG");
-            assert.equal(result.done, true);
-            assert.equal(monetagCalls, 1);
-        } finally {
-            if (previous === undefined) delete globalThis.show_11422269;
-            else globalThis.show_11422269 = previous;
-        }
-    });
-}
-
-test("fallback completion performs one backend claim for one session", async () => {
+test("Adsgram rejection does not automatically call Monetag", async () => {
     const previous = globalThis.show_11422269;
-    let sessions = 0;
-    let claims = 0;
-    globalThis.show_11422269 = async () => {};
+    let monetagCalls = 0;
+    globalThis.show_11422269 = async () => {
+        monetagCalls += 1;
+    };
 
     try {
-        const result = await runAdsgramRewardedFlow({
-            createSession: async () => {
-                sessions += 1;
-                return { token: "shared-provider-token" };
-            },
-            showAd: () => WHEEL_REWARDED_ADS.run("3", {
+        await assert.rejects(
+            WHEEL_REWARDED_ADS.run("1", {
                 ADSGRAM_AVAILABLE: true,
                 ADSGRAM: async () => {
-                    throw new Error("no fill");
+                    throw new Error("adsgram-no-fill");
                 },
             }),
-            claimReward: async (token) => {
-                claims += 1;
-                assert.equal(token, "shared-provider-token");
-                return { remaining_ad_spins: 1 };
-            },
-        });
+            /adsgram-no-fill/,
+        );
+        assert.equal(monetagCalls, 0);
+    } finally {
+        if (previous === undefined) delete globalThis.show_11422269;
+        else globalThis.show_11422269 = previous;
+    }
+});
 
-        assert.equal(result.remaining_ad_spins, 1);
-        assert.equal(sessions, 1);
-        assert.equal(claims, 1);
+test("Monetag rejection does not automatically call Adsgram", async () => {
+    const previous = globalThis.show_11422269;
+    let adsgramCalls = 0;
+    globalThis.show_11422269 = async () => {
+        throw new Error("monetag-reject");
+    };
+
+    try {
+        await assert.rejects(
+            WHEEL_REWARDED_ADS.run("2", {
+                ADSGRAM_AVAILABLE: true,
+                ADSGRAM: async () => {
+                    adsgramCalls += 1;
+                    return { done: true, error: false };
+                },
+            }),
+            /monetag-reject/,
+        );
+        assert.equal(adsgramCalls, 0);
     } finally {
         if (previous === undefined) delete globalThis.show_11422269;
         else globalThis.show_11422269 = previous;
@@ -339,45 +326,17 @@ test("Adsgram no-fill listener suppresses the SDK default alert without handling
     }
 });
 
-test("fallback exhaustion is tagged only after Adsgram and Monetag both fail", async () => {
-    const previous = globalThis.show_11422269;
-    let adsgramCalls = 0;
-    let monetagCalls = 0;
-    globalThis.show_11422269 = async () => {
-        monetagCalls += 1;
-        throw new Error("monetag-no-fill");
-    };
-
-    try {
-        await assert.rejects(
-            WHEEL_REWARDED_ADS.run("1", {
-                ADSGRAM_AVAILABLE: true,
-                ADSGRAM: async () => {
-                    adsgramCalls += 1;
-                    throw new Error("adsgram-no-fill");
-                },
-            }),
-            (error) => error.code === "REWARDED_FALLBACK_EXHAUSTED"
-                && error.message === "monetag-no-fill",
-        );
-        assert.equal(adsgramCalls, 1);
-        assert.equal(monetagCalls, 1);
-    } finally {
-        if (previous === undefined) delete globalThis.show_11422269;
-        else globalThis.show_11422269 = previous;
-    }
-});
-
-test("general no-ads dialog is gated by fallback_exhausted", () => {
-    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
-    assert.match(source, /error\?\.code === "REWARDED_FALLBACK_EXHAUSTED"/);
-    assert.match(source, /showWheelNoAdsAvailableDialog\(\)/);
-});
-
-test("provider diagnostics include Monetag SDK call confirmation", () => {
+test("provider diagnostics include independent provider attempts", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel-ad-providers.js"), "utf8");
     assert.match(source, /monetag_show_called/);
     assert.match(source, /provider_failed/);
     assert.match(source, /provider_unavailable/);
-    assert.match(source, /fallback_exhausted/);
+});
+
+test("global pending lock and existing exact-once claim flow remain wired", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.match(source, /if \(wheelAdsgramPending \|\| !wheelCooldownSnapshot\?\.adRewardReady\) return/);
+    assert.match(source, /wheelAdsgramPending = true/);
+    assert.match(source, /wheelAdsgramPending = false/);
+    assert.match(source, /claimReward\(session\.token\)/);
 });
