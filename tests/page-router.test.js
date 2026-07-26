@@ -37,7 +37,7 @@ test("all module mounts remain isolated direct children of pageContent", () => {
         .map((match) => match[1]);
     assert.deepEqual(pageIds, [
         "homePage", "p2pPage", "arenaPage", "shopPage", "wheelPage",
-        "ordersPage", "profilePage", "referralPage", "walletPage",
+        "ordersPage", "profilePage", "supportPage", "referralPage", "walletPage",
         "promotionsAdminPage", "promotionsPage", "notificationsPage",
         "coinPromotionAdminPage", "wheelOrderAdminPage",
     ]);
