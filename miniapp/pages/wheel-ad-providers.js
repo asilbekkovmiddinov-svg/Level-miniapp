@@ -52,7 +52,7 @@
                 throw error;
             }
             providerLog("info", "monetag_show_called", { zone: "11422269", format: "pop" });
-            await root.show_11422269("pop");
+            await root.show_11422269({ type: "pop" });
             providerLog("info", "monetag_show_resolved", { zone: "11422269", format: "pop" });
             return { done: true, error: false, provider: "MONETAG" };
         },

@@ -165,11 +165,11 @@ test("Adsgram remains the first rewarded provider when available", async () => {
     assert.deepEqual(selected, ["ADSGRAM"]);
 });
 
-test("Monetag is selected automatically when Adsgram is unavailable", async () => {
+test("Monetag uses the official object API when Adsgram is unavailable", async () => {
     const previous = globalThis.show_11422269;
     const selected = [];
     globalThis.show_11422269 = async (format) => {
-        assert.equal(format, "pop");
+        assert.deepEqual(format, { type: "pop" });
         selected.push("MONETAG");
     };
 
@@ -192,7 +192,7 @@ test("Monetag completion claims the existing backend reward exactly once", async
     const previous = globalThis.show_11422269;
     let claims = 0;
     globalThis.show_11422269 = async (format) => {
-        assert.equal(format, "pop");
+        assert.deepEqual(format, { type: "pop" });
     };
 
     try {
@@ -257,7 +257,7 @@ for (const [failureName, adsgramFailure] of ADSGRAM_FALLBACK_FAILURES) {
         const previous = globalThis.show_11422269;
         let monetagCalls = 0;
         globalThis.show_11422269 = async (format) => {
-            assert.equal(format, "pop");
+            assert.deepEqual(format, { type: "pop" });
             monetagCalls += 1;
         };
 
