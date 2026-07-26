@@ -721,14 +721,30 @@ function arenaPremiumEmpty(kind) {
     </section>`;
 }
 
+function arenaHistoryBadge(match) {
+    const status = String(match?.status || "").toUpperCase();
+    const result = String(match?.result || "").toUpperCase();
+    if (status === "COMPLETED") {
+        if (["WIN", "LOSE", "DRAW"].includes(result)) {
+            return { label: result, tone: result.toLowerCase() };
+        }
+        return { label: "COMPLETED", tone: "completed" };
+    }
+    const lifecycleBadges = {
+        CANCELLED: { label: "✕ CANCELLED", tone: "cancelled" },
+        WAITING_PLAYER: { label: "⌛ WAITING", tone: "waiting" },
+        WAITING_ADMIN: { label: "◆ ADMIN REVIEW", tone: "review" },
+    };
+    return lifecycleBadges[status] || { label: status || "UNKNOWN", tone: "status" };
+}
+
 function arenaHistoryCard(match, index = 0) {
-    const result = String(match.result || "PENDING").toUpperCase();
+    const badge = arenaHistoryBadge(match);
     const current = arenaTelegramProfile();
     const opponent = match.opponentName === "Raqib kutilmoqda" ? match.creatorName : match.opponentName;
-    const statusClass = ["WIN", "LOSE"].includes(result) ? result.toLowerCase() : "pending";
-    return `<article class="arena-v7-history-card result-${statusClass}" style="--arena-order:${index}">
+    return `<article class="arena-v7-history-card result-${badge.tone}" style="--arena-order:${index}">
         <i class="arena-v7-history-dot" aria-hidden="true"></i>
-        <header><small>ROOM #${match.id}</small><strong class="arena-v7-result-badge">${arenaEscape(result)}</strong></header>
+        <header><small>ROOM #${match.id}</small><strong class="arena-v7-result-badge">${arenaEscape(badge.label)}</strong></header>
         <section class="arena-v7-history-versus">
             <div>${arenaAvatar(current.displayName, { current: true })}<b>${arenaEscape(current.displayName)}</b></div>
             <span>VS</span>
@@ -1421,6 +1437,7 @@ if (typeof module !== "undefined") {
         normalizeArenaStakeMetrics,
         normalizeArenaProfile,
         normalizeArenaLeaderboardUser,
+        arenaHistoryBadge,
         arenaHistoryCard,
         arenaProfileView,
         arenaLeaderboardRow,

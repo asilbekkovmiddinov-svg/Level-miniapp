@@ -75,3 +75,13 @@ html.design-low-motion .arena-v2::before,html.design-low-motion .arena-v2-ready-
 @keyframes arenaV8Entry{0%,70%{opacity:1}100%{opacity:0}}@keyframes arenaV8Logo{from{opacity:0;transform:scale(.76);letter-spacing:.3em}to{opacity:1;transform:none}}@keyframes arenaV8Copy{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}@keyframes arenaV8Particle{0%{opacity:0}15%{opacity:1}100%{opacity:0;transform:rotate(calc(var(--particle)*25.7deg)) translateX(clamp(130px,42vw,220px)) scale(.2)}}@keyframes arenaV8Live{50%{opacity:.65;box-shadow:0 0 22px rgba(34,197,94,.38)}}@keyframes arenaV8Online{50%{transform:scale(.78);box-shadow:0 0 0 6px rgba(34,197,94,0),0 0 8px #22c55e}}@keyframes arenaV8Crown{50%{transform:translateX(-50%) translateY(-2px) rotate(4deg)}}@keyframes arenaV8Disabled{50%{opacity:.42}}@keyframes arenaV8Ripple{to{opacity:0;transform:translate(-50%,-50%) scale(22)}}@keyframes arenaV8ModalIn{from{opacity:0;transform:translateY(24px) scale(.96)}to{opacity:1;transform:none}}@keyframes arenaV8ModalOut{to{opacity:0;transform:translateY(14px) scale(.98)}}@keyframes arenaV8ModalIcon{50%{transform:translateY(-4px) scale(1.04)}}
 @media(max-width:370px){.arena-v8-modal{right:9px;left:9px;padding-inline:13px}.arena-v8-modal h3{font-size:20px}.arena-v8-live{padding-inline:5px!important}.arena-v8-avatar-mvp{right:-7px}.arena-v8-avatar-level{font-size:4px!important}}
 @media(prefers-reduced-motion:reduce){.arena-v8-entry,.arena-v8-entry-logo,.arena-v8-entry>small,.arena-v8-entry-particles i,.arena-v8-live,.arena-v8-avatar-online,.arena-v8-avatar-crown,.arena-v8-modal,.arena-v8-modal>span,.arena-v8 button:disabled{animation:none}.arena-v8 button,.arena-v8 button::after{transition:none}.arena-v8-button-ripple{display:none}}
+
+/* Arena History lifecycle badges */
+.arena-v7-result-badge{border:1px solid transparent}
+.result-win .arena-v7-result-badge{border-color:rgba(74,222,128,.35)}
+.result-lose .arena-v7-result-badge{border-color:rgba(251,113,133,.35)}
+.result-draw .arena-v7-result-badge{border-color:rgba(203,213,225,.35);background:rgba(148,163,184,.14);color:#cbd5e1}
+.result-cancelled .arena-v7-result-badge{border-color:rgba(248,113,113,.48);background:rgba(100,116,139,.14);color:#fca5a5}
+.result-waiting .arena-v7-result-badge{border-color:rgba(251,191,36,.4);background:rgba(245,158,11,.14);color:#fbbf24}
+.result-review .arena-v7-result-badge{border-color:rgba(196,181,253,.4);background:rgba(124,58,237,.16);color:#c4b5fd}
+.result-completed .arena-v7-result-badge{border-color:rgba(203,213,225,.3);background:rgba(148,163,184,.12);color:#e2e8f0}
