@@ -28,7 +28,10 @@ let wheelLastExpiryRefreshKey = null;
 let wheelServerOffsetMs = 0;
 let wheelAdsgramPending = false;
 let wheelAdsgramController = null;
+let wheelActiveAdSlot = null;
 const WHEEL_ADSGRAM_BLOCK_ID = "39763";
+const WHEEL_REWARDED_ADS = globalThis.WheelRewardedAds
+    || (typeof module !== "undefined" && module.exports ? require("./wheel-ad-providers.js") : null);
 
 const WHEEL_COIN_REGIONS = ["Global", "Japan"];
 const WHEEL_COIN_PLATFORMS = ["Android", "iOS"];
@@ -402,6 +405,58 @@ async function refreshWheelState() {
     }
 }
 
+function wheelRewardedSlotState(state, slotId, now = wheelNow()) {
+    const pending = wheelAdsgramPending;
+    if (pending) {
+        return {
+            disabled: true,
+            status: wheelActiveAdSlot === String(slotId)
+                ? "Reklama yuklanmoqda…"
+                : "Boshqa slot ishlatilmoqda",
+            tone: "is-pending",
+        };
+    }
+    if (state.adRewardReady) {
+        return { disabled: false, status: "1 ta spin olish", tone: "is-ready" };
+    }
+    if (state.adCooldown && state.adAt) {
+        return {
+            disabled: true,
+            status: `⏳ Keyingi imkoniyat: ${formatWheelCountdown(state.adAt, now)}`,
+            tone: "is-cooldown",
+        };
+    }
+    if (state.adReady) {
+        return { disabled: true, status: "🎁 Spin tayyor", tone: "is-claimed" };
+    }
+    return { disabled: true, status: "Hozircha mavjud emas", tone: "is-disabled" };
+}
+
+function wheelRewardedSlotsMarkup(state, now = wheelNow()) {
+    return (WHEEL_REWARDED_ADS?.slots || []).map((slot) => {
+        const view = wheelRewardedSlotState(state, slot.id, now);
+        return `<button class="wheel-ad-slot ${view.tone}" type="button"
+            data-wheel-ad-slot="${escapeWheelAttribute(slot.id)}"
+            onclick="watchWheelRewardedAdSlot('${escapeWheelAttribute(slot.id)}')"
+            ${view.disabled ? "disabled" : ""}>
+            <span aria-hidden="true">📺</span>
+            <b>${escapeWheelText(slot.label)}</b>
+            <small data-wheel-ad-slot-status>${escapeWheelText(view.status)}</small>
+        </button>`;
+    }).join("");
+}
+
+function updateWheelRewardedSlots(state, now = wheelNow()) {
+    document.querySelectorAll("[data-wheel-ad-slot]").forEach((button) => {
+        const view = wheelRewardedSlotState(state, button.dataset.wheelAdSlot, now);
+        button.disabled = view.disabled;
+        button.classList.remove("is-ready", "is-cooldown", "is-pending", "is-claimed", "is-disabled");
+        button.classList.add(view.tone);
+        const status = button.querySelector("[data-wheel-ad-slot-status]");
+        if (status) status.textContent = view.status;
+    });
+}
+
 function renderWheelInfo() {
     const region = document.getElementById("wheelStatusRegion");
     const button = document.getElementById("wheelSpinButton");
@@ -412,8 +467,8 @@ function renderWheelInfo() {
 
     region.innerHTML = `<div class="wheel-stats">
         <article id="wheelFreeCard" class="wheel-timer-card ${cooldown.freeReady ? "is-ready" : cooldown.freeCooldown ? "is-cooldown" : ""}"><i>☀️</i><span>Bugungi bepul spin</span><b id="wheelFreeCountdown" ${cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeCooldown ? formatWheelCountdown(cooldown.freeAt) : ""}</b><em id="wheelFreeBadge" ${cooldown.freeReady || cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
-        <article id="wheelAdCard" class="wheel-timer-card ${cooldown.adReady || cooldown.adRewardReady ? "is-ready" : cooldown.adCooldown ? "is-cooldown" : ""}"><i>▶️</i><span>Reklama orqali</span><b id="wheelAdCountdown" ${cooldown.adCooldown ? "" : "hidden"}>${cooldown.adCooldown ? formatWheelCountdown(cooldown.adAt) : ""}</b><em id="wheelAdBadge" ${cooldown.adReady || cooldown.adRewardReady || cooldown.adCooldown ? "" : "hidden"}>${cooldown.adReady ? "🎁 SPIN READY" : cooldown.adRewardReady ? "🟢 AD READY" : "🟡 COOLDOWN"}</em>
-            <button id="wheelWatchAdButton" class="wheel-watch-ad" type="button" onclick="watchAdsgramRewardedAd()" ${cooldown.adRewardReady && !wheelAdsgramPending ? "" : "disabled"}>${wheelAdsgramPending ? "Tekshirilmoqda…" : "🎥 Watch Ad"}</button></article>
+        <article id="wheelAdCard" class="wheel-timer-card wheel-rewarded-card ${cooldown.adRewardReady ? "is-ready" : cooldown.adCooldown ? "is-cooldown" : ""}"><i>▶️</i><span>Rewarded Spin</span><b id="wheelAdCountdown" hidden></b><em id="wheelAdBadge" ${cooldown.adRewardReady || cooldown.adCooldown || cooldown.adReady ? "" : "hidden"}>${cooldown.adRewardReady ? "🟢 AD READY" : cooldown.adReady ? "🎁 SPIN READY" : "🟡 COOLDOWN"}</em>
+            <div class="wheel-ad-slots" role="group" aria-label="Rewarded reklama slotlari">${wheelRewardedSlotsMarkup(cooldown)}</div></article>
         <article class="wheel-remaining-card"><i>✨</i><span>Qolgan spinlar</span><b>${cooldown.remaining}</b></article>
         <article class="wheel-last-win"><i>${lastPrize.icon}</i><span>Oxirgi yutuq</span><b>${escapeWheelText(lastPrize.label)}</b><small>${escapeWheelText(lastPrize.time)}</small><em>LAST WIN</em></article>
     </div>`;
@@ -433,6 +488,7 @@ function updateWheelCountdowns(now = wheelNow()) {
     const current = wheelCooldownState(wheelData, now);
     updateWheelTimerCard("Free", current.freeReady, current.freeCooldown, current.freeAt, now);
     updateWheelTimerCard("Ad", current.adReady || current.adRewardReady, current.adCooldown, current.adAt, now);
+    updateWheelRewardedSlots(current, now);
     const button = document.getElementById("wheelSpinButton");
     const hint = document.getElementById("wheelSpinHint");
     if (button) {
@@ -546,26 +602,29 @@ async function runAdsgramRewardedFlow({
     }
 }
 
-async function watchAdsgramRewardedAd() {
+async function watchWheelRewardedAdSlot(slotId) {
     if (wheelAdsgramPending || !wheelCooldownSnapshot?.adRewardReady) return;
-    const button = document.getElementById("wheelWatchAdButton");
+    if (!WHEEL_REWARDED_ADS?.getSlot(slotId)) return;
+
     const hint = document.getElementById("wheelSpinHint");
     wheelAdsgramPending = true;
-    if (button) {
-        button.disabled = true;
-        button.textContent = "Reklama yuklanmoqda…";
-    }
-    if (hint) hint.textContent = "Rewarded video tayyorlanmoqda";
+    wheelActiveAdSlot = String(slotId);
+    updateWheelRewardedSlots(wheelCooldownSnapshot);
+    if (hint) hint.textContent = `Watch Ad #${slotId} tayyorlanmoqda`;
 
     try {
-        const controller = getWheelAdsgramController();
-        await runAdsgramRewardedFlow({
-            createSession: createAdsgramRewardSession,
-            showAd: () => controller.show(),
-            claimReward: claimAdsgramRewardWithRetry,
-            onTimeout: () => {
-                controller.destroy?.();
-                wheelAdsgramController = null;
+        await WHEEL_REWARDED_ADS.run(slotId, {
+            ADSGRAM: async () => {
+                const controller = getWheelAdsgramController();
+                return runAdsgramRewardedFlow({
+                    createSession: createAdsgramRewardSession,
+                    showAd: () => controller.show(),
+                    claimReward: claimAdsgramRewardWithRetry,
+                    onTimeout: () => {
+                        controller.destroy?.();
+                        wheelAdsgramController = null;
+                    },
+                });
             },
         });
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
@@ -575,12 +634,13 @@ async function watchAdsgramRewardedAd() {
         await refreshWheelState();
     } finally {
         wheelAdsgramPending = false;
-        const current = document.getElementById("wheelWatchAdButton");
-        if (current) {
-            current.disabled = !wheelCooldownSnapshot?.adRewardReady;
-            current.textContent = "🎥 Watch Ad";
-        }
+        wheelActiveAdSlot = null;
+        if (wheelCooldownSnapshot) updateWheelRewardedSlots(wheelCooldownSnapshot);
     }
+}
+
+async function watchAdsgramRewardedAd(slotId = "1") {
+    return watchWheelRewardedAdSlot(slotId);
 }
 
 function normalizeWheelLastWin(value) {
@@ -968,7 +1028,11 @@ if (typeof module !== "undefined") {
         getWheelAdsgramController,
         claimAdsgramRewardWithRetry,
         runAdsgramRewardedFlow,
+        wheelRewardedSlotState,
+        wheelRewardedSlotsMarkup,
+        watchWheelRewardedAdSlot,
         watchAdsgramRewardedAd,
         WHEEL_ADSGRAM_BLOCK_ID,
+        WHEEL_REWARDED_ADS,
     };
 }
