@@ -9,15 +9,36 @@
         Object.freeze({ id: "3", label: "Watch Ad #3", provider: "ADSGRAM", fallbackProviders: Object.freeze(["MONETAG"]) }),
     ]);
 
+    function providerLog(level, event, detail = {}) {
+        root?.console?.[level]?.(`[WheelAds] ${event}`, detail);
+    }
+
+    function providerError(error) {
+        return {
+            name: error?.name || "Error",
+            code: error?.code || null,
+            message: error?.message || String(error),
+        };
+    }
+
+    function requireRewardedResult(result, providerName) {
+        if (result?.done === true && result?.error !== true) return result;
+        const error = new Error(`${providerName} reklama reward bermadi.`);
+        error.code = `${providerName}_NOT_REWARDED`;
+        throw error;
+    }
+
     const AdsgramProvider = Object.freeze({
         getName: () => "ADSGRAM",
         isAvailable: (adapters = {}) => adapters.ADSGRAM_AVAILABLE !== false
             && typeof adapters.ADSGRAM === "function",
         showRewarded: async (adapters = {}) => {
             if (!AdsgramProvider.isAvailable(adapters)) {
-                throw new Error("Adsgram provider mavjud emas.");
+                const error = new Error("Adsgram provider mavjud emas.");
+                error.code = "ADSGRAM_UNAVAILABLE";
+                throw error;
             }
-            return adapters.ADSGRAM();
+            return requireRewardedResult(await adapters.ADSGRAM(), "ADSGRAM");
         },
     });
 
@@ -26,25 +47,20 @@
         isAvailable: () => typeof root?.show_11422269 === "function",
         showRewarded: async () => {
             if (!MonetagProvider.isAvailable()) {
-                throw new Error("Monetag provider mavjud emas.");
+                const error = new Error("Monetag SDK yuklanmadi.");
+                error.code = "MONETAG_SDK_UNAVAILABLE";
+                throw error;
             }
-            return root.show_11422269("pop");
+            providerLog("info", "monetag_show_called", { zone: "11422269", format: "pop" });
+            await root.show_11422269("pop");
+            providerLog("info", "monetag_show_resolved", { zone: "11422269", format: "pop" });
+            return { done: true, error: false, provider: "MONETAG" };
         },
     });
 
     const providers = Object.freeze({
         ADSGRAM: AdsgramProvider,
-        MONETAG: Object.freeze({
-            getName: MonetagProvider.getName,
-            isAvailable: (adapters = {}) => typeof adapters.MONETAG === "function"
-                && MonetagProvider.isAvailable(),
-            showRewarded: async (adapters = {}) => {
-                if (typeof adapters.MONETAG !== "function" || !MonetagProvider.isAvailable()) {
-                    throw new Error("Monetag provider mavjud emas.");
-                }
-                return adapters.MONETAG();
-            },
-        }),
+        MONETAG: MonetagProvider,
     });
 
     function getSlot(slotId) {
@@ -56,11 +72,33 @@
         if (!slot) throw new Error("Rewarded reklama sloti topilmadi.");
 
         const providerNames = [slot.provider, ...(slot.fallbackProviders || [])];
-        const provider = providerNames
-            .map((name) => providers[name])
-            .find((candidate) => candidate?.isAvailable(adapters));
-        if (!provider) throw new Error("Rewarded reklama provideri mavjud emas.");
-        return provider.showRewarded(adapters);
+        let lastError = null;
+
+        for (const providerName of providerNames) {
+            const provider = providers[providerName];
+            if (!provider?.isAvailable(adapters)) {
+                providerLog("warn", "provider_unavailable", { provider: providerName, slotId: slot.id });
+                continue;
+            }
+
+            providerLog("info", "provider_attempt", { provider: providerName, slotId: slot.id });
+            try {
+                const result = await provider.showRewarded(adapters);
+                providerLog("info", "provider_success", { provider: providerName, slotId: slot.id });
+                return result;
+            } catch (error) {
+                lastError = error;
+                providerLog("warn", "provider_failed", {
+                    provider: providerName,
+                    slotId: slot.id,
+                    error: providerError(error),
+                });
+            }
+        }
+
+        const error = lastError || new Error("Rewarded reklama provideri mavjud emas.");
+        providerLog("error", "fallback_exhausted", { slotId: slot.id, error: providerError(error) });
+        throw error;
     }
 
     return Object.freeze({

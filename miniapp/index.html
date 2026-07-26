@@ -10,11 +10,74 @@
     <title>LEVEL_GROUP</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+    <script>
+        (() => {
+            const sdkUrl = "https://libtl.com/sdk.js";
+            const audit = (event, detail = {}) => {
+                console.info(`[MonetagSDK] ${event}`, detail);
+            };
+            const originalConsoleError = console.error.bind(console);
+            console.error = (...args) => {
+                audit("console_error", { args });
+                originalConsoleError(...args);
+            };
+            const resourceStatus = () => {
+                const entry = performance.getEntriesByName(sdkUrl, "resource").at(-1);
+                return entry ? {
+                    responseStatus: entry.responseStatus ?? null,
+                    duration: entry.duration,
+                    transferSize: entry.transferSize,
+                } : null;
+            };
+
+            window.__monetagSdkAudit = {
+                onload() {
+                    audit("script_onload", {
+                        script: document.querySelector('script[src*="libtl.com"]'),
+                        globalType: typeof window.show_11422269,
+                        request: resourceStatus(),
+                    });
+                },
+                onerror(event) {
+                    audit("script_onerror", {
+                        message: event?.message || "SDK resource load failed",
+                        globalType: typeof window.show_11422269,
+                        request: resourceStatus(),
+                    });
+                },
+            };
+
+            window.addEventListener("error", (event) => {
+                audit("window_error", {
+                    message: event.message,
+                    source: event.filename,
+                    line: event.lineno,
+                    column: event.colno,
+                    error: event.error?.stack || null,
+                });
+            });
+            window.addEventListener("unhandledrejection", (event) => {
+                audit("console_error", {
+                    type: "unhandledrejection",
+                    reason: event.reason?.stack || event.reason?.message || String(event.reason),
+                });
+            });
+            window.addEventListener("DOMContentLoaded", () => {
+                audit("runtime_state", {
+                    script: document.querySelector('script[src*="libtl.com"]'),
+                    globalType: typeof window.show_11422269,
+                    request: resourceStatus(),
+                });
+            }, { once: true });
+        })();
+    </script>
     <script
         src="https://libtl.com/sdk.js"
         data-zone="11422269"
         data-sdk="show_11422269"
         defer
+        onload="window.__monetagSdkAudit.onload()"
+        onerror="window.__monetagSdkAudit.onerror(event)"
     ></script>
     <link rel="stylesheet" href="design-tokens.css?v=1.0.0">
     <link rel="stylesheet" href="style.css">
