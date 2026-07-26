@@ -614,6 +614,7 @@ async function watchWheelRewardedAdSlot(slotId) {
 
     try {
         await WHEEL_REWARDED_ADS.run(slotId, {
+            ADSGRAM_AVAILABLE: Boolean(globalThis.Adsgram?.init),
             ADSGRAM: async () => {
                 const controller = getWheelAdsgramController();
                 return runAdsgramRewardedFlow({
@@ -626,6 +627,14 @@ async function watchWheelRewardedAdSlot(slotId) {
                     },
                 });
             },
+            MONETAG: async () => runAdsgramRewardedFlow({
+                createSession: createAdsgramRewardSession,
+                showAd: async () => {
+                    await WHEEL_REWARDED_ADS.MonetagProvider.showRewarded();
+                    return { done: true, error: false };
+                },
+                claimReward: claimAdsgramRewardWithRetry,
+            }),
         });
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
         await refreshWheelState();
