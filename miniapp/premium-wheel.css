@@ -14,3 +14,25 @@
 @media(min-width:520px){.wheel-v2 .wheel-stage{width:min(84vw,450px)}}
 @media(prefers-reduced-motion:reduce){.premium-wheel-visual::after,.wheel-v2 .wheel-stage::before,.wheel-v2-logo,.wheel-v2-rotor.is-spinning~.wheel-v2-pointer,.wheel-v2-disc:has(.wheel-v2-rotor.is-spinning)::before,.wheel-v2-disc:has(.wheel-v2-rotor.is-spinning)::after,.wheel-last-win>i,.wheel-spin-button::after,.wheel-spin-button.is-loading::before{animation:none!important}.wheel-v2-rotor.is-spinning{transition-duration:.12s}.wheel-spin-button,.wheel-stats article{transition:none}}
 html.design-low-motion .premium-wheel-visual::after,html.design-low-motion .wheel-v2-disc::after{display:none}html.design-low-motion .premium-wheel-visual::before{filter:none;opacity:.45}html.design-low-motion .wheel-stats,html.design-low-motion .wheel-result-backdrop{backdrop-filter:none}
+
+
+/* Rewarded ads slots */
+.wheel-rewarded-card{grid-column:1/-1!important;min-height:auto!important;padding:14px!important;align-items:start!important}
+.wheel-rewarded-card>i{position:absolute;left:14px;top:13px}
+.wheel-rewarded-card>span{padding-left:34px;letter-spacing:.08em}
+.wheel-rewarded-card>em{top:13px!important;right:14px!important}
+.wheel-rewarded-card>#wheelAdCountdown{display:none!important}
+.wheel-ad-slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;margin-top:12px}
+.wheel-ad-slot{position:relative;display:grid;grid-template-columns:auto 1fr;grid-template-areas:"icon title" "icon status";gap:2px 8px;min-width:0;min-height:68px;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025));color:#fff;text-align:left;box-shadow:inset 0 1px rgba(255,255,255,.07),0 10px 25px rgba(0,0,0,.16);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease,filter .18s ease}
+.wheel-ad-slot>span{grid-area:icon;align-self:center;display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:rgba(239,51,79,.13);font-size:15px}
+.wheel-ad-slot>b{grid-area:title;align-self:end;overflow:hidden;font-size:10px;line-height:1.2;white-space:nowrap;text-overflow:ellipsis}
+.wheel-ad-slot>small{grid-area:status;align-self:start;min-width:0;color:rgba(255,255,255,.62);font-size:8px;line-height:1.25}
+.wheel-ad-slot.is-ready{border-color:rgba(52,211,153,.38);background:radial-gradient(circle at 85% 0,rgba(52,211,153,.18),transparent 50%),linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.03));box-shadow:inset 0 1px rgba(255,255,255,.1),0 10px 28px rgba(16,185,129,.13)}
+.wheel-ad-slot.is-ready>small{color:#86efac}
+.wheel-ad-slot.is-ready:not(:disabled):active{transform:translateY(1px) scale(.985)}
+.wheel-ad-slot.is-pending{border-color:rgba(250,204,21,.32);box-shadow:0 0 24px rgba(250,204,21,.1)}
+.wheel-ad-slot.is-cooldown,.wheel-ad-slot.is-claimed,.wheel-ad-slot.is-disabled{filter:saturate(.55);opacity:.68}
+.wheel-ad-slot:disabled{cursor:not-allowed}
+.wheel-ad-slot:focus-visible{outline:2px solid var(--lg-color-info);outline-offset:2px}
+@media(max-width:390px){.wheel-ad-slots{grid-template-columns:1fr}.wheel-ad-slot{min-height:62px}.wheel-ad-slot>b{font-size:11px}.wheel-ad-slot>small{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.wheel-ad-slot{transition:none}}
