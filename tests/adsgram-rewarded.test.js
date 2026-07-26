@@ -141,3 +141,99 @@ test("provider module loads before the Wheel page controller", () => {
     assert.ok(providerAt >= 0);
     assert.ok(wheelAt > providerAt);
 });
+
+
+test("Monetag SDK uses the production zone and secure URL", () => {
+    const html = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
+    assert.match(html, /src="https:\/\/libtl\.com\/sdk\.js"/);
+    assert.match(html, /data-zone="11422269"/);
+    assert.match(html, /data-sdk="show_11422269"/);
+});
+
+test("Adsgram remains the first rewarded provider when available", async () => {
+    const selected = [];
+    await WHEEL_REWARDED_ADS.run("1", {
+        ADSGRAM_AVAILABLE: true,
+        ADSGRAM: async () => selected.push("ADSGRAM"),
+        MONETAG: async () => selected.push("MONETAG"),
+    });
+    assert.deepEqual(selected, ["ADSGRAM"]);
+});
+
+test("Monetag is selected automatically when Adsgram is unavailable", async () => {
+    const previous = globalThis.show_11422269;
+    const selected = [];
+    globalThis.show_11422269 = async (format) => {
+        assert.equal(format, "pop");
+        selected.push("MONETAG");
+    };
+
+    try {
+        await WHEEL_REWARDED_ADS.run("2", {
+            ADSGRAM_AVAILABLE: false,
+            ADSGRAM: async () => selected.push("ADSGRAM"),
+            MONETAG: () => WHEEL_REWARDED_ADS.MonetagProvider.showRewarded(),
+        });
+        assert.deepEqual(selected, ["MONETAG"]);
+        assert.equal(WHEEL_REWARDED_ADS.MonetagProvider.getName(), "MONETAG");
+        assert.equal(WHEEL_REWARDED_ADS.MonetagProvider.isAvailable(), true);
+    } finally {
+        if (previous === undefined) delete globalThis.show_11422269;
+        else globalThis.show_11422269 = previous;
+    }
+});
+
+test("Monetag completion claims the existing backend reward exactly once", async () => {
+    const previous = globalThis.show_11422269;
+    let claims = 0;
+    globalThis.show_11422269 = async (format) => {
+        assert.equal(format, "pop");
+    };
+
+    try {
+        await runAdsgramRewardedFlow({
+            createSession: async () => ({ token: "monetag-one-time-token" }),
+            showAd: async () => {
+                await WHEEL_REWARDED_ADS.MonetagProvider.showRewarded();
+                return { done: true, error: false };
+            },
+            claimReward: async (token) => {
+                claims += 1;
+                assert.equal(token, "monetag-one-time-token");
+                return { remaining_ad_spins: 1 };
+            },
+        });
+        assert.equal(claims, 1);
+    } finally {
+        if (previous === undefined) delete globalThis.show_11422269;
+        else globalThis.show_11422269 = previous;
+    }
+});
+
+test("Monetag rejection never claims a reward", async () => {
+    const previous = globalThis.show_11422269;
+    let claims = 0;
+    globalThis.show_11422269 = async () => {
+        throw new Error("monetag-cancel");
+    };
+
+    try {
+        await assert.rejects(
+            runAdsgramRewardedFlow({
+                createSession: async () => ({ token: "unused-monetag-token" }),
+                showAd: async () => {
+                    await WHEEL_REWARDED_ADS.MonetagProvider.showRewarded();
+                    return { done: true, error: false };
+                },
+                claimReward: async () => {
+                    claims += 1;
+                },
+            }),
+            /monetag-cancel/,
+        );
+        assert.equal(claims, 0);
+    } finally {
+        if (previous === undefined) delete globalThis.show_11422269;
+        else globalThis.show_11422269 = previous;
+    }
+});
