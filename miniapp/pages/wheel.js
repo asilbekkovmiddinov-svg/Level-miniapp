@@ -417,7 +417,7 @@ function wheelRewardedSlotState(state, slotId, now = wheelNow()) {
         };
     }
     if (state.adRewardReady) {
-        return { disabled: false, status: "1 ta spin olish", tone: "is-ready" };
+        return { disabled: false, status: "Get 1 Spin", tone: "is-ready" };
     }
     if (state.adCooldown && state.adAt) {
         return {
@@ -439,7 +439,7 @@ function wheelRewardedSlotsMarkup(state, now = wheelNow()) {
             data-wheel-ad-slot="${escapeWheelAttribute(slot.id)}"
             onclick="watchWheelRewardedAdSlot('${escapeWheelAttribute(slot.id)}')"
             ${view.disabled ? "disabled" : ""}>
-            <span aria-hidden="true">📺</span>
+            <span aria-hidden="true">🎥</span>
             <b>${escapeWheelText(slot.label)}</b>
             <small data-wheel-ad-slot-status>${escapeWheelText(view.status)}</small>
         </button>`;
@@ -556,16 +556,6 @@ function registerWheelAdsgramNoFillDiagnostics(controller) {
     return controller;
 }
 
-function showWheelNoAdsAvailableDialog() {
-    const message = "Oops! No ads available at the moment";
-    const webApp = globalThis.Telegram?.WebApp;
-    if (typeof webApp?.showAlert === "function") {
-        webApp.showAlert(message);
-        return;
-    }
-    globalThis.alert?.(message);
-}
-
 function getWheelAdsgramController() {
     if (wheelAdsgramController) return wheelAdsgramController;
     if (!globalThis.Adsgram?.init) throw new Error("Adsgram SDK yuklanmadi.");
@@ -630,7 +620,7 @@ async function watchWheelRewardedAdSlot(slotId) {
     wheelAdsgramPending = true;
     wheelActiveAdSlot = String(slotId);
     updateWheelRewardedSlots(wheelCooldownSnapshot);
-    if (hint) hint.textContent = `Watch Ad #${slotId} tayyorlanmoqda`;
+    if (hint) hint.textContent = "Reklama tayyorlanmoqda";
 
     try {
         await runAdsgramRewardedFlow({
@@ -652,7 +642,6 @@ async function watchWheelRewardedAdSlot(slotId) {
         await refreshWheelState();
     } catch (error) {
         if (hint) hint.textContent = error?.message || "Reklama yakunlanmadi";
-        if (error?.code === "REWARDED_FALLBACK_EXHAUSTED") showWheelNoAdsAvailableDialog();
         await refreshWheelState();
     } finally {
         wheelAdsgramPending = false;
@@ -1049,7 +1038,6 @@ if (typeof module !== "undefined") {
         wheelPageMarkup,
         getWheelAdsgramController,
         registerWheelAdsgramNoFillDiagnostics,
-        showWheelNoAdsAvailableDialog,
         claimAdsgramRewardWithRetry,
         runAdsgramRewardedFlow,
         wheelRewardedSlotState,
