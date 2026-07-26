@@ -613,28 +613,20 @@ async function watchWheelRewardedAdSlot(slotId) {
     if (hint) hint.textContent = `Watch Ad #${slotId} tayyorlanmoqda`;
 
     try {
-        await WHEEL_REWARDED_ADS.run(slotId, {
-            ADSGRAM_AVAILABLE: Boolean(globalThis.Adsgram?.init),
-            ADSGRAM: async () => {
-                const controller = getWheelAdsgramController();
-                return runAdsgramRewardedFlow({
-                    createSession: createAdsgramRewardSession,
-                    showAd: () => controller.show(),
-                    claimReward: claimAdsgramRewardWithRetry,
-                    onTimeout: () => {
-                        controller.destroy?.();
-                        wheelAdsgramController = null;
-                    },
-                });
-            },
-            MONETAG: async () => runAdsgramRewardedFlow({
-                createSession: createAdsgramRewardSession,
-                showAd: async () => {
-                    await WHEEL_REWARDED_ADS.MonetagProvider.showRewarded();
-                    return { done: true, error: false };
+        await runAdsgramRewardedFlow({
+            createSession: createAdsgramRewardSession,
+            showAd: () => WHEEL_REWARDED_ADS.run(slotId, {
+                ADSGRAM_AVAILABLE: Boolean(globalThis.Adsgram?.init),
+                ADSGRAM: async () => {
+                    const controller = getWheelAdsgramController();
+                    return controller.show();
                 },
-                claimReward: claimAdsgramRewardWithRetry,
             }),
+            claimReward: claimAdsgramRewardWithRetry,
+            onTimeout: () => {
+                wheelAdsgramController?.destroy?.();
+                wheelAdsgramController = null;
+            },
         });
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
         await refreshWheelState();
