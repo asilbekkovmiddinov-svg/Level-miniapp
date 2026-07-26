@@ -7,6 +7,7 @@ const {
     runAdsgramRewardedFlow,
     wheelRewardedSlotState,
     wheelRewardedSlotsMarkup,
+    registerWheelAdsgramNoFillDiagnostics,
     WHEEL_ADSGRAM_BLOCK_ID,
     WHEEL_REWARDED_ADS,
 } = require("../miniapp/pages/wheel.js");
@@ -308,6 +309,69 @@ test("fallback completion performs one backend claim for one session", async () 
         if (previous === undefined) delete globalThis.show_11422269;
         else globalThis.show_11422269 = previous;
     }
+});
+
+test("Adsgram no-fill listener suppresses the SDK default alert without handling show rejection", async () => {
+    let listenerName = null;
+    let listener = null;
+    const controller = {
+        addEventListener(name, callback) {
+            listenerName = name;
+            listener = callback;
+        },
+        show: async () => {
+            throw new Error("adsgram-no-fill");
+        },
+    };
+    const originalInfo = console.info;
+    const logs = [];
+    console.info = (...args) => logs.push(args);
+
+    try {
+        assert.equal(registerWheelAdsgramNoFillDiagnostics(controller), controller);
+        assert.equal(listenerName, "onBannerNotFound");
+        listener({ description: "No banner found" });
+        assert.equal(logs.length, 1);
+        assert.match(logs[0][0], /adsgram_banner_not_found/);
+        await assert.rejects(controller.show(), /adsgram-no-fill/);
+    } finally {
+        console.info = originalInfo;
+    }
+});
+
+test("fallback exhaustion is tagged only after Adsgram and Monetag both fail", async () => {
+    const previous = globalThis.show_11422269;
+    let adsgramCalls = 0;
+    let monetagCalls = 0;
+    globalThis.show_11422269 = async () => {
+        monetagCalls += 1;
+        throw new Error("monetag-no-fill");
+    };
+
+    try {
+        await assert.rejects(
+            WHEEL_REWARDED_ADS.run("1", {
+                ADSGRAM_AVAILABLE: true,
+                ADSGRAM: async () => {
+                    adsgramCalls += 1;
+                    throw new Error("adsgram-no-fill");
+                },
+            }),
+            (error) => error.code === "REWARDED_FALLBACK_EXHAUSTED"
+                && error.message === "monetag-no-fill",
+        );
+        assert.equal(adsgramCalls, 1);
+        assert.equal(monetagCalls, 1);
+    } finally {
+        if (previous === undefined) delete globalThis.show_11422269;
+        else globalThis.show_11422269 = previous;
+    }
+});
+
+test("general no-ads dialog is gated by fallback_exhausted", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.match(source, /error\?\.code === "REWARDED_FALLBACK_EXHAUSTED"/);
+    assert.match(source, /showWheelNoAdsAvailableDialog\(\)/);
 });
 
 test("provider diagnostics include Monetag SDK call confirmation", () => {
