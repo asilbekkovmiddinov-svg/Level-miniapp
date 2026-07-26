@@ -417,7 +417,7 @@ function wheelRewardedSlotState(state, slotId, now = wheelNow()) {
         };
     }
     if (state.adRewardReady) {
-        return { disabled: false, status: "1 ta spin olish", tone: "is-ready" };
+        return { disabled: false, status: "Get 1 Spin", tone: "is-ready" };
     }
     if (state.adCooldown && state.adAt) {
         return {
@@ -439,7 +439,7 @@ function wheelRewardedSlotsMarkup(state, now = wheelNow()) {
             data-wheel-ad-slot="${escapeWheelAttribute(slot.id)}"
             onclick="watchWheelRewardedAdSlot('${escapeWheelAttribute(slot.id)}')"
             ${view.disabled ? "disabled" : ""}>
-            <span aria-hidden="true">📺</span>
+            <span aria-hidden="true">🎥</span>
             <b>${escapeWheelText(slot.label)}</b>
             <small data-wheel-ad-slot-status>${escapeWheelText(view.status)}</small>
         </button>`;
@@ -546,13 +546,23 @@ function wheelNextSpinHint(state, now = wheelNow()) {
         : "Spin mavjud emas";
 }
 
+function registerWheelAdsgramNoFillDiagnostics(controller) {
+    controller?.addEventListener?.("onBannerNotFound", (event) => {
+        console.info("[WheelAds] adsgram_banner_not_found", {
+            blockId: WHEEL_ADSGRAM_BLOCK_ID,
+            description: event?.description || null,
+        });
+    });
+    return controller;
+}
+
 function getWheelAdsgramController() {
     if (wheelAdsgramController) return wheelAdsgramController;
     if (!globalThis.Adsgram?.init) throw new Error("Adsgram SDK yuklanmadi.");
-    wheelAdsgramController = globalThis.Adsgram.init({
+    wheelAdsgramController = registerWheelAdsgramNoFillDiagnostics(globalThis.Adsgram.init({
         blockId: WHEEL_ADSGRAM_BLOCK_ID,
         debug: false,
-    });
+    }));
     return wheelAdsgramController;
 }
 
@@ -610,7 +620,7 @@ async function watchWheelRewardedAdSlot(slotId) {
     wheelAdsgramPending = true;
     wheelActiveAdSlot = String(slotId);
     updateWheelRewardedSlots(wheelCooldownSnapshot);
-    if (hint) hint.textContent = `Watch Ad #${slotId} tayyorlanmoqda`;
+    if (hint) hint.textContent = "Reklama tayyorlanmoqda";
 
     try {
         await runAdsgramRewardedFlow({
@@ -1027,6 +1037,7 @@ if (typeof module !== "undefined") {
         wheelDiscMarkup,
         wheelPageMarkup,
         getWheelAdsgramController,
+        registerWheelAdsgramNoFillDiagnostics,
         claimAdsgramRewardWithRetry,
         runAdsgramRewardedFlow,
         wheelRewardedSlotState,
