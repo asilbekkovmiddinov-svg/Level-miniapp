@@ -259,7 +259,7 @@ test("Adsgram rejection does not automatically call Monetag", async () => {
     }
 });
 
-test("Monetag rejection does not automatically call Adsgram", async () => {
+test("Monetag Promise rejection remains diagnostic and does not call Adsgram", async () => {
     const previous = globalThis.show_11422269;
     let adsgramCalls = 0;
     globalThis.show_11422269 = async () => {
@@ -267,17 +267,16 @@ test("Monetag rejection does not automatically call Adsgram", async () => {
     };
 
     try {
-        await assert.rejects(
-            WHEEL_REWARDED_ADS.run("2", {
-                ymid: "11111111-2222-4333-8444-555555555555",
-                ADSGRAM_AVAILABLE: true,
-                ADSGRAM: async () => {
-                    adsgramCalls += 1;
-                    return { done: true, error: false };
-                },
-            }),
-            /monetag-reject/,
-        );
+        const result = await WHEEL_REWARDED_ADS.run("2", {
+            ymid: "11111111-2222-4333-8444-555555555555",
+            ADSGRAM_AVAILABLE: true,
+            ADSGRAM: async () => {
+                adsgramCalls += 1;
+                return { done: true, error: false };
+            },
+        });
+        await Promise.resolve();
+        assert.equal(result.shown, true);
         assert.equal(adsgramCalls, 0);
     } finally {
         if (previous === undefined) delete globalThis.show_11422269;

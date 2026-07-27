@@ -57,12 +57,19 @@
                 error.code = "MONETAG_YMID_REQUIRED";
                 throw error;
             }
-            await root.show_11422269({
+            const popup = root.show_11422269({
                 type: "pop",
                 ymid,
                 requestVar: "wheel_reward",
             });
-            providerLog("info", "monetag_show_resolved", { zone: "11422269", format: "pop" });
+            Promise.resolve(popup).then(
+                () => providerLog("info", "monetag_show_resolved", { zone: "11422269", format: "pop" }),
+                (error) => providerLog("warn", "monetag_show_rejected", {
+                    zone: "11422269",
+                    format: "pop",
+                    error: providerError(error),
+                }),
+            );
             return { shown: true, provider: "MONETAG" };
         },
     });
