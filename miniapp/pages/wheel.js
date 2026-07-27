@@ -695,6 +695,7 @@ async function watchWheelRewardedAdSlot(slotId) {
         });
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
         await refreshWheelState();
+        await spinFreeWheel("AD");
     } catch (error) {
         if (hint) hint.textContent = error?.message || "Reklama yakunlanmadi";
         await refreshWheelState();
