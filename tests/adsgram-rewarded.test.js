@@ -274,12 +274,20 @@ test("dormant Monetag Promise rejection remains diagnostic", async () => {
     }
 });
 
-test("Adsgram reward immediately starts exactly one AD wheel spin", () => {
+test("Adsgram reward becomes a ready spin without automatic wheel rotation", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
-    assert.match(
-        source,
-        /await runAdsgramRewardedFlow\([\s\S]*?await refreshWheelState\(\);\s*await spinFreeWheel\("AD"\);/,
+    const adsgramSuccess = source.match(
+        /await runAdsgramRewardedFlow\([\s\S]*?if \(hint\) hint\.textContent = "1 ta Ad Spin qo‘shildi";([\s\S]*?)\} catch/,
     );
+    assert.ok(adsgramSuccess);
+    assert.match(adsgramSuccess[1], /await refreshWheelState\(\);/);
+    assert.doesNotMatch(adsgramSuccess[1], /spinFreeWheel/);
+});
+
+test("manual Wheel button click does not pass the browser event as a spin type", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/wheel.js"), "utf8");
+    assert.match(source, /addEventListener\("click", \(\) => spinFreeWheel\(\)\)/);
+    assert.match(source, /typeof arguments\[0\] === "string" \? arguments\[0\] : null/);
 });
 
 test("Adsgram no-fill listener suppresses the SDK default alert without handling show rejection", async () => {

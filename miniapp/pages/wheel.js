@@ -354,7 +354,7 @@ async function loadWheelPage() {
 }
 
 function bindWheelEvents() {
-    document.getElementById("wheelSpinButton")?.addEventListener("click", spinFreeWheel);
+    document.getElementById("wheelSpinButton")?.addEventListener("click", () => spinFreeWheel());
     document.querySelectorAll("[data-wheel-close]").forEach((button) => {
         button.addEventListener("click", closeWheelResult);
     });
@@ -695,7 +695,6 @@ async function watchWheelRewardedAdSlot(slotId) {
         });
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
         await refreshWheelState();
-        await spinFreeWheel("AD");
     } catch (error) {
         if (hint) hint.textContent = error?.message || "Reklama yakunlanmadi";
         await refreshWheelState();
@@ -739,7 +738,7 @@ function wheelSoundCue(type, detail = {}) {
 }
 
 async function spinFreeWheel() {
-    const forcedSpinType = arguments[0] || null;
+    const requestedSpinType = typeof arguments[0] === "string" ? arguments[0] : null;
     if (wheelSpinState.spinning) return;
     const disc = document.getElementById("premiumWheelDisc");
     const button = document.getElementById("wheelSpinButton");
@@ -754,7 +753,7 @@ async function spinFreeWheel() {
     wheelSoundCue("spin");
 
     try {
-        const spinType = forcedSpinType || wheelSpinType(wheelCooldownSnapshot, wheelData);
+        const spinType = requestedSpinType || wheelSpinType(wheelCooldownSnapshot, wheelData);
         const backendResult = await spinProductionWheel(spinType);
         if (!backendResult || backendResult.success === false) throw new Error(backendResult?.message || "Wheel aylantirilmadi.");
         const resultIndex = applyWheelBackendSector(backendResult);
