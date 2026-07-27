@@ -5,7 +5,6 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, (root) => {
     const slots = Object.freeze([
         Object.freeze({ id: "1", label: "Watch Ad", subtitle: "Get 1 Spin", provider: "ADSGRAM" }),
-        Object.freeze({ id: "2", label: "Watch Ad", subtitle: "Get 1 Spin", provider: "MONETAG" }),
     ]);
 
     function providerLog(level, event, detail = {}) {
