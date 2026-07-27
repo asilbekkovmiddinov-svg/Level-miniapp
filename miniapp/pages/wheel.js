@@ -612,6 +612,51 @@ async function runAdsgramRewardedFlow({
     }
 }
 
+function createMonetagYmid() {
+    const ymid = globalThis.crypto?.randomUUID?.();
+    if (!ymid) throw new Error("Xavfsiz reward identifikatori yaratilmadi.");
+    return ymid;
+}
+
+async function pollMonetagRewardStatus(
+    ymid,
+    {
+        getStatus = getMonetagRewardStatus,
+        timeoutMs = 60000,
+        intervalMs = 1000,
+        wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    } = {},
+) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+        const response = await getStatus(ymid);
+        const status = String(response?.status || "").toUpperCase();
+        if (status === "CLAIMED") return response;
+        if (["REJECTED", "EXPIRED"].includes(status)) {
+            throw new Error("Reklama reward tasdiqlanmadi.");
+        }
+        await wait(intervalMs);
+    }
+    const error = new Error("Reklama tasdig‘i 60 soniyada kelmadi.");
+    error.code = "MONETAG_POSTBACK_TIMEOUT";
+    throw error;
+}
+
+async function runMonetagPostbackFlow({
+    createYmid = createMonetagYmid,
+    createSession = createMonetagRewardSession,
+    showAd,
+    pollStatus = pollMonetagRewardStatus,
+}) {
+    const ymid = createYmid();
+    const session = await createSession(ymid);
+    if (session?.ymid !== ymid || session?.status !== "PENDING") {
+        throw new Error("Reward sessiyasi yaratilmadi.");
+    }
+    await showAd(ymid);
+    return pollStatus(ymid);
+}
+
 async function watchWheelRewardedAdSlot(slotId) {
     if (wheelAdsgramPending || !wheelCooldownSnapshot?.adRewardReady) return;
     if (!WHEEL_REWARDED_ADS?.getSlot(slotId)) return;
@@ -623,6 +668,16 @@ async function watchWheelRewardedAdSlot(slotId) {
     if (hint) hint.textContent = "Reklama tayyorlanmoqda";
 
     try {
+        const slot = WHEEL_REWARDED_ADS.getSlot(slotId);
+        if (slot.provider === "MONETAG") {
+            await runMonetagPostbackFlow({
+                showAd: (ymid) => WHEEL_REWARDED_ADS.run(slotId, { ymid }),
+            });
+            if (hint) hint.textContent = "Reward tasdiqlandi";
+            await refreshWheelState();
+            await spinFreeWheel("AD");
+            return;
+        }
         await runAdsgramRewardedFlow({
             createSession: createAdsgramRewardSession,
             showAd: () => WHEEL_REWARDED_ADS.run(slotId, {
@@ -683,6 +738,7 @@ function wheelSoundCue(type, detail = {}) {
 }
 
 async function spinFreeWheel() {
+    const forcedSpinType = arguments[0] || null;
     if (wheelSpinState.spinning) return;
     const disc = document.getElementById("premiumWheelDisc");
     const button = document.getElementById("wheelSpinButton");
@@ -697,7 +753,7 @@ async function spinFreeWheel() {
     wheelSoundCue("spin");
 
     try {
-        const spinType = wheelSpinType(wheelCooldownSnapshot, wheelData);
+        const spinType = forcedSpinType || wheelSpinType(wheelCooldownSnapshot, wheelData);
         const backendResult = await spinProductionWheel(spinType);
         if (!backendResult || backendResult.success === false) throw new Error(backendResult?.message || "Wheel aylantirilmadi.");
         const resultIndex = applyWheelBackendSector(backendResult);
@@ -1040,6 +1096,9 @@ if (typeof module !== "undefined") {
         registerWheelAdsgramNoFillDiagnostics,
         claimAdsgramRewardWithRetry,
         runAdsgramRewardedFlow,
+        createMonetagYmid,
+        pollMonetagRewardStatus,
+        runMonetagPostbackFlow,
         wheelRewardedSlotState,
         wheelRewardedSlotsMarkup,
         watchWheelRewardedAdSlot,

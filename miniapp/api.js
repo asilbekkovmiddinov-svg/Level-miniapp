@@ -291,6 +291,17 @@ async function claimAdsgramReward(token) {
     });
 }
 
+async function createMonetagRewardSession(ymid) {
+    return await walletRequest("/api/ads/monetag/session", {
+        method: "POST",
+        body: { ymid: String(ymid || "") },
+    });
+}
+
+async function getMonetagRewardStatus(ymid) {
+    return await walletRequest(`/api/ads/monetag/status/${encodeURIComponent(String(ymid || ""))}`);
+}
+
 async function getLiveWheelWinners() {
     return await walletRequest("/wheel/winners");
 }
