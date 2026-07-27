@@ -44,16 +44,33 @@
     const MonetagProvider = Object.freeze({
         getName: () => "MONETAG",
         isAvailable: () => typeof root?.show_11422269 === "function",
-        showRewarded: async () => {
+        showRewarded: async (options = {}) => {
             if (!MonetagProvider.isAvailable()) {
                 const error = new Error("Monetag SDK yuklanmadi.");
                 error.code = "MONETAG_SDK_UNAVAILABLE";
                 throw error;
             }
             providerLog("info", "monetag_show_called", { zone: "11422269", format: "pop" });
-            await root.show_11422269({ type: "pop" });
-            providerLog("info", "monetag_show_resolved", { zone: "11422269", format: "pop" });
-            return { done: true, error: false, provider: "MONETAG" };
+            const ymid = String(options.ymid || "");
+            if (!ymid) {
+                const error = new Error("Monetag YMID yaratilmadi.");
+                error.code = "MONETAG_YMID_REQUIRED";
+                throw error;
+            }
+            const popup = root.show_11422269({
+                type: "pop",
+                ymid,
+                requestVar: "wheel_reward",
+            });
+            Promise.resolve(popup).then(
+                () => providerLog("info", "monetag_show_resolved", { zone: "11422269", format: "pop" }),
+                (error) => providerLog("warn", "monetag_show_rejected", {
+                    zone: "11422269",
+                    format: "pop",
+                    error: providerError(error),
+                }),
+            );
+            return { shown: true, provider: "MONETAG" };
         },
     });
 

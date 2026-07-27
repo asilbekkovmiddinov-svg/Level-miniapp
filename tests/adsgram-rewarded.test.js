@@ -5,6 +5,8 @@ const test = require("node:test");
 
 const {
     runAdsgramRewardedFlow,
+    pollMonetagRewardStatus,
+    runMonetagPostbackFlow,
     wheelRewardedSlotState,
     wheelRewardedSlotsMarkup,
     registerWheelAdsgramNoFillDiagnostics,
@@ -175,12 +177,17 @@ test("Monetag card runs only Monetag with the official object API", async () => 
     const previous = globalThis.show_11422269;
     const selected = [];
     globalThis.show_11422269 = async (format) => {
-        assert.deepEqual(format, { type: "pop" });
+        assert.deepEqual(format, {
+            type: "pop",
+            ymid: "11111111-2222-4333-8444-555555555555",
+            requestVar: "wheel_reward",
+        });
         selected.push("MONETAG");
     };
 
     try {
         await WHEEL_REWARDED_ADS.run("2", {
+            ymid: "11111111-2222-4333-8444-555555555555",
             ADSGRAM_AVAILABLE: true,
             ADSGRAM: async () => selected.push("ADSGRAM"),
         });
@@ -193,59 +200,38 @@ test("Monetag card runs only Monetag with the official object API", async () => 
     }
 });
 
-test("Monetag completion claims the existing backend reward exactly once", async () => {
-    const previous = globalThis.show_11422269;
-    let claims = 0;
-    globalThis.show_11422269 = async (format) => {
-        assert.deepEqual(format, { type: "pop" });
-    };
-
-    try {
-        await runAdsgramRewardedFlow({
-            createSession: async () => ({ token: "monetag-one-time-token" }),
-            showAd: async () => {
-                await WHEEL_REWARDED_ADS.MonetagProvider.showRewarded();
-                return { done: true, error: false };
-            },
-            claimReward: async (token) => {
-                claims += 1;
-                assert.equal(token, "monetag-one-time-token");
-                return { remaining_ad_spins: 1 };
-            },
-        });
-        assert.equal(claims, 1);
-    } finally {
-        if (previous === undefined) delete globalThis.show_11422269;
-        else globalThis.show_11422269 = previous;
-    }
+test("Monetag waits for the backend postback and never performs a frontend claim", async () => {
+    const calls = [];
+    const result = await runMonetagPostbackFlow({
+        createYmid: () => "11111111-2222-4333-8444-555555555555",
+        createSession: async (ymid) => {
+            calls.push(["session", ymid]);
+            return { ymid, status: "PENDING" };
+        },
+        showAd: async (ymid) => calls.push(["show", ymid]),
+        pollStatus: async (ymid) => {
+            calls.push(["poll", ymid]);
+            return { ymid, status: "CLAIMED" };
+        },
+    });
+    assert.equal(result.status, "CLAIMED");
+    assert.deepEqual(calls.map(([name]) => name), ["session", "show", "poll"]);
 });
 
-test("Monetag rejection never claims a reward", async () => {
-    const previous = globalThis.show_11422269;
-    let claims = 0;
-    globalThis.show_11422269 = async () => {
-        throw new Error("monetag-cancel");
-    };
-
-    try {
-        await assert.rejects(
-            runAdsgramRewardedFlow({
-                createSession: async () => ({ token: "unused-monetag-token" }),
-                showAd: async () => {
-                    await WHEEL_REWARDED_ADS.MonetagProvider.showRewarded();
-                    return { done: true, error: false };
-                },
-                claimReward: async () => {
-                    claims += 1;
-                },
-            }),
-            /monetag-cancel/,
-        );
-        assert.equal(claims, 0);
-    } finally {
-        if (previous === undefined) delete globalThis.show_11422269;
-        else globalThis.show_11422269 = previous;
-    }
+test("Monetag polling accepts only backend CLAIMED and rejects terminal failures", async () => {
+    let reads = 0;
+    const claimed = await pollMonetagRewardStatus("ymid", {
+        getStatus: async () => ({ status: ++reads === 2 ? "CLAIMED" : "PENDING" }),
+        wait: async () => {},
+    });
+    assert.equal(claimed.status, "CLAIMED");
+    await assert.rejects(
+        pollMonetagRewardStatus("ymid", {
+            getStatus: async () => ({ status: "REJECTED" }),
+            wait: async () => {},
+        }),
+        /tasdiqlanmadi/,
+    );
 });
 
 
@@ -273,7 +259,7 @@ test("Adsgram rejection does not automatically call Monetag", async () => {
     }
 });
 
-test("Monetag rejection does not automatically call Adsgram", async () => {
+test("Monetag Promise rejection remains diagnostic and does not call Adsgram", async () => {
     const previous = globalThis.show_11422269;
     let adsgramCalls = 0;
     globalThis.show_11422269 = async () => {
@@ -281,16 +267,16 @@ test("Monetag rejection does not automatically call Adsgram", async () => {
     };
 
     try {
-        await assert.rejects(
-            WHEEL_REWARDED_ADS.run("2", {
-                ADSGRAM_AVAILABLE: true,
-                ADSGRAM: async () => {
-                    adsgramCalls += 1;
-                    return { done: true, error: false };
-                },
-            }),
-            /monetag-reject/,
-        );
+        const result = await WHEEL_REWARDED_ADS.run("2", {
+            ymid: "11111111-2222-4333-8444-555555555555",
+            ADSGRAM_AVAILABLE: true,
+            ADSGRAM: async () => {
+                adsgramCalls += 1;
+                return { done: true, error: false };
+            },
+        });
+        await Promise.resolve();
+        assert.equal(result.shown, true);
         assert.equal(adsgramCalls, 0);
     } finally {
         if (previous === undefined) delete globalThis.show_11422269;
