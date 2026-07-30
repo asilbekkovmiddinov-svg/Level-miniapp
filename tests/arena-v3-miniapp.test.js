@@ -9,6 +9,10 @@ const {
     normalizeArenaV3Match,
     ARENA_V3_TIMELINE,
     arenaV3StatusIndex,
+    arenaV3ScreenshotSeconds,
+    arenaV3AIVisualStep,
+    normalizeArenaV3Screenshot,
+    normalizeArenaV3Result,
 } = require("../miniapp/pages/arena-v3.js");
 
 function response(payload, status = 200) {
@@ -229,5 +233,135 @@ test("Sprint 2 styles cover phone, desktop, transitions and action loading", () 
     assert.match(css, /arena-v3x-spinner/);
     assert.match(css, /@media\(max-width:380px\)/);
     assert.match(css, /@media\(min-width:680px\)/);
+    assert.match(css, /prefers-reduced-motion:reduce/);
+});
+
+test("screenshot upload accepts PNG and reports multipart progress", async () => {
+    const listeners = {};
+    const uploadListeners = {};
+    const xhr = {
+        status: 201,
+        response: {
+            id: 31, match_id: 17, player_id: 1, mime_type: "image/png",
+            file_size: 100, width: 1280, height: 720,
+            validation_status: "PENDING", uploaded_at: "2026-07-30T10:02:00Z",
+        },
+        upload: { addEventListener: (name, handler) => { uploadListeners[name] = handler; } },
+        open(method, url) { this.method = method; this.url = url; },
+        setRequestHeader(name, value) { (this.headers ||= {})[name] = value; },
+        addEventListener(name, handler) { listeners[name] = handler; },
+        send(body) {
+            this.body = body;
+            uploadListeners.progress({ lengthComputable: true, loaded: 50, total: 100 });
+            listeners.load();
+        },
+    };
+    const progress = [];
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        xhrFactory: () => xhr,
+    });
+    const file = new Blob(["png"], { type: "image/png" });
+    Object.defineProperty(file, "name", { value: "result.png" });
+    const result = await client.uploadScreenshot(17, file, (value) => progress.push(value));
+    assert.equal(xhr.method, "POST");
+    assert.equal(xhr.url, "/arena/17/upload-screenshot");
+    assert.equal(xhr.headers["X-Telegram-Init-Data"], "auth");
+    assert.match(xhr.headers["Idempotency-Key"], /^arena-v3-screenshot-17-/);
+    assert.ok(xhr.body instanceof FormData);
+    assert.deepEqual(progress, [50, 100]);
+    assert.equal(result.validationStatus, "PENDING");
+});
+
+test("screenshot upload rejects unsupported files before XHR", async () => {
+    let created = false;
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        xhrFactory: () => {
+            created = true;
+            return {};
+        },
+    });
+    await assert.rejects(
+        () => client.uploadScreenshot(17, { type: "image/webp", name: "x.webp" }),
+        /PNG yoki JPEG/,
+    );
+    assert.equal(created, false);
+});
+
+test("screenshot list and public result use authenticated user routes", async () => {
+    const calls = [];
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async (url) => {
+            calls.push(url);
+            if (url.endsWith("/screenshots")) return response({ screenshots: [{
+                id: 31, match_id: 17, player_id: 1, mime_type: "image/jpeg",
+                file_size: 100, width: 1280, height: 720,
+                validation_status: "VALID", uploaded_at: "2026-07-30T10:02:00Z",
+            }] });
+            return response({ match: { ...match, status: "FINISHED" }, ai_review: {
+                id: 9, match_id: 17, status: "COMPLETED", winner_player_id: 1,
+                score: "2-1", confidence: "0.96", reason: "Matching evidence",
+                conflict_type: null, started_at: "2026-07-30T10:03:00Z",
+                completed_at: "2026-07-30T10:03:10Z",
+            } });
+        },
+    });
+    assert.equal((await client.screenshots(17))[0].mimeType, "image/jpeg");
+    const result = await client.result(17);
+    assert.equal(result.aiReview.score, "2-1");
+    assert.equal(result.aiReview.confidence, 0.96);
+    assert.deepEqual(calls, ["/arena/17/screenshots", "/arena/17/result"]);
+});
+
+test("60 second screenshot countdown is deterministic", () => {
+    const started = "2026-07-30T10:00:00.000Z";
+    assert.equal(arenaV3ScreenshotSeconds({ playingStartedAt: started }, Date.parse(started)), 60);
+    assert.equal(arenaV3ScreenshotSeconds({ playingStartedAt: started }, Date.parse(started) + 45000), 15);
+    assert.equal(arenaV3ScreenshotSeconds({ playingStartedAt: started }, Date.parse(started) + 61000), 0);
+});
+
+test("AI review presentation follows backend state without settlement actions", () => {
+    assert.equal(arenaV3AIVisualStep(null), 0);
+    assert.equal(arenaV3AIVisualStep({ status: "PENDING" }), 0);
+    assert.equal(arenaV3AIVisualStep({ status: "COMPLETED" }), 4);
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
+    for (const label of ["Uploading", "Validating", "Analyzing", "Comparing", "Finalizing"]) {
+        assert.match(source, new RegExp(label));
+    }
+    assert.match(source, /APPEAL_REQUIRED/);
+    assert.doesNotMatch(source, /\/settle|\/payout|walletRequest/);
+});
+
+test("result normalization preserves winner score confidence and failure reason", () => {
+    const result = normalizeArenaV3Result({
+        match: { ...match, status: "FINISHED" },
+        ai_review: {
+            id: 9, status: "COMPLETED", winner_player_id: 1, score: "3-2",
+            confidence: "0.91", reason: "Both screenshots agree",
+        },
+    });
+    assert.equal(result.aiReview.winnerPlayerId, 1);
+    assert.equal(result.aiReview.score, "3-2");
+    assert.equal(result.aiReview.confidence, 0.91);
+    assert.equal(normalizeArenaV3Screenshot({
+        id: 1, player_id: 2, validation_status: "PENDING",
+    }).playerId, 2);
+});
+
+test("Sprint 3 UI includes preview progress AI result and responsive states", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
+    const css = fs.readFileSync(path.join(__dirname, "../miniapp/arena-v3.css"), "utf8");
+    assert.match(source, /accept="image\/png,image\/jpeg"/);
+    assert.match(source, /Screenshot preview/);
+    assert.match(source, /Upload Screenshot/);
+    assert.match(source, /AI VERIFIED RESULT/);
+    assert.match(source, /Appeal yuborish keyingi sprintda/);
+    assert.doesNotMatch(source, /video-appeal/);
+    assert.match(css, /arena-v3x-upload-progress/);
+    assert.match(css, /arena-v3x-ai-orb/);
+    assert.match(css, /arena-v3x-result/);
+    assert.match(css, /@media\(max-width:380px\)/);
     assert.match(css, /prefers-reduced-motion:reduce/);
 });
