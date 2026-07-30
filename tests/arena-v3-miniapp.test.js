@@ -294,6 +294,70 @@ test("screenshot upload rejects unsupported files before XHR", async () => {
     assert.equal(created, false);
 });
 
+test("screenshot upload exposes backend HTTP status and response detail", async () => {
+    const listeners = {};
+    const xhr = {
+        status: 409,
+        response: { detail: "Screenshot already uploaded" },
+        upload: { addEventListener() {} },
+        open() {},
+        setRequestHeader() {},
+        addEventListener(name, handler) { listeners[name] = handler; },
+        send() { listeners.load(); },
+    };
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        xhrFactory: () => xhr,
+    });
+    const file = new Blob(["png"], { type: "image/png" });
+    Object.defineProperty(file, "name", { value: "result.png" });
+
+    await assert.rejects(
+        client.uploadScreenshot(17, file),
+        (error) => error.status === 409
+            && error.message === "409 Conflict: Screenshot already uploaded",
+    );
+    assert.equal(xhr.timeout, 120000);
+});
+
+test("screenshot upload separates status zero, timeout and file limit errors", async () => {
+    const makeClient = (event) => new ArenaV3Client({
+        initDataProvider: () => "auth",
+        xhrFactory: () => {
+            const listeners = {};
+            return {
+                status: 0,
+                response: null,
+                upload: { addEventListener() {} },
+                open() {},
+                setRequestHeader() {},
+                addEventListener(name, handler) { listeners[name] = handler; },
+                send() { listeners[event](); },
+            };
+        },
+    });
+    const file = new Blob(["png"], { type: "image/png" });
+    Object.defineProperty(file, "name", { value: "result.png" });
+
+    await assert.rejects(
+        makeClient("error").uploadScreenshot(17, file),
+        (error) => error.status === 0 && /HTTP status 0/.test(error.message),
+    );
+    await assert.rejects(
+        makeClient("timeout").uploadScreenshot(17, file),
+        (error) => error.status === 408 && /Upload timeout/.test(error.message),
+    );
+
+    const oversized = new Blob([new Uint8Array((5 * 1024 * 1024) + 1)], {
+        type: "image/jpeg",
+    });
+    Object.defineProperty(oversized, "name", { value: "large.jpg" });
+    await assert.rejects(
+        makeClient("load").uploadScreenshot(17, oversized),
+        (error) => error.status === 413 && /5 MB/.test(error.message),
+    );
+});
+
 test("Sprint 4 profile and paginated history use authenticated contracts", async () => {
     const calls = [];
     const client = new ArenaV3Client({
