@@ -13,6 +13,9 @@ const {
     arenaV3AIVisualStep,
     normalizeArenaV3Screenshot,
     normalizeArenaV3Result,
+    normalizeArenaV3Profile,
+    normalizeArenaV3RankingPlayer,
+    arenaV3Track,
 } = require("../miniapp/pages/arena-v3.js");
 
 function response(payload, status = 200) {
@@ -146,12 +149,11 @@ test("responsive, dark glass, skeleton and reduced-motion styles are present", (
     assert.match(css, /prefers-reduced-motion:reduce/);
 });
 
-test("deferred modules are cards only and make no backend calls", () => {
+test("Sprint 4 profile history and ranking cards are enabled", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
-    assert.match(source, /\["history".+false\]/);
-    assert.match(source, /\["ranking".+false\]/);
-    assert.match(source, /\["profile".+false\]/);
-    assert.doesNotMatch(source, /request\("\/arena\/(?:history|ranking|profile|room-code|upload-screenshot)/);
+    assert.match(source, /\["history".+true\]/);
+    assert.match(source, /\["ranking".+true\]/);
+    assert.match(source, /\["profile".+true\]/);
 });
 
 test("match detail, ready, room code and cancel use exact V3 contracts", async () => {
@@ -221,9 +223,10 @@ test("Sprint 2 UI contains detail, ready, room, playing and cancel states", () =
     assert.match(source, /}, 5000\);/);
 });
 
-test("Sprint 2 keeps deferred flows out of V3 requests", () => {
+test("Sprint 2 backend mutation contracts remain unchanged", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
-    assert.doesNotMatch(source, /request\([^)]*\/(?:upload-screenshot|ai-result|result|history|ranking|profile)/);
+    assert.match(source, /request\(`\/arena\/\$\{Number\(matchId\)\}\/room-code`/);
+    assert.match(source, /request\(`\/arena\/\$\{Number\(matchId\)\}\/cancel`/);
 });
 
 test("Sprint 2 styles cover phone, desktop, transitions and action loading", () => {
@@ -287,6 +290,114 @@ test("screenshot upload rejects unsupported files before XHR", async () => {
         /PNG yoki JPEG/,
     );
     assert.equal(created, false);
+});
+
+test("Sprint 4 profile and paginated history use authenticated contracts", async () => {
+    const calls = [];
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async (url) => {
+            calls.push(url);
+            if (url === "/arena/profile") return response({
+                player_id: 1, total_matches: 8, wins: 5, losses: 2, draws: 1,
+                goals_for: 15, goals_against: 9, win_rate: "62.50",
+                current_streak: 2, best_streak: 4, total_efc_won: "900",
+                total_efc_lost: "200",
+            });
+            return response({ matches: [{ ...match, status: "FINISHED" }] });
+        },
+    });
+    const profile = await client.profile();
+    const history = await client.history({ limit: 20, offset: 40 });
+    assert.equal(profile.winRate, 62.5);
+    assert.equal(profile.totalEfcWon, 900);
+    assert.equal(history[0].status, "FINISHED");
+    assert.deepEqual(calls, ["/arena/profile", "/arena/history?limit=20&offset=40"]);
+});
+
+test("Sprint 4 ranking accepts backend periods and rejects unsupported daily", async () => {
+    const calls = [];
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async (url) => {
+            calls.push(url);
+            return response({ players: [{ player_id: 7, rank: 1, username: "Champion", wins: 12, win_rate: "75" }] });
+        },
+    });
+    const rows = await client.ranking("weekly");
+    assert.equal(rows[0].username, "Champion");
+    assert.equal(rows[0].winRate, 75);
+    await assert.rejects(() => client.ranking("daily"), /Daily ranking/);
+    assert.deepEqual(calls, ["/arena/ranking?period=weekly"]);
+});
+
+test("profile and result settlement fields normalize authoritative backend data", () => {
+    const profile = normalizeArenaV3Profile({
+        player_id: 9, total_matches: 0, wins: 0, losses: 0, draws: 0,
+        goals_for: 0, goals_against: 0, win_rate: "0", current_streak: 0,
+        best_streak: 0, total_efc_won: "0", total_efc_lost: "0",
+    });
+    const normalized = normalizeArenaV3Match({
+        ...match, status: "FINISHED", winner_id: 1, owner_score: 2,
+        opponent_score: 1, settlement_status: "COMPLETED",
+        finished_at: "2026-07-30T11:00:00Z",
+    });
+    assert.equal(profile.playerId, 9);
+    assert.equal(normalized.winnerId, 1);
+    assert.equal(normalized.ownerScore, 2);
+    assert.equal(normalized.settlementStatus, "COMPLETED");
+});
+
+test("video appeal uses multipart auth idempotency and upload progress", async () => {
+    const listeners = {};
+    const uploadListeners = {};
+    const xhr = {
+        status: 200, response: { status: "SUBMITTED" },
+        upload: { addEventListener: (name, handler) => { uploadListeners[name] = handler; } },
+        open(method, url) { this.method = method; this.url = url; },
+        setRequestHeader(name, value) { (this.headers ||= {})[name] = value; },
+        addEventListener(name, handler) { listeners[name] = handler; },
+        send(body) {
+            this.body = body;
+            uploadListeners.progress({ lengthComputable: true, loaded: 1, total: 2 });
+            listeners.load();
+        },
+    };
+    const client = new ArenaV3Client({ initDataProvider: () => "auth", xhrFactory: () => xhr });
+    const file = new Blob(["video"], { type: "video/mp4" });
+    Object.defineProperty(file, "name", { value: "appeal.mp4" });
+    const progress = [];
+    await client.uploadAppeal(17, file, (value) => progress.push(value));
+    assert.equal(xhr.url, "/arena/17/video-appeal?reason_code=AI_CONFLICT");
+    assert.equal(xhr.headers["X-Telegram-Init-Data"], "auth");
+    assert.match(xhr.headers["Idempotency-Key"], /^arena-v3-appeal-17-/);
+    assert.ok(xhr.body instanceof FormData);
+    assert.deepEqual(progress, [50, 100]);
+});
+
+test("Sprint 4 surfaces contain infinite history, podium, appeal states and analytics hooks", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
+    const css = fs.readFileSync(path.join(__dirname, "../miniapp/arena-v3.css"), "utf8");
+    assert.match(source, /IntersectionObserver/);
+    assert.match(source, /Waiting Review/);
+    assert.match(source, /Settlement/);
+    assert.match(source, /arena_profile_open/);
+    assert.match(source, /arena_history_open/);
+    assert.match(source, /arena_ranking_open/);
+    assert.match(source, /arena_result_open/);
+    assert.match(source, /arena_appeal_upload/);
+    assert.match(source, /arena_appeal_submit/);
+    assert.match(css, /arena-v3x-podium/);
+    assert.match(css, /arena-v3x-history-card/);
+    assert.match(css, /arena-v3x-stats/);
+});
+
+test("analytics delegates only when an existing provider is available", () => {
+    const calls = [];
+    globalThis.analytics = { track: (...args) => calls.push(args) };
+    arenaV3Track("arena_profile_open", { source: "test" });
+    delete globalThis.analytics;
+    assert.deepEqual(calls, [["arena_profile_open", { source: "test" }]]);
 });
 
 test("screenshot list and public result use authenticated user routes", async () => {
@@ -357,8 +468,8 @@ test("Sprint 3 UI includes preview progress AI result and responsive states", ()
     assert.match(source, /Screenshot preview/);
     assert.match(source, /Upload Screenshot/);
     assert.match(source, /AI VERIFIED RESULT/);
-    assert.match(source, /Appeal yuborish keyingi sprintda/);
-    assert.doesNotMatch(source, /video-appeal/);
+    assert.match(source, /Submit Appeal/);
+    assert.match(source, /video-appeal/);
     assert.match(css, /arena-v3x-upload-progress/);
     assert.match(css, /arena-v3x-ai-orb/);
     assert.match(css, /arena-v3x-result/);

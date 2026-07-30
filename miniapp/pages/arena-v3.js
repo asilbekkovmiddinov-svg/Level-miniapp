@@ -137,6 +137,58 @@ class ArenaV3Client {
         return normalizeArenaV3Result(await this.request(`/arena/${Number(matchId)}/result`));
     }
 
+    async profile() {
+        return normalizeArenaV3Profile(await this.request("/arena/profile"));
+    }
+
+    async history({ limit = 20, offset = 0 } = {}) {
+        const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
+        const safeOffset = Math.max(0, Number(offset) || 0);
+        const payload = await this.request(`/arena/history?limit=${safeLimit}&offset=${safeOffset}`);
+        return Array.isArray(payload?.matches) ? payload.matches.map(normalizeArenaV3Match) : [];
+    }
+
+    async ranking(period = "all") {
+        const normalized = String(period).toLowerCase();
+        if (!["weekly", "monthly", "all"].includes(normalized)) {
+            throw new ArenaV3ClientError("Daily ranking backend tomonidan qo‘llanmaydi.", 400);
+        }
+        const payload = await this.request(`/arena/ranking?period=${normalized}`);
+        const rows = payload?.players || payload?.ranking || [];
+        return Array.isArray(rows) ? rows.map(normalizeArenaV3RankingPlayer) : [];
+    }
+
+    uploadAppeal(matchId, file, onProgress = () => {}) {
+        if (!file || !String(file.type || "").startsWith("video/")) {
+            return Promise.reject(new ArenaV3ClientError("Faqat video fayl yuborish mumkin.", 400));
+        }
+        const initData = this.initDataProvider();
+        if (!initData) return Promise.reject(new ArenaV3ClientError("Telegram tasdiqlashi topilmadi.", 401));
+        return new Promise((resolve, reject) => {
+            const xhr = this.xhrFactory();
+            xhr.open("POST", `${this.baseUrl}/arena/${Number(matchId)}/video-appeal?reason_code=AI_CONFLICT`);
+            xhr.setRequestHeader("X-Telegram-Init-Data", initData);
+            xhr.setRequestHeader("Idempotency-Key", arenaV3Key(`appeal-${Number(matchId)}`));
+            xhr.responseType = "json";
+            xhr.upload.addEventListener("progress", (event) => {
+                if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+            });
+            xhr.addEventListener("load", () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    onProgress(100);
+                    resolve(xhr.response || { status: "SUBMITTED" });
+                } else {
+                    reject(new ArenaV3ClientError(arenaV3HttpMessage(xhr.status), xhr.status));
+                }
+            });
+            xhr.addEventListener("error", () =>
+                reject(new ArenaV3ClientError("Appeal yuklashda tarmoq xatosi.")));
+            const form = new FormData();
+            form.append("video", file, file.name);
+            xhr.send(form);
+        });
+    }
+
     uploadScreenshot(matchId, file, onProgress = () => {}) {
         if (!file || !["image/png", "image/jpeg"].includes(file.type)) {
             return Promise.reject(new ArenaV3ClientError("Faqat PNG yoki JPEG yuborish mumkin.", 400));
@@ -224,6 +276,37 @@ function normalizeArenaV3Result(value) {
     };
 }
 
+function normalizeArenaV3Profile(value) {
+    if (!value || !Number.isInteger(value.player_id)) {
+        throw new ArenaV3ClientError("Arena profile javobi noto‘g‘ri.");
+    }
+    return {
+        playerId: value.player_id,
+        totalMatches: Number(value.total_matches) || 0,
+        wins: Number(value.wins) || 0,
+        losses: Number(value.losses) || 0,
+        draws: Number(value.draws) || 0,
+        goalsFor: Number(value.goals_for) || 0,
+        goalsAgainst: Number(value.goals_against) || 0,
+        winRate: Number(value.win_rate) || 0,
+        currentStreak: Number(value.current_streak) || 0,
+        bestStreak: Number(value.best_streak) || 0,
+        totalEfcWon: Number(value.total_efc_won) || 0,
+        totalEfcLost: Number(value.total_efc_lost) || 0,
+    };
+}
+
+function normalizeArenaV3RankingPlayer(value, index) {
+    return {
+        playerId: Number(value?.player_id) || 0,
+        rank: Number(value?.rank) || index + 1,
+        username: value?.username || value?.display_name || "O‘yinchi",
+        avatar: value?.avatar_url || null,
+        wins: Number(value?.wins) || 0,
+        winRate: Number(value?.win_rate) || 0,
+    };
+}
+
 function normalizeArenaV3Match(value) {
     if (!value || !Number.isInteger(value.id) || typeof value.status !== "string") {
         throw new ArenaV3ClientError("Arena match javobi noto‘g‘ri.");
@@ -244,6 +327,14 @@ function normalizeArenaV3Match(value) {
         roomCode: value.room_code || null,
         roomCodeCreatedAt: value.room_code_created_at || null,
         playingStartedAt: value.playing_started_at || null,
+        winnerId: value.winner_id ?? null,
+        loserId: value.loser_id ?? null,
+        ownerScore: value.owner_score ?? null,
+        opponentScore: value.opponent_score ?? null,
+        resultSource: value.result_source || null,
+        settlementStatus: value.settlement_status || null,
+        settledAt: value.settled_at || null,
+        finishedAt: value.finished_at || null,
         createdAt: value.created_at || null,
         updatedAt: value.updated_at || null,
     };
@@ -290,6 +381,18 @@ const arenaV3State = {
     refreshTimer: null,
     clockTimer: null,
     touchStart: 0,
+    profile: null,
+    history: [],
+    historyResults: {},
+    historyOffset: 0,
+    historyHasMore: true,
+    ranking: [],
+    rankingPeriod: "all",
+    sectionLoading: false,
+    sectionError: null,
+    appealFile: null,
+    appealProgress: 0,
+    appealStatus: null,
 };
 
 const arenaV3Client = new ArenaV3Client();
@@ -310,6 +413,21 @@ function arenaV3Date(value) {
     if (seconds < 3600) return `${Math.floor(seconds / 60)} daqiqa oldin`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} soat oldin`;
     return date.toLocaleDateString("uz-UZ", { day: "2-digit", month: "short" });
+}
+
+function arenaV3FullDate(value) {
+    const date = new Date(value);
+    if (!value || Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleString("uz-UZ", {
+        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+}
+
+function arenaV3Track(name, properties = {}) {
+    try {
+        if (typeof globalThis.analytics?.track === "function") globalThis.analytics.track(name, properties);
+        else if (typeof globalThis.gtag === "function") globalThis.gtag("event", name, properties);
+    } catch (_) {}
 }
 
 function arenaV3Skeleton(count = 3) {
@@ -339,9 +457,9 @@ function arenaV3HomeCards() {
         ["open", "⚔", "Open Matches", `${arenaV3State.openMatches.length} ta ochiq match`, true],
         ["create", "＋", "Create Match", "Yangi Arena ochish", true],
         ["active", "◉", "My Active Match", arenaV3State.activeMatch ? "Davom ettirish" : "Faol match yo‘q", true],
-        ["history", "↺", "History", "Keyingi sprint", false],
-        ["ranking", "♛", "Ranking", "Keyingi sprint", false],
-        ["profile", "◇", "Profile", "Keyingi sprint", false],
+        ["history", "↺", "History", "Match natijalari", true],
+        ["ranking", "♛", "Ranking", "Top o‘yinchilar", true],
+        ["profile", "◇", "Profile", "Statistika", true],
     ];
     return `<section class="arena-v3x-menu" aria-label="Arena bo‘limlari">${cards.map(([view, icon, title, text, enabled]) =>
         `<button type="button" data-arena-v3-view="${view}" ${enabled ? "" : "disabled"} aria-disabled="${!enabled}">
@@ -516,11 +634,21 @@ function arenaV3AIVisualStep(review) {
 function arenaV3AIReviewPanel() {
     const review = arenaV3State.result?.aiReview;
     if (review?.status === "APPEAL_REQUIRED") {
+        const status = arenaV3State.appealStatus;
         return `<section class="arena-v3x-stage-card arena-v3x-appeal">
             <span>⚠</span><small>AI CONFLICT</small><h3>Appeal Required</h3>
             <p>Ikki screenshot natijasi bir-biriga mos kelmadi. Match xavfsiz tarzda to‘xtatildi va wallet settlement bajarilmaydi.</p>
             <div><b>${arenaV3Escape(review.conflictType || "RESULT_CONFLICT")}</b>
-                <small>Appeal yuborish keyingi sprintda ochiladi.</small></div></section>`;
+                <small>${status === "submitted" ? "Waiting Review" : status === "uploading" ? "Uploading" : "Video dalil yuboring"}</small></div>
+            ${status === "submitted" ? `<p class="arena-v3x-uploaded-note">✓ Submitted · Waiting Review</p>` :
+                `<label class="arena-v3x-file-picker"><span class="arena-v3x-upload-icon">▶</span>
+                    <span>${arenaV3State.appealFile ? arenaV3Escape(arenaV3State.appealFile.name) : "Video tanlang"}</span>
+                    <input type="file" accept="video/*" data-arena-v3-appeal-file></label>
+                ${arenaV3State.evidenceError ? `<p class="arena-v3x-inline-error">${arenaV3Escape(arenaV3State.evidenceError)}</p>` : ""}
+                <button class="arena-v3x-primary" data-arena-v3-appeal-upload ${!arenaV3State.appealFile ? "disabled" : ""}>
+                    ${arenaV3State.evidenceError ? "Retry" : "Submit Appeal"}</button>
+                <div class="arena-v3x-upload-progress"><i style="width:${arenaV3State.appealProgress}%"></i>
+                    <span>${arenaV3State.appealProgress}%</span></div>`}</section>`;
     }
     if (review?.status === "FAILED") {
         return `<section class="arena-v3x-stage-card arena-v3x-ai-error">
@@ -552,8 +680,115 @@ function arenaV3ResultPanel(match) {
         <h3>${arenaV3Escape(winner || "Draw")}</h3><p>WINNER</p>
         <div><span>Score<b>${arenaV3Escape(review.score || "—")}</b></span>
             <span>Confidence<b>${review.confidence == null ? "—" : `${Math.round(review.confidence * 100)}%`}</b></span>
-            <span>Status<b>${arenaV3Escape(match.status)}</b></span></div>
+            <span>Stake<b>${arenaV3Escape(match.stake)} EFC</b></span>
+            <span>Match Type<b>${arenaV3Escape(match.matchType)}</b></span>
+            <span>Finished<b>${arenaV3Escape(arenaV3FullDate(match.finishedAt))}</b></span>
+            <span>Settlement<b>${arenaV3Escape(match.settlementStatus || "PENDING")}</b></span></div>
         <button class="arena-v3x-primary" data-arena-v3-continue>Continue</button></section>`;
+}
+
+function arenaV3PanelHeader(kicker, title) {
+    return `<header><button type="button" data-arena-v3-back>‹</button>
+        <section><small>${kicker}</small><h3>${title}</h3></section>
+        <button class="arena-v3x-refresh" type="button" data-arena-v3-section-retry aria-label="Yangilash">↻</button></header>`;
+}
+
+function arenaV3Avatar(name, url) {
+    const safeUrl = /^https:\/\//.test(String(url || "")) ? url : "";
+    return safeUrl
+        ? `<img class="arena-v3x-profile-avatar" src="${arenaV3Escape(safeUrl)}" alt="">`
+        : `<span class="arena-v3x-profile-avatar">${arenaV3Initial(name)}</span>`;
+}
+
+function arenaV3ProfileView() {
+    if (arenaV3State.sectionLoading) return `<section class="arena-v3x-panel">${arenaV3PanelHeader("PLAYER", "Arena Profile")}${arenaV3Skeleton(4)}</section>`;
+    if (arenaV3State.sectionError) return arenaV3SectionError("Profile", arenaV3State.sectionError);
+    const profile = arenaV3State.profile;
+    if (!profile) return arenaV3Skeleton(3);
+    const user = arenaV3TelegramUser();
+    const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "O‘yinchi";
+    const stats = [
+        ["Total Matches", profile.totalMatches], ["Wins", profile.wins], ["Losses", profile.losses],
+        ["Draws", profile.draws], ["Win Rate", `${profile.winRate}%`], ["Goals For", profile.goalsFor],
+        ["Goals Against", profile.goalsAgainst], ["Current Streak", profile.currentStreak],
+        ["Best Streak", profile.bestStreak], ["Total EFC Won", profile.totalEfcWon],
+        ["Total EFC Lost", profile.totalEfcLost],
+    ];
+    return `<section class="arena-v3x-panel arena-v3x-profile">${arenaV3PanelHeader("PLAYER", "Arena Profile")}
+        <article class="arena-v3x-profile-identity">${arenaV3Avatar(name, user.photo_url)}
+            <div><small>DISPLAY NAME</small><h3>${arenaV3Escape(name)}</h3>
+                <p>@${arenaV3Escape(user.username || "telegram")}</p></div></article>
+        <article class="arena-v3x-username"><span>eFootball username</span>
+            <strong>${arenaV3Escape(arenaV3StoredUsername() || "Kiritilmagan")}</strong>
+            <small>Backend tahrirlash endpointi mavjud bo‘lganda edit ochiladi.</small></article>
+        <div class="arena-v3x-stats">${stats.map(([label, value]) =>
+            `<article><small>${label}</small><b data-arena-v3-counter="${arenaV3Escape(value)}">${arenaV3Escape(value)}</b></article>`).join("")}</div>
+    </section>`;
+}
+
+function arenaV3HistoryCard(match) {
+    const ownId = Number(arenaV3TelegramUser().id);
+    const owner = ownId === Number(match.ownerId);
+    const opponent = owner ? match.opponentUsername : match.ownerUsername;
+    const result = arenaV3State.historyResults[match.id];
+    const review = result?.aiReview;
+    const winner = match.winnerId == null ? "Draw"
+        : Number(match.winnerId) === Number(match.ownerId) ? match.ownerUsername : match.opponentUsername;
+    const score = review?.score || (
+        match.ownerScore != null && match.opponentScore != null ? `${match.ownerScore}-${match.opponentScore}` : "—"
+    );
+    return `<article class="arena-v3x-history-card">
+        <i class="arena-v3x-history-dot"></i><header><span class="arena-v3x-avatar">${arenaV3Initial(opponent)}</span>
+            <section><small>OPPONENT</small><strong>${arenaV3Escape(opponent || "O‘yinchi")}</strong>
+                <em>${arenaV3Escape(arenaV3FullDate(match.finishedAt || match.updatedAt))}</em></section>
+            <b>${arenaV3Escape(score)}</b></header>
+        <div><span>Winner<b>${arenaV3Escape(winner || "Draw")}</b></span>
+            <span>Stake<b>${arenaV3Escape(match.stake)} EFC</b></span>
+            <span>Type<b>${arenaV3Escape(match.matchType)}</b></span>
+            <span>AI Confidence<b>${review?.confidence == null ? "—" : `${Math.round(review.confidence * 100)}%`}</b></span></div>
+        <footer><b>${arenaV3Escape(match.status)}</b><button data-arena-v3-history-result="${match.id}">Result Details</button></footer>
+    </article>`;
+}
+
+function arenaV3HistoryView() {
+    if (arenaV3State.sectionLoading && !arenaV3State.history.length) {
+        return `<section class="arena-v3x-panel">${arenaV3PanelHeader("TIMELINE", "Match History")}${arenaV3Skeleton(4)}</section>`;
+    }
+    if (arenaV3State.sectionError && !arenaV3State.history.length) return arenaV3SectionError("Match History", arenaV3State.sectionError);
+    return `<section class="arena-v3x-panel arena-v3x-history">${arenaV3PanelHeader("TIMELINE", "Match History")}
+        <div class="arena-v3x-history-list">${arenaV3State.history.length
+            ? arenaV3State.history.map(arenaV3HistoryCard).join("")
+            : `<div class="arena-v3x-empty"><span>↺</span><h4>History bo‘sh</h4><p>Yakunlangan matchlar shu yerda chiqadi.</p></div>`}</div>
+        ${arenaV3State.historyHasMore ? `<button class="arena-v3x-load-more" data-arena-v3-history-more
+            ${arenaV3State.sectionLoading ? "disabled" : ""}>${arenaV3State.sectionLoading ? "Yuklanmoqda…" : "Ko‘proq yuklash"}</button>
+            <i data-arena-v3-history-sentinel></i>` : ""}
+    </section>`;
+}
+
+function arenaV3RankingView() {
+    const filters = [["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["all", "All Time"]];
+    const podium = arenaV3State.ranking.slice(0, 3);
+    return `<section class="arena-v3x-panel arena-v3x-ranking">${arenaV3PanelHeader("LEADERBOARD", "Top Players")}
+        <div class="arena-v3x-rank-filters">${filters.map(([key, label]) =>
+            `<button data-arena-v3-period="${key}" class="${arenaV3State.rankingPeriod === key ? "is-active" : ""}"
+                ${key === "daily" ? `disabled title="Backend daily periodni qo‘llamaydi"` : ""}>${label}</button>`).join("")}</div>
+        ${arenaV3State.sectionLoading ? arenaV3Skeleton(3) : arenaV3State.sectionError
+            ? `<div class="arena-v3x-error"><span>UNAVAILABLE</span><h3>Ranking hozircha ochilmagan</h3>
+                <p>${arenaV3Escape(arenaV3State.sectionError)}</p><button data-arena-v3-section-retry>Retry</button></div>`
+            : `<div class="arena-v3x-podium">${podium.map((row, index) => `<article class="is-${index + 1}">
+                ${arenaV3Avatar(row.username, row.avatar)}<i>${row.rank}</i><strong>${arenaV3Escape(row.username)}</strong>
+                <small>${row.wins} wins · ${row.winRate}%</small></article>`).join("")}</div>
+              <div class="arena-v3x-rank-list">${arenaV3State.ranking.slice(3).map((row) =>
+                `<article><b>#${row.rank}</b>${arenaV3Avatar(row.username, row.avatar)}
+                    <strong>${arenaV3Escape(row.username)}</strong><span>${row.wins} wins</span><em>${row.winRate}%</em></article>`).join("")}</div>
+              ${!arenaV3State.ranking.length ? `<div class="arena-v3x-empty"><span>♛</span><h4>Ranking bo‘sh</h4></div>` : ""}`}
+    </section>`;
+}
+
+function arenaV3SectionError(title, message) {
+    return `<section class="arena-v3x-panel">${arenaV3PanelHeader("ARENA", title)}
+        <div class="arena-v3x-error"><span>ERROR</span><h3>${title} yuklanmadi</h3>
+            <p>${arenaV3Escape(message)}</p><button data-arena-v3-section-retry>Retry</button></div></section>`;
 }
 
 function arenaV3StageAction(match) {
@@ -651,6 +886,9 @@ function arenaV3Render() {
     if (arenaV3State.view === "create") body = arenaV3CreateView();
     if (arenaV3State.view === "active") body = arenaV3ActiveView();
     if (arenaV3State.view === "detail") body = arenaV3MatchDetailView();
+    if (arenaV3State.view === "profile") body = arenaV3ProfileView();
+    if (arenaV3State.view === "history") body = arenaV3HistoryView();
+    if (arenaV3State.view === "ranking") body = arenaV3RankingView();
     page.innerHTML = arenaV3Shell(body);
     arenaV3Bind(page);
 }
@@ -755,9 +993,127 @@ function arenaV3TickClocks() {
 }
 
 function arenaV3Select(view) {
-    if (!["home", "open", "create", "active", "detail"].includes(view)) return;
+    if (!["home", "open", "create", "active", "detail", "profile", "history", "ranking"].includes(view)) return;
     arenaV3State.view = view;
     arenaV3Render();
+    if (view === "profile") arenaV3LoadProfile();
+    if (view === "history") arenaV3LoadHistory(true);
+    if (view === "ranking") arenaV3LoadRanking();
+}
+
+async function arenaV3LoadProfile() {
+    arenaV3State.sectionLoading = true;
+    arenaV3State.sectionError = null;
+    arenaV3Render();
+    arenaV3Track("arena_profile_open");
+    try {
+        arenaV3State.profile = await arenaV3Client.profile();
+    } catch (error) {
+        arenaV3State.sectionError = error.message;
+    } finally {
+        arenaV3State.sectionLoading = false;
+        arenaV3Render();
+    }
+}
+
+async function arenaV3LoadHistory(reset = false) {
+    if (arenaV3State.sectionLoading) return;
+    if (reset) {
+        arenaV3State.history = [];
+        arenaV3State.historyResults = {};
+        arenaV3State.historyOffset = 0;
+        arenaV3State.historyHasMore = true;
+        arenaV3Track("arena_history_open");
+    }
+    arenaV3State.sectionLoading = true;
+    arenaV3State.sectionError = null;
+    arenaV3Render();
+    try {
+        const page = await arenaV3Client.history({ limit: 20, offset: arenaV3State.historyOffset });
+        arenaV3State.history.push(...page);
+        arenaV3State.historyOffset += page.length;
+        arenaV3State.historyHasMore = page.length === 20;
+        const results = await Promise.allSettled(page.map((match) => arenaV3Client.result(match.id)));
+        results.forEach((result, index) => {
+            if (result.status === "fulfilled") arenaV3State.historyResults[page[index].id] = result.value;
+        });
+    } catch (error) {
+        arenaV3State.sectionError = error.message;
+    } finally {
+        arenaV3State.sectionLoading = false;
+        arenaV3Render();
+    }
+}
+
+async function arenaV3LoadRanking(period = arenaV3State.rankingPeriod) {
+    arenaV3State.rankingPeriod = period;
+    arenaV3State.sectionLoading = true;
+    arenaV3State.sectionError = null;
+    arenaV3Render();
+    arenaV3Track("arena_ranking_open", { period });
+    try {
+        arenaV3State.ranking = await arenaV3Client.ranking(period);
+    } catch (error) {
+        arenaV3State.ranking = [];
+        arenaV3State.sectionError = error.message;
+    } finally {
+        arenaV3State.sectionLoading = false;
+        arenaV3Render();
+    }
+}
+
+async function arenaV3ShowHistoryResult(matchId) {
+    try {
+        arenaV3State.result = arenaV3State.historyResults[matchId] || await arenaV3Client.result(matchId);
+        arenaV3State.activeMatch = arenaV3State.result.match;
+        arenaV3State.view = "active";
+        arenaV3Track("arena_result_open", { match_id: Number(matchId) });
+        arenaV3Render();
+    } catch (error) {
+        arenaV3Toast(error.message, "error");
+    }
+}
+
+function arenaV3SelectAppeal(input) {
+    const file = input.files?.[0] || null;
+    arenaV3State.evidenceError = null;
+    if (!file || !String(file.type || "").startsWith("video/")) {
+        arenaV3State.appealFile = null;
+        arenaV3State.evidenceError = "Faqat video fayl tanlang.";
+    } else {
+        arenaV3State.appealFile = file;
+        arenaV3State.appealProgress = 0;
+        arenaV3Track("arena_appeal_upload", { match_id: arenaV3State.activeMatch?.id });
+    }
+    arenaV3Render();
+}
+
+async function arenaV3UploadAppeal() {
+    const match = arenaV3State.activeMatch;
+    if (!match || !arenaV3State.appealFile || arenaV3State.actionLoading) return;
+    arenaV3State.actionLoading = "appeal";
+    arenaV3State.appealStatus = "uploading";
+    arenaV3State.evidenceError = null;
+    arenaV3Render();
+    try {
+        await arenaV3Client.uploadAppeal(match.id, arenaV3State.appealFile, (progress) => {
+            arenaV3State.appealProgress = progress;
+            const bar = document.querySelector(".arena-v3x-upload-progress i");
+            const label = document.querySelector(".arena-v3x-upload-progress span");
+            if (bar) bar.style.width = `${progress}%`;
+            if (label) label.textContent = `${progress}%`;
+        });
+        arenaV3State.appealStatus = "submitted";
+        arenaV3Track("arena_appeal_submit", { match_id: match.id });
+        arenaV3Toast("Appeal yuborildi.");
+    } catch (error) {
+        arenaV3State.appealStatus = null;
+        arenaV3State.evidenceError = error.message;
+        arenaV3Toast(error.message, "error");
+    } finally {
+        arenaV3State.actionLoading = null;
+        arenaV3Render();
+    }
 }
 
 async function arenaV3OpenDetail(matchId) {
@@ -990,6 +1346,20 @@ function arenaV3Bind(page) {
         arenaV3SelectScreenshot(event.currentTarget));
     page.querySelector("[data-arena-v3-upload]")?.addEventListener("click", arenaV3UploadScreenshot);
     page.querySelector("[data-arena-v3-retry-result]")?.addEventListener("click", arenaV3RetryResult);
+    page.querySelector("[data-arena-v3-appeal-file]")?.addEventListener("change", (event) =>
+        arenaV3SelectAppeal(event.currentTarget));
+    page.querySelector("[data-arena-v3-appeal-upload]")?.addEventListener("click", arenaV3UploadAppeal);
+    page.querySelector("[data-arena-v3-history-more]")?.addEventListener("click", () => arenaV3LoadHistory(false));
+    page.querySelectorAll("[data-arena-v3-history-result]").forEach((button) =>
+        button.addEventListener("click", () => arenaV3ShowHistoryResult(Number(button.dataset.arenaV3HistoryResult))));
+    page.querySelectorAll("[data-arena-v3-period]").forEach((button) =>
+        button.addEventListener("click", () => arenaV3LoadRanking(button.dataset.arenaV3Period)));
+    page.querySelectorAll("[data-arena-v3-section-retry]").forEach((button) =>
+        button.addEventListener("click", () => {
+            if (arenaV3State.view === "profile") arenaV3LoadProfile();
+            if (arenaV3State.view === "history") arenaV3LoadHistory(true);
+            if (arenaV3State.view === "ranking") arenaV3LoadRanking();
+        }));
     page.querySelector("[data-arena-v3-continue]")?.addEventListener("click", async () => {
         arenaV3State.view = "home";
         await arenaV3Load();
@@ -1011,6 +1381,16 @@ function arenaV3Bind(page) {
         const distance = (event.changedTouches[0]?.clientY || 0) - arenaV3State.touchStart;
         if (page.scrollTop <= 0 && distance > 80) arenaV3Load({ silent: true });
     }, { passive: true, once: true });
+    const sentinel = page.querySelector("[data-arena-v3-history-sentinel]");
+    if (sentinel && typeof IntersectionObserver !== "undefined") {
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+                observer.disconnect();
+                arenaV3LoadHistory(false);
+            }
+        }, { rootMargin: "180px" });
+        observer.observe(sentinel);
+    }
 }
 
 Object.assign(globalThis, {
@@ -1039,5 +1419,8 @@ if (typeof module !== "undefined") {
         normalizeArenaV3Screenshot,
         normalizeArenaV3AIReview,
         normalizeArenaV3Result,
+        normalizeArenaV3Profile,
+        normalizeArenaV3RankingPlayer,
+        arenaV3Track,
     };
 }
