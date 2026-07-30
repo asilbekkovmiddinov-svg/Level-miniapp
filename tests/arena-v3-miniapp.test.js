@@ -16,6 +16,8 @@ const {
     normalizeArenaV3Profile,
     normalizeArenaV3RankingPlayer,
     arenaV3Track,
+    arenaV3StoredUsername,
+    arenaV3SaveUsername,
 } = require("../miniapp/pages/arena-v3.js");
 
 function response(payload, status = 200) {
@@ -426,15 +428,49 @@ test("screenshot list and public result use authenticated user routes", async ()
     assert.deepEqual(calls, ["/arena/17/screenshots", "/arena/17/result"]);
 });
 
-test("screenshot countdown starts after each supported match duration", () => {
+test("5 minute screenshot countdown starts after each supported match duration", () => {
     const started = "2026-07-30T10:00:00.000Z";
     for (const matchTime of [6, 8, 10, 12, 15]) {
         const windowStart = Date.parse(started) + (matchTime * 60000);
         const value = { playingStartedAt: started, matchTime };
-        assert.equal(arenaV3ScreenshotSeconds(value, windowStart), 60);
-        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 45000), 15);
-        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 61000), 0);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart), 300);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 285000), 15);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 301000), 0);
     }
+});
+
+test("eFootball username storage is isolated by Telegram player", () => {
+    const values = new Map();
+    globalThis.localStorage = {
+        getItem: (key) => values.get(key) || null,
+        setItem: (key, value) => values.set(key, value),
+    };
+    globalThis.Telegram = { WebApp: { initDataUnsafe: { user: { id: 1001 } } } };
+
+    arenaV3SaveUsername("CREATOR");
+    assert.equal(arenaV3StoredUsername(), "CREATOR");
+
+    globalThis.Telegram.WebApp.initDataUnsafe.user.id = 2002;
+    assert.equal(arenaV3StoredUsername(), "");
+    arenaV3SaveUsername("OPPONENT");
+    assert.equal(arenaV3StoredUsername(), "OPPONENT");
+
+    globalThis.Telegram.WebApp.initDataUnsafe.user.id = 1001;
+    assert.equal(arenaV3StoredUsername(), "CREATOR");
+    delete globalThis.Telegram;
+    delete globalThis.localStorage;
+});
+
+test("legacy shared username never autofills another player", () => {
+    globalThis.localStorage = {
+        getItem: (key) => key === "arena-v3-efootball-username" ? "CREATOR" : null,
+        setItem: () => {},
+    };
+    globalThis.Telegram = { WebApp: { initDataUnsafe: { user: { id: 2002 } } } };
+
+    assert.equal(arenaV3StoredUsername(), "");
+    delete globalThis.Telegram;
+    delete globalThis.localStorage;
 });
 
 test("AI review presentation follows backend state without settlement actions", () => {
