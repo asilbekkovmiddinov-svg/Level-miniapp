@@ -149,3 +149,85 @@ test("deferred modules are cards only and make no backend calls", () => {
     assert.match(source, /\["profile".+false\]/);
     assert.doesNotMatch(source, /request\("\/arena\/(?:history|ranking|profile|room-code|upload-screenshot)/);
 });
+
+test("match detail, ready, room code and cancel use exact V3 contracts", async () => {
+    const calls = [];
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async (url, options) => {
+            calls.push({ url, options });
+            return response({
+                ...match,
+                status: url.endsWith("/ready") ? "READY"
+                    : url.endsWith("/room-code") ? "PLAYING"
+                        : url.endsWith("/cancel") ? "CANCELLED" : "OPEN",
+            });
+        },
+    });
+    await client.detail(17);
+    await client.ready(17);
+    await client.submitRoomCode(17, "  A7B  ");
+    await client.cancel(17);
+    assert.deepEqual(calls.map(({ url }) => url), [
+        "/arena/17", "/arena/17/ready", "/arena/17/room-code", "/arena/17/cancel",
+    ]);
+    assert.equal(calls[1].options.body, "{}");
+    assert.deepEqual(JSON.parse(calls[2].options.body), { room_code: "A7B" });
+    assert.deepEqual(JSON.parse(calls[3].options.body), { reason_code: "USER_CANCELLED" });
+    assert.match(calls[3].options.headers["Idempotency-Key"], /^arena-v3-cancel-17-/);
+});
+
+test("room code validation blocks invalid input before network", async () => {
+    let called = false;
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async () => {
+            called = true;
+            return response(match);
+        },
+    });
+    await assert.rejects(() => client.submitRoomCode(17, ""), /1–8/);
+    await assert.rejects(() => client.submitRoomCode(17, "123456789"), /1–8/);
+    assert.equal(called, false);
+});
+
+test("ready and room fields are normalized from authoritative response", () => {
+    const normalized = normalizeArenaV3Match({
+        ...match,
+        owner_ready_at: "2026-07-30T10:01:00Z",
+        opponent_ready_at: null,
+        room_code: "ABC7",
+        playing_started_at: "2026-07-30T10:02:00Z",
+        updated_at: "2026-07-30T10:02:00Z",
+    });
+    assert.equal(normalized.ownerReadyAt, "2026-07-30T10:01:00Z");
+    assert.equal(normalized.opponentReadyAt, null);
+    assert.equal(normalized.roomCode, "ABC7");
+    assert.equal(normalized.playingStartedAt, "2026-07-30T10:02:00Z");
+});
+
+test("Sprint 2 UI contains detail, ready, room, playing and cancel states", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
+    assert.match(source, /MATCH DETAIL/);
+    assert.match(source, /Player Ready/);
+    assert.match(source, /Opponent Ready/);
+    assert.match(source, /arenaV3RoomCodeForm/);
+    assert.match(source, /LIVE MATCH/);
+    assert.match(source, /Matchni bekor qilasizmi/);
+    assert.match(source, /}, 5000\);/);
+});
+
+test("Sprint 2 keeps deferred flows out of V3 requests", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
+    assert.doesNotMatch(source, /request\([^)]*\/(?:upload-screenshot|ai-result|result|history|ranking|profile)/);
+});
+
+test("Sprint 2 styles cover phone, desktop, transitions and action loading", () => {
+    const css = fs.readFileSync(path.join(__dirname, "../miniapp/arena-v3.css"), "utf8");
+    assert.match(css, /arena-v3x-ready-grid/);
+    assert.match(css, /arena-v3x-playing/);
+    assert.match(css, /arena-v3x-spinner/);
+    assert.match(css, /@media\(max-width:380px\)/);
+    assert.match(css, /@media\(min-width:680px\)/);
+    assert.match(css, /prefers-reduced-motion:reduce/);
+});

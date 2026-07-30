@@ -48,6 +48,7 @@ class ArenaV3Client {
                 404: "Arena V3 hozircha ochilmagan.",
                 409: "Match holati o‘zgargan. Yangilab qayta urining.",
                 422: "Forma ma’lumotlari noto‘g‘ri.",
+                500: "Arena serverida vaqtinchalik xatolik.",
                 503: "Arena vaqtincha mavjud emas.",
             };
             throw new ArenaV3ClientError(
@@ -66,6 +67,10 @@ class ArenaV3Client {
     async active() {
         const payload = await this.request("/arena/active");
         return payload?.match ? normalizeArenaV3Match(payload.match) : null;
+    }
+
+    async detail(matchId) {
+        return normalizeArenaV3Match(await this.request(`/arena/${Number(matchId)}`));
     }
 
     async create(input) {
@@ -94,6 +99,32 @@ class ArenaV3Client {
             },
         }));
     }
+
+    async ready(matchId) {
+        return normalizeArenaV3Match(await this.request(`/arena/${Number(matchId)}/ready`, {
+            method: "POST",
+            body: {},
+        }));
+    }
+
+    async submitRoomCode(matchId, roomCode) {
+        const normalized = String(roomCode || "").trim();
+        if (!normalized || normalized.length > 8) {
+            throw new ArenaV3ClientError("Room Code 1–8 belgidan iborat bo‘lishi kerak.", 400);
+        }
+        return normalizeArenaV3Match(await this.request(`/arena/${Number(matchId)}/room-code`, {
+            method: "POST",
+            body: { room_code: normalized },
+        }));
+    }
+
+    async cancel(matchId) {
+        return normalizeArenaV3Match(await this.request(`/arena/${Number(matchId)}/cancel`, {
+            method: "POST",
+            idempotencyKey: arenaV3Key(`cancel-${Number(matchId)}`),
+            body: { reason_code: "USER_CANCELLED" },
+        }));
+    }
 }
 
 function normalizeArenaV3Match(value) {
@@ -111,7 +142,13 @@ function normalizeArenaV3Match(value) {
         matchType: value.match_type || "STANDARD",
         matchTime: Number(value.match_time_minutes) || 10,
         status: value.status,
+        ownerReadyAt: value.owner_ready_at || null,
+        opponentReadyAt: value.opponent_ready_at || null,
+        roomCode: value.room_code || null,
+        roomCodeCreatedAt: value.room_code_created_at || null,
+        playingStartedAt: value.playing_started_at || null,
         createdAt: value.created_at || null,
+        updatedAt: value.updated_at || null,
     };
 }
 
@@ -144,7 +181,9 @@ const arenaV3State = {
     view: "home",
     openMatches: [],
     activeMatch: null,
+    selectedMatch: null,
     loading: false,
+    actionLoading: null,
     refreshTimer: null,
     touchStart: 0,
 };
@@ -236,7 +275,7 @@ function arenaV3MatchCard(match) {
         <div><span><i>◆</i>${arenaV3Escape(match.matchType)}</span>
             <span><i>◷</i>${match.matchTime} min</span>
             <span><i>●</i>OPEN</span></div>
-        <button type="button" data-arena-v3-join="${match.id}">Join Match <i>→</i></button>
+        <button type="button" data-arena-v3-detail="${match.id}">Match Detail <i>→</i></button>
     </article>`;
 }
 
@@ -290,6 +329,75 @@ function arenaV3StatusIndex(status) {
     return ARENA_V3_TIMELINE.findIndex(([key]) => key === status);
 }
 
+function arenaV3IsOwner(match) {
+    return String(arenaV3TelegramUser().id || "") === String(match?.ownerId || "");
+}
+
+function arenaV3MatchDetailView() {
+    const match = arenaV3State.selectedMatch;
+    if (!match) return arenaV3Skeleton(1);
+    return `<section class="arena-v3x-panel arena-v3x-detail">
+        <header><button type="button" data-arena-v3-back-open>‹</button>
+            <section><small>MATCH DETAIL</small><h3>${arenaV3Escape(match.publicId)}</h3></section>
+            <b class="arena-v3x-status">${arenaV3Escape(match.status)}</b></header>
+        <article class="arena-v3x-detail-card">
+            <span class="arena-v3x-avatar arena-v3x-avatar--large">${arenaV3Initial(match.ownerUsername)}</span>
+            <small>CREATOR</small><h3>${arenaV3Escape(match.ownerUsername)}</h3>
+            <div><span>Stake<b>${arenaV3Escape(match.stake)} EFC</b></span>
+                <span>Match Type<b>${arenaV3Escape(match.matchType)}</b></span>
+                <span>Match Time<b>${match.matchTime} MIN</b></span>
+                <span>Created<b>${arenaV3Escape(arenaV3Date(match.createdAt))}</b></span></div>
+            <button class="arena-v3x-primary" type="button" data-arena-v3-join="${match.id}">
+                Join Match <i>→</i></button>
+        </article></section>`;
+}
+
+function arenaV3PlayingClock(match) {
+    const started = new Date(match.playingStartedAt);
+    if (!match.playingStartedAt || Number.isNaN(started.getTime())) return "00:00";
+    const elapsed = Math.max(0, Math.floor((Date.now() - started.getTime()) / 1000));
+    return `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+}
+
+function arenaV3StageAction(match) {
+    if (match.status === "READY") {
+        const owner = arenaV3IsOwner(match);
+        const playerReady = owner ? match.ownerReadyAt : match.opponentReadyAt;
+        return `<section class="arena-v3x-stage-card">
+            <small>READY CHECK</small><h3>Matchga tayyormisiz?</h3>
+            <div class="arena-v3x-ready-grid">
+                <span class="${match.ownerReadyAt ? "is-ready" : ""}"><i>${match.ownerReadyAt ? "✓" : "1"}</i>
+                    <b>Player Ready</b><small>${match.ownerReadyAt ? "Tayyor" : "Kutilmoqda"}</small></span>
+                <span class="${match.opponentReadyAt ? "is-ready" : ""}"><i>${match.opponentReadyAt ? "✓" : "2"}</i>
+                    <b>Opponent Ready</b><small>${match.opponentReadyAt ? "Tayyor" : "Kutilmoqda"}</small></span>
+            </div>
+            <button class="arena-v3x-primary" data-arena-v3-ready ${playerReady ? "disabled" : ""}>
+                ${playerReady ? "Ready yuborildi" : "READY"}</button></section>`;
+    }
+    if (match.status === "WAITING_ROOM_CODE") {
+        if (arenaV3IsOwner(match)) {
+            return `<section class="arena-v3x-stage-card"><small>ROOM CODE</small>
+                <h3>Room Code kiriting</h3><p>Raqibingiz eFootball xonasiga kirishi uchun 1–8 belgi.</p>
+                <form id="arenaV3RoomCodeForm"><input name="roomCode" minlength="1" maxlength="8"
+                    required autocomplete="off" placeholder="ROOM CODE">
+                    <button class="arena-v3x-primary" type="submit">Boshlash <i>→</i></button></form></section>`;
+        }
+        return `<section class="arena-v3x-stage-card arena-v3x-waiting">
+            <i class="arena-v3x-spinner"></i><small>ROOM CODE</small>
+            <h3>Creator Room Code yuborishini kuting</h3><p>Status avtomatik yangilanadi.</p></section>`;
+    }
+    if (match.status === "PLAYING") {
+        const opponent = arenaV3IsOwner(match) ? match.opponentUsername : match.ownerUsername;
+        return `<section class="arena-v3x-stage-card arena-v3x-playing">
+            <small>LIVE MATCH</small><h3>${arenaV3Escape(opponent || "Raqib")}</h3>
+            <div><span>Room Code<b>${arenaV3Escape(match.roomCode || "—")}</b></span>
+                <span>Match Timer<b data-arena-v3-clock>${arenaV3PlayingClock(match)}</b></span>
+                <span>Status<b>PLAYING</b></span></div>
+            <p>Match yakunlangach keyingi bosqich avtomatik ochiladi.</p></section>`;
+    }
+    return "";
+}
+
 function arenaV3ActiveView() {
     const match = arenaV3State.activeMatch;
     if (!match) {
@@ -314,8 +422,12 @@ function arenaV3ActiveView() {
             `<li class="${index < active ? "is-done" : index === active ? "is-active" : ""}">
                 <i>${index < active ? "✓" : index + 1}</i><span><strong>${label}</strong>
                 <small>${index === active ? "Hozirgi bosqich" : index < active ? "Yakunlandi" : "Kutilmoqda"}</small></span></li>`).join("")}</ol>
+        ${arenaV3StageAction(match)}
         <div class="arena-v3x-info"><span>Match ID</span><b>${arenaV3Escape(match.publicId)}</b>
             <span>Format</span><b>${arenaV3Escape(match.matchType)} · ${match.matchTime} MIN</b></div>
+        ${["OPEN", "READY", "WAITING_ROOM_CODE"].includes(match.status)
+            ? `<button class="arena-v3x-cancel" type="button" data-arena-v3-cancel>Matchni bekor qilish</button>`
+            : ""}
     </section>`;
 }
 
@@ -326,6 +438,7 @@ function arenaV3Render() {
     if (arenaV3State.view === "open") body = arenaV3OpenView();
     if (arenaV3State.view === "create") body = arenaV3CreateView();
     if (arenaV3State.view === "active") body = arenaV3ActiveView();
+    if (arenaV3State.view === "detail") body = arenaV3MatchDetailView();
     page.innerHTML = arenaV3Shell(body);
     arenaV3Bind(page);
 }
@@ -333,7 +446,9 @@ function arenaV3Render() {
 function arenaV3Error(error, retry) {
     const page = document.getElementById("arenaPage");
     if (!page) return;
-    page.innerHTML = arenaV3Shell(`<div class="arena-v3x-error"><span>!</span>
+    const labels = { 401: "AUTH", 403: "ACCESS", 404: "NOT FOUND", 409: "CONFLICT", 500: "SERVER" };
+    page.innerHTML = arenaV3Shell(`<div class="arena-v3x-error" data-status="${error.status || 0}">
+        <span>${labels[error.status] || "NETWORK"}</span>
         <h3>Arena yuklanmadi</h3><p>${arenaV3Escape(error.message)}</p>
         <button type="button" id="arenaV3Retry">Qayta urinish</button></div>`);
     page.querySelector("#arenaV3Retry")?.addEventListener("click", retry);
@@ -352,7 +467,6 @@ async function arenaV3Load({ silent = false } = {}) {
         arenaV3State.openMatches = openMatches;
         arenaV3State.activeMatch = activeMatch;
         arenaV3Render();
-        if (silent) arenaV3Toast("Arena yangilandi");
     } catch (error) {
         if (!silent) arenaV3Error(error, () => arenaV3Load());
         else arenaV3Toast(error.message, "error");
@@ -367,16 +481,96 @@ async function loadArenaV3Page() {
     arenaV3State.view = "home";
     clearInterval(arenaV3State.refreshTimer);
     await arenaV3Load();
-    arenaV3State.refreshTimer = setInterval(() => {
+    arenaV3State.refreshTimer = setInterval(async () => {
         const page = document.getElementById("arenaPage");
-        if (page?.classList.contains("active")) arenaV3Load({ silent: true });
-    }, 10000);
+        if (!page?.classList.contains("active") || arenaV3State.loading) return;
+        try {
+            const previous = arenaV3State.activeMatch?.status;
+            arenaV3State.activeMatch = await arenaV3Client.active();
+            if (arenaV3State.view === "active") arenaV3Render();
+            if (previous && arenaV3State.activeMatch?.status !== previous) {
+                arenaV3Toast(`Status: ${arenaV3State.activeMatch?.status || "Yakunlandi"}`);
+            }
+        } catch (error) {
+            arenaV3Toast(error.message, "error");
+        }
+    }, 5000);
 }
 
 function arenaV3Select(view) {
-    if (!["home", "open", "create", "active"].includes(view)) return;
+    if (!["home", "open", "create", "active", "detail"].includes(view)) return;
     arenaV3State.view = view;
     arenaV3Render();
+}
+
+async function arenaV3OpenDetail(matchId) {
+    arenaV3State.view = "detail";
+    arenaV3State.selectedMatch = null;
+    arenaV3Render();
+    try {
+        arenaV3State.selectedMatch = await arenaV3Client.detail(matchId);
+        arenaV3Render();
+    } catch (error) {
+        arenaV3Error(error, () => arenaV3OpenDetail(matchId));
+    }
+}
+
+async function arenaV3RunAction(key, action, success) {
+    if (arenaV3State.actionLoading) return;
+    arenaV3State.actionLoading = key;
+    const controls = document.querySelectorAll("[data-arena-v3-ready], #arenaV3RoomCodeForm button, [data-arena-v3-cancel]");
+    controls.forEach((control) => {
+        control.disabled = true;
+        control.classList.add("is-loading");
+        control.setAttribute("aria-busy", "true");
+    });
+    try {
+        arenaV3State.activeMatch = await action();
+        arenaV3State.view = "active";
+        arenaV3Render();
+        arenaV3Toast(success);
+    } catch (error) {
+        controls.forEach((control) => {
+            control.disabled = false;
+            control.classList.remove("is-loading");
+            control.removeAttribute("aria-busy");
+        });
+        arenaV3Toast(error.message, "error");
+    } finally {
+        arenaV3State.actionLoading = null;
+    }
+}
+
+function arenaV3Ready() {
+    const match = arenaV3State.activeMatch;
+    if (match) arenaV3RunAction("ready", () => arenaV3Client.ready(match.id), "Ready qabul qilindi.");
+}
+
+function arenaV3RoomCodeSubmit(form) {
+    const match = arenaV3State.activeMatch;
+    const code = String(new FormData(form).get("roomCode") || "").trim();
+    if (!code || code.length > 8) return arenaV3Toast("Room Code 1–8 belgi bo‘lishi kerak.", "error");
+    if (match) arenaV3RunAction("room", () => arenaV3Client.submitRoomCode(match.id, code), "Match boshlandi.");
+}
+
+function arenaV3CancelConfirm() {
+    const match = arenaV3State.activeMatch;
+    if (!match || !["OPEN", "READY", "WAITING_ROOM_CODE"].includes(match.status)) return;
+    const modal = document.createElement("div");
+    modal.className = "arena-v3x-modal";
+    modal.innerHTML = `<section role="dialog" aria-modal="true" aria-labelledby="arenaV3CancelTitle">
+        <button type="button" data-close aria-label="Yopish">×</button><small>CONFIRM</small>
+        <h3 id="arenaV3CancelTitle">Matchni bekor qilasizmi?</h3>
+        <p>Bu amal matchni CANCELLED holatiga o‘tkazadi.</p>
+        <div class="arena-v3x-modal-actions"><button type="button" data-close>Yo‘q</button>
+            <button class="arena-v3x-cancel" type="button" data-confirm>Ha, bekor qilish</button></div></section>`;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", close));
+    modal.querySelector("[data-confirm]").addEventListener("click", () => {
+        close();
+        arenaV3RunAction("cancel", () => arenaV3Client.cancel(match.id), "Match bekor qilindi.");
+    });
 }
 
 function arenaV3Choice(event) {
@@ -440,6 +634,8 @@ function arenaV3JoinModal(matchId) {
         const username = modal.querySelector("input").value.trim();
         if (!username) return arenaV3Toast("eFootball username kiriting.", "error");
         event.currentTarget.disabled = true;
+        event.currentTarget.classList.add("is-loading");
+        event.currentTarget.setAttribute("aria-busy", "true");
         try {
             const active = await arenaV3Client.join(match.id, username);
             try {
@@ -452,6 +648,8 @@ function arenaV3JoinModal(matchId) {
             arenaV3Toast("Matchga qo‘shildingiz.");
         } catch (error) {
             event.currentTarget.disabled = false;
+            event.currentTarget.classList.remove("is-loading");
+            event.currentTarget.removeAttribute("aria-busy");
             arenaV3Toast(error.message, "error");
         }
     });
@@ -462,10 +660,20 @@ function arenaV3Bind(page) {
         button.addEventListener("click", () => arenaV3Select(button.dataset.arenaV3View)));
     page.querySelectorAll("[data-arena-v3-back]").forEach((button) =>
         button.addEventListener("click", () => arenaV3Select("home")));
+    page.querySelectorAll("[data-arena-v3-back-open]").forEach((button) =>
+        button.addEventListener("click", () => arenaV3Select("open")));
     page.querySelectorAll("[data-arena-v3-refresh]").forEach((button) =>
         button.addEventListener("click", () => arenaV3Load({ silent: true })));
     page.querySelectorAll("[data-arena-v3-join]").forEach((button) =>
         button.addEventListener("click", () => arenaV3JoinModal(button.dataset.arenaV3Join)));
+    page.querySelectorAll("[data-arena-v3-detail]").forEach((button) =>
+        button.addEventListener("click", () => arenaV3OpenDetail(button.dataset.arenaV3Detail)));
+    page.querySelector("[data-arena-v3-ready]")?.addEventListener("click", arenaV3Ready);
+    page.querySelector("[data-arena-v3-cancel]")?.addEventListener("click", arenaV3CancelConfirm);
+    page.querySelector("#arenaV3RoomCodeForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        arenaV3RoomCodeSubmit(event.currentTarget);
+    });
     page.querySelectorAll(".arena-v3x-choice").forEach((choice) =>
         choice.addEventListener("click", arenaV3Choice));
     page.querySelector("#arenaV3CreateForm")?.addEventListener("submit", (event) => {
@@ -499,5 +707,7 @@ if (typeof module !== "undefined") {
         arenaV3Skeleton,
         arenaV3MatchCard,
         arenaV3StatusIndex,
+        arenaV3PlayingClock,
+        arenaV3IsOwner,
     };
 }
