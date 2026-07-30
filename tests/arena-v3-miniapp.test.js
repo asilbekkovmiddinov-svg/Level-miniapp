@@ -426,11 +426,15 @@ test("screenshot list and public result use authenticated user routes", async ()
     assert.deepEqual(calls, ["/arena/17/screenshots", "/arena/17/result"]);
 });
 
-test("60 second screenshot countdown is deterministic", () => {
+test("screenshot countdown starts after each supported match duration", () => {
     const started = "2026-07-30T10:00:00.000Z";
-    assert.equal(arenaV3ScreenshotSeconds({ playingStartedAt: started }, Date.parse(started)), 60);
-    assert.equal(arenaV3ScreenshotSeconds({ playingStartedAt: started }, Date.parse(started) + 45000), 15);
-    assert.equal(arenaV3ScreenshotSeconds({ playingStartedAt: started }, Date.parse(started) + 61000), 0);
+    for (const matchTime of [6, 8, 10, 12, 15]) {
+        const windowStart = Date.parse(started) + (matchTime * 60000);
+        const value = { playingStartedAt: started, matchTime };
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart), 60);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 45000), 15);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 61000), 0);
+    }
 });
 
 test("AI review presentation follows backend state without settlement actions", () => {

@@ -577,14 +577,16 @@ function arenaV3MatchDetailView() {
 function arenaV3PlayingClock(match) {
     const started = new Date(match.playingStartedAt);
     if (!match.playingStartedAt || Number.isNaN(started.getTime())) return "00:00";
-    const elapsed = Math.max(0, Math.floor((Date.now() - started.getTime()) / 1000));
-    return `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+    const endsAt = started.getTime() + (match.matchTime * 60000);
+    const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+    return `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
 }
 
 function arenaV3ScreenshotSeconds(match, now = Date.now()) {
     const started = new Date(match?.playingStartedAt).getTime();
     if (!Number.isFinite(started)) return 0;
-    return Math.max(0, Math.ceil((started + 60000 - now) / 1000));
+    const screenshotStartsAt = started + (match.matchTime * 60000);
+    return Math.max(0, Math.ceil((screenshotStartsAt + 60000 - now) / 1000));
 }
 
 function arenaV3EvidenceState(match) {
@@ -825,16 +827,10 @@ function arenaV3StageAction(match) {
             <div><span>Room Code<b>${arenaV3Escape(match.roomCode || "—")}</b></span>
                 <span>Match Timer<b data-arena-v3-clock>${arenaV3PlayingClock(match)}</b></span>
                 <span>Status<b>PLAYING</b></span></div>
-            <p>Match History screenshotini 60 soniyalik oynada yuboring.</p></section>
-            ${arenaV3ScreenshotPanel(match)}`;
+            <p>Match tugagach screenshot yuborish uchun 60 soniya beriladi.</p></section>`;
     }
     if (match.status === "WAITING_SCREENSHOT") {
-        const evidence = arenaV3EvidenceState(match);
-        return `<section class="arena-v3x-stage-card arena-v3x-waiting">
-            <i class="arena-v3x-spinner"></i><small>SCREENSHOT TIMEOUT</small>
-            <h3>${evidence.count}/2 screenshot qabul qilindi</h3>
-            <p>Upload oynasi yopildi. AI Review ishga tushirilmoqda.</p>
-            <div class="arena-v3x-evidence-progress"><i style="width:${evidence.count * 50}%"></i></div></section>`;
+        return arenaV3ScreenshotPanel(match);
     }
     if (match.status === "AI_REVIEW") {
         return arenaV3State.result?.aiReview?.status === "COMPLETED"
