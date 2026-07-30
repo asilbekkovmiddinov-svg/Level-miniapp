@@ -514,10 +514,27 @@ function arenaV3OpenView() {
 }
 
 function arenaV3StoredUsername() {
+    const telegramId = Number(arenaV3TelegramUser()?.id);
+    if (!Number.isInteger(telegramId) || telegramId <= 0) return "";
     try {
-        return globalThis.localStorage?.getItem("arena-v3-efootball-username") || "";
+        return globalThis.localStorage?.getItem(
+            `arena-v3-efootball-username:${telegramId}`
+        ) || "";
     } catch (_) {
         return "";
+    }
+}
+
+function arenaV3SaveUsername(username) {
+    const telegramId = Number(arenaV3TelegramUser()?.id);
+    if (!Number.isInteger(telegramId) || telegramId <= 0) return;
+    try {
+        globalThis.localStorage?.setItem(
+            `arena-v3-efootball-username:${telegramId}`,
+            username
+        );
+    } catch (_) {
+        // Storage can be unavailable in restricted Telegram WebViews.
     }
 }
 
@@ -586,7 +603,7 @@ function arenaV3ScreenshotSeconds(match, now = Date.now()) {
     const started = new Date(match?.playingStartedAt).getTime();
     if (!Number.isFinite(started)) return 0;
     const screenshotStartsAt = started + (match.matchTime * 60000);
-    return Math.max(0, Math.ceil((screenshotStartsAt + 60000 - now) / 1000));
+    return Math.max(0, Math.ceil((screenshotStartsAt + 300000 - now) / 1000));
 }
 
 function arenaV3EvidenceState(match) {
@@ -827,7 +844,7 @@ function arenaV3StageAction(match) {
             <div><span>Room Code<b>${arenaV3Escape(match.roomCode || "—")}</b></span>
                 <span>Match Timer<b data-arena-v3-clock>${arenaV3PlayingClock(match)}</b></span>
                 <span>Status<b>PLAYING</b></span></div>
-            <p>Match tugagach screenshot yuborish uchun 60 soniya beriladi.</p></section>`;
+            <p>Match tugagach screenshot yuborish uchun 5 daqiqa beriladi.</p></section>`;
     }
     if (match.status === "WAITING_SCREENSHOT") {
         return arenaV3ScreenshotPanel(match);
@@ -1263,7 +1280,7 @@ async function arenaV3CreateSubmit(form) {
             matchTime: Number(selected("time")),
         });
         try {
-            globalThis.localStorage?.setItem("arena-v3-efootball-username", username);
+            arenaV3SaveUsername(username);
         } catch (_) {}
         arenaV3State.activeMatch = match;
         arenaV3State.view = "active";
@@ -1307,7 +1324,7 @@ function arenaV3JoinModal(matchId) {
         try {
             const active = await arenaV3Client.join(match.id, username);
             try {
-                globalThis.localStorage?.setItem("arena-v3-efootball-username", username);
+                arenaV3SaveUsername(username);
             } catch (_) {}
             close();
             arenaV3State.activeMatch = active;
@@ -1418,5 +1435,7 @@ if (typeof module !== "undefined") {
         normalizeArenaV3Profile,
         normalizeArenaV3RankingPlayer,
         arenaV3Track,
+        arenaV3StoredUsername,
+        arenaV3SaveUsername,
     };
 }
