@@ -193,6 +193,12 @@ class ArenaV3Client {
         if (!file || !["image/png", "image/jpeg"].includes(file.type)) {
             return Promise.reject(new ArenaV3ClientError("Faqat PNG yoki JPEG yuborish mumkin.", 400));
         }
+        if (Number(file.size) > 5 * 1024 * 1024) {
+            return Promise.reject(new ArenaV3ClientError(
+                "413 Payload Too Large: Screenshot hajmi 5 MB dan oshmasligi kerak.",
+                413,
+            ));
+        }
         const initData = this.initDataProvider();
         if (!initData) return Promise.reject(new ArenaV3ClientError("Telegram tasdiqlashi topilmadi.", 401));
         return new Promise((resolve, reject) => {
@@ -201,6 +207,7 @@ class ArenaV3Client {
             xhr.setRequestHeader("X-Telegram-Init-Data", initData);
             xhr.setRequestHeader("Idempotency-Key", arenaV3Key(`screenshot-${Number(matchId)}`));
             xhr.responseType = "json";
+            xhr.timeout = 120000;
             xhr.upload.addEventListener("progress", (event) => {
                 if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
             });
@@ -209,16 +216,64 @@ class ArenaV3Client {
                     onProgress(100);
                     resolve(normalizeArenaV3Screenshot(xhr.response));
                 } else {
-                    reject(new ArenaV3ClientError(arenaV3HttpMessage(xhr.status), xhr.status));
+                    reject(arenaV3UploadError(xhr));
                 }
             });
             xhr.addEventListener("error", () =>
-                reject(new ArenaV3ClientError("Screenshot yuklashda tarmoq xatosi.")));
+                reject(arenaV3UploadError(xhr)));
+            xhr.addEventListener("timeout", () => reject(new ArenaV3ClientError(
+                "Upload timeout: server 120 soniyada javob bermadi.",
+                408,
+            )));
+            xhr.addEventListener("abort", () => reject(new ArenaV3ClientError(
+                "Screenshot yuklash bekor qilindi.",
+                0,
+            )));
             const form = new FormData();
             form.append("file", file, file.name);
             xhr.send(form);
         });
     }
+}
+
+function arenaV3UploadError(xhr) {
+    const status = Number(xhr?.status) || 0;
+    let detail = "";
+    if (typeof xhr?.response?.detail === "string") {
+        detail = xhr.response.detail.trim();
+    } else {
+        try {
+            const parsed = JSON.parse(xhr?.responseText || "{}");
+            if (typeof parsed?.detail === "string") detail = parsed.detail.trim();
+        } catch (_) {
+            // Non-JSON proxy responses are represented by their HTTP status.
+        }
+    }
+    if (status === 0) {
+        return new ArenaV3ClientError(
+            "HTTP status 0: server javobi olinmadi. Internet, CORS yoki reverse proxy ulanishi uzilgan.",
+            0,
+        );
+    }
+    const labels = {
+        400: "Bad Request",
+        401: "Unauthorized",
+        403: "Forbidden",
+        404: "Not Found",
+        408: "Request Timeout",
+        409: "Conflict",
+        413: "Payload Too Large",
+        422: "Unprocessable Content",
+        500: "Internal Server Error",
+        502: "Bad Gateway",
+        503: "Service Unavailable",
+        504: "Gateway Timeout",
+    };
+    const prefix = `${status} ${labels[status] || "HTTP Error"}`;
+    return new ArenaV3ClientError(
+        `${prefix}: ${detail || arenaV3HttpMessage(status)}`,
+        status,
+    );
 }
 
 function arenaV3HttpMessage(status) {
