@@ -35,8 +35,19 @@ test("quick actions are the requested premium 2x2 destinations", () => {
     assert.match(quick, /data-page="wheel"/);
     assert.match(quick, /data-page="wallet"/);
     assert.match(quick, /data-page="shop"/);
-    assert.equal((quick.match(/home-v4-quick/g) || []).length, 5);
+    assert.equal((quick.match(/class="home-v4-quick home-quick-card/g) || []).length, 4);
     assert.match(styles, /\.home-v4-ripple/);
+});
+
+test("quick actions use optimized contextual artwork instead of emoji icons", () => {
+    const quick = index.match(/<div class="home-v4-quick-grid[\s\S]*?<\/div>/)?.[0] || "";
+    for (const asset of ["quick-arena.webp", "quick-wheel.webp", "quick-wallet.webp", "quick-shop.webp"]) {
+        assert.match(quick, new RegExp(`assets/home/${asset}`));
+    }
+    assert.equal((quick.match(/loading="lazy"/g) || []).length, 4);
+    assert.equal((quick.match(/class="home-v4-quick-art"/g) || []).length, 4);
+    assert.doesNotMatch(quick, /⚔|🎡|💰|🪙/u);
+    assert.match(styles, /\.home-v4-quick-art img/);
 });
 
 test("live info uses existing Arena and winner read data with honest fallbacks", () => {
