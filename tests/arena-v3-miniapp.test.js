@@ -85,6 +85,22 @@ test("history terminal result never re-enters Active Match state", () => {
     );
 });
 
+test("FINISHED polling preserves result and opens confirmation screen", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8",
+    );
+    assert.match(
+        source,
+        /arenaV3State\.result = terminal;[\s\S]*arenaV3State\.view = "result"/,
+    );
+    assert.doesNotMatch(
+        source,
+        /if \(!match\) \{[\s\S]{0,120}arenaV3State\.result = null/,
+    );
+    assert.match(source, /<h4>Natija to‘g‘rimi\?<\/h4>/);
+    assert.match(source, /Ikkala o‘yinchi tasdiqlagach reward darhol ochiladi/);
+});
+
 test("PLAYING remains visible as Active Match", async () => {
     const client = new ArenaV3Client({
         initDataProvider: () => "auth",
@@ -437,11 +453,20 @@ test("Sprint 4 ranking accepts backend periods and rejects unsupported daily", a
         initDataProvider: () => "auth",
         fetchImpl: async (url) => {
             calls.push(url);
-            return response({ players: [{ player_id: 7, rank: 1, username: "Champion", wins: 12, win_rate: "75" }] });
+            return response({ players: [{
+                player_id: 7, rank: 1, username: "Champion",
+                total_matches: 16, wins: 12, losses: 4,
+                goals_for: 38, total_efc_won: "1440.00", win_rate: "75",
+            }] });
         },
     });
     const rows = await client.ranking("weekly");
     assert.equal(rows[0].username, "Champion");
+    assert.equal(rows[0].totalMatches, 16);
+    assert.equal(rows[0].wins, 12);
+    assert.equal(rows[0].losses, 4);
+    assert.equal(rows[0].goalsFor, 38);
+    assert.equal(rows[0].totalEfcWon, 1440);
     assert.equal(rows[0].winRate, 75);
     await assert.rejects(() => client.ranking("daily"), /Daily ranking/);
     assert.deepEqual(calls, ["/arena/ranking?period=weekly"]);
@@ -507,7 +532,7 @@ test("result confirmation uses authenticated idempotent V4 endpoint", async () =
     assert.match(call.options.headers["Idempotency-Key"], /^arena-v3-confirm-result-17-/);
 });
 
-test("Sprint 4 surfaces contain infinite history, podium, appeal states and analytics hooks", () => {
+test("Arena surfaces contain result confirmation, ranking rows, appeal and analytics hooks", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/arena-v3.css"), "utf8");
     assert.match(source, /IntersectionObserver/);
@@ -519,7 +544,12 @@ test("Sprint 4 surfaces contain infinite history, podium, appeal states and anal
     assert.match(source, /arena_result_open/);
     assert.match(source, /arena_appeal_upload/);
     assert.match(source, /arena_appeal_submit/);
-    assert.match(css, /arena-v3x-podium/);
+    assert.match(source, /O‘yin/);
+    assert.match(source, /G‘alaba/);
+    assert.match(source, /Mag‘lubiyat/);
+    assert.match(source, /Gollar/);
+    assert.match(source, /Yutilgan EFC/);
+    assert.match(css, /arena-v3x-rank-table/);
     assert.match(css, /arena-v3x-history-card/);
     assert.match(css, /arena-v3x-stats/);
 });
