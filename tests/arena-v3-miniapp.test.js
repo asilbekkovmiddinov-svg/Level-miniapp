@@ -10,6 +10,7 @@ const {
     ARENA_V3_TIMELINE,
     arenaV3StatusIndex,
     arenaV3IsActiveStatus,
+    arenaV3ScreenshotAccepted,
     arenaV3ScreenshotSeconds,
     normalizeArenaV3Screenshot,
     normalizeArenaV3Result,
@@ -350,6 +351,23 @@ test("screenshot upload exposes backend HTTP status and response detail", async 
             && error.message === "409 Conflict: Screenshot already uploaded",
     );
     assert.equal(xhr.timeout, 120000);
+});
+
+test("ambiguous screenshot response is accepted only after participant reconciliation", () => {
+    const screenshots = [
+        { playerId: 1, id: 31 },
+        { playerId: 2, id: 32 },
+    ];
+    assert.equal(arenaV3ScreenshotAccepted(screenshots, 1), true);
+    assert.equal(arenaV3ScreenshotAccepted(screenshots, 3), false);
+    assert.equal(arenaV3ScreenshotAccepted(screenshots, 0), false);
+
+    const source = fs.readFileSync(
+        path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8",
+    );
+    assert.match(source, /\[0, 408\]\.includes\(Number\(error\?\.status\)\)/);
+    assert.match(source, /await arenaV3Client\.screenshots\(match\.id\)/);
+    assert.match(source, /✅ Screenshot muvaffaqiyatli yuborildi/);
 });
 
 test("screenshot upload separates status zero, timeout and file limit errors", async () => {
