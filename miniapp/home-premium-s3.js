@@ -149,10 +149,10 @@ function renderHomeS3News() {
     const root = document.getElementById("homeNewsEvents");
     if (!root || typeof promotionsUserState === "undefined") return;
     const items = promotionsUserState.items.slice(0, 6);
+    const section = document.getElementById("homeNewsSection");
+    if (section) section.hidden = items.length === 0;
     if (!items.length) {
-        root.innerHTML = typeof homeS2Empty === "function"
-            ? homeS2Empty("◈", "News & Events tayyorlanmoqda", "Faol Promotions API ma’lumotlari kelganda tadbirlar shu yerda ko‘rinadi.", "promotions", "Promotions")
-            : "";
+        root.innerHTML = "";
         return;
     }
     root.innerHTML = items.map((item, index) => {

@@ -20,6 +20,8 @@ function promotionsHomeMarkup() {
 function renderPromotionsHome() {
     const root = document.getElementById("homePromotions");
     if (!root) return;
+    const section = document.getElementById("homePromotionSection");
+    if (section) section.hidden = promotionsUserState.items.length === 0;
     root.innerHTML = promotionsHomeMarkup(); bindPromotionsHome(); scheduleCarousel();
     const active = promotionsUserState.items[promotionsUserState.index]; if (active) trackPromotionView(active.id, "home");
 }

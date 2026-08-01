@@ -92,11 +92,13 @@ function renderLiveWinners(payload) {
     const panel = document.getElementById("liveWinnersPanel");
     if (!panel) return;
     const data = normalizeLiveWinners(payload);
+    const section = document.getElementById("liveWinnersSection");
+    if (section) section.hidden = data.winners.length === 0;
     if (typeof updateHomePremiumLiveInfo === "function") {
         updateHomePremiumLiveInfo(data, payload);
     }
     if (!data.winners.length) {
-        panel.innerHTML = `<div class="live-winners-state"><i>🏆</i><strong>Bugungi g‘olib siz bo‘lishingiz mumkin</strong><small>Yangi yutuqlar shu yerda jonli ko‘rinadi.</small></div>${liveWinnersMeta(data)}`;
+        panel.innerHTML = "";
         liveWinnersLoaded = true;
         return;
     }
@@ -114,7 +116,9 @@ async function loadLiveWinners({ silent = false, force = false } = {}) {
         renderLiveWinners(await getLiveWheelWinners());
     } catch (error) {
         if (silent && liveWinnersLoaded) return;
-        panel.innerHTML = `<div class="live-winners-state"><i>!</i><strong>Yutuqlar yuklanmadi</strong><small>Aloqani tekshirib, qayta urinib ko‘ring.</small><button type="button" onclick="loadLiveWinners()">Qayta urinish</button></div>`;
+        const section = document.getElementById("liveWinnersSection");
+        if (section) section.hidden = true;
+        panel.innerHTML = "";
     }
 }
 

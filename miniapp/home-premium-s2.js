@@ -150,8 +150,10 @@ function explicitMissionRows(payloads) {
 function renderHomeS2Missions(items) {
     const root = document.getElementById("homeDailyMissions");
     if (!root) return;
+    const section = document.getElementById("homeMissionsSection");
+    if (section) section.hidden = items.length === 0;
     if (!items.length) {
-        root.innerHTML = homeS2Empty("◎", "Kunlik missiyalar kutilmoqda", "Mavjud API kunlik progress yuborganda natijalar shu yerda ko‘rinadi.", "", "");
+        root.innerHTML = "";
         return;
     }
     root.innerHTML = items.map((item, index) => {
@@ -168,8 +170,10 @@ function renderHomeS2Featured() {
     const root = document.getElementById("homeFeaturedCards");
     if (!root || typeof promotionsUserState === "undefined") return;
     const items = promotionsUserState.items.slice(0, 3);
+    const section = document.getElementById("homeFeaturedSection");
+    if (section) section.hidden = items.length === 0;
     if (!items.length) {
-        root.innerHTML = homeS2Empty("◇", "Featured kartalar tayyorlanmoqda", "Faol premium takliflar paydo bo‘lganda shu yerda ko‘rsatiladi.", "promotions", "Takliflarni ko‘rish");
+        root.innerHTML = "";
         return;
     }
     root.innerHTML = items.map((item, index) => `<button class="home-s2-feature" data-home-feature="${item.id}" type="button" style="--s2-order:${index}">

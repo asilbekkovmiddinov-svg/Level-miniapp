@@ -37,13 +37,14 @@ test("Live Winners normalizes backend-ready envelopes and relative time", () => 
     assert.equal(liveWinnerRelativeTime("2030-01-01T10:00:00Z", Date.parse("2030-01-01T12:00:00Z")), "2 soat oldin");
 });
 
-test("Home integrates skeleton, retry, empty, 12-second polling and reduced motion", () => {
+test("Home hides empty or failed winners and polls for real data every 12 seconds", () => {
     const index = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/live-winners.js"), "utf8");
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/home.css"), "utf8");
     assert.match(index, /So‘nggi yutuqlar/);
+    assert.match(index, /id="liveWinnersSection"[^>]*hidden/);
     assert.match(source, /setInterval\(\(\) => loadLiveWinners\(\{ silent: true \}\), 12000\)/);
-    assert.match(source, /Qayta urinish/);
-    assert.match(source, /Bugungi g‘olib/);
+    assert.match(source, /section\.hidden = data\.winners\.length === 0/);
+    assert.match(source, /section\.hidden = true/);
     assert.match(css, /prefers-reduced-motion:reduce/);
 });
