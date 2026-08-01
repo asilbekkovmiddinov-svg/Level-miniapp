@@ -17,6 +17,14 @@ test("Home exposes premium promotion, mission, featured and activity surfaces", 
     assert.match(index, /home-premium-s2\.js\?v=1\.0\.0/);
 });
 
+test("content-driven Home sections stay hidden until authoritative data exists", () => {
+    for (const id of ["homePromotionSection", "homeMissionsSection", "homeFeaturedSection", "liveWinnersSection", "homeNewsSection"]) {
+        assert.match(index, new RegExp(`id="${id}"[^>]*hidden`));
+    }
+    assert.match(promotionsSource, /section\.hidden = promotionsUserState\.items\.length === 0/);
+    assert.match(controllerSource, /section\.hidden = items\.length === 0/);
+});
+
 test("promotion hero preserves existing API carousel behavior", () => {
     assert.match(promotionsSource, /promotionsUserApi\.active\(\)/);
     assert.match(promotionsSource, /setInterval\(\(\) => movePromotionSlide/);
@@ -43,7 +51,7 @@ test("daily missions render only explicit server progress and never fabricate to
     });
     assert.deepEqual(rows[0], { title: "Arena", progress: 1, target: 3, completed: false, icon: "◆" });
     assert.deepEqual(home.explicitMissionRows({ api: { total_matches: 12, total_referrals: 5 } }), []);
-    assert.match(controllerSource, /Kunlik missiyalar kutilmoqda/);
+    assert.match(controllerSource, /section\.hidden = items\.length === 0/);
 });
 
 test("featured cards are sourced from active promotions rather than static fixtures", () => {
