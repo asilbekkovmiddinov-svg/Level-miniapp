@@ -971,6 +971,16 @@ function arenaV3ActiveView() {
     </section>`;
 }
 
+function arenaV3TerminalResultView() {
+    const match = arenaV3State.result?.match;
+    if (!match || arenaV3IsActiveStatus(match.status)) return arenaV3HomeCards();
+    return `<section class="arena-v3x-panel arena-v3x-terminal-result">
+        <header><button type="button" data-arena-v3-back-history>‹</button>
+            <section><small>MATCH HISTORY</small><h3>Match natijasi</h3></section>
+            <b class="arena-v3x-status">${arenaV3Escape(match.status)}</b></header>
+        ${arenaV3ResultPanel(match)}</section>`;
+}
+
 function arenaV3Render() {
     const page = document.getElementById("arenaPage");
     if (!page) return;
@@ -978,6 +988,7 @@ function arenaV3Render() {
     if (arenaV3State.view === "open") body = arenaV3OpenView();
     if (arenaV3State.view === "create") body = arenaV3CreateView();
     if (arenaV3State.view === "active") body = arenaV3ActiveView();
+    if (arenaV3State.view === "result") body = arenaV3TerminalResultView();
     if (arenaV3State.view === "detail") body = arenaV3MatchDetailView();
     if (arenaV3State.view === "profile") body = arenaV3ProfileView();
     if (arenaV3State.view === "history") body = arenaV3HistoryView();
@@ -1159,8 +1170,8 @@ async function arenaV3LoadRanking(period = arenaV3State.rankingPeriod) {
 async function arenaV3ShowHistoryResult(matchId) {
     try {
         arenaV3State.result = arenaV3State.historyResults[matchId] || await arenaV3Client.result(matchId);
-        arenaV3State.activeMatch = arenaV3State.result.match;
-        arenaV3State.view = "active";
+        arenaV3State.activeMatch = null;
+        arenaV3State.view = "result";
         arenaV3Track("arena_result_open", { match_id: Number(matchId) });
         arenaV3Render();
     } catch (error) {
@@ -1177,13 +1188,15 @@ function arenaV3SelectAppeal(input) {
     } else {
         arenaV3State.appealFile = file;
         arenaV3State.appealProgress = 0;
-        arenaV3Track("arena_appeal_upload", { match_id: arenaV3State.activeMatch?.id });
+        arenaV3Track("arena_appeal_upload", {
+            match_id: arenaV3State.activeMatch?.id || arenaV3State.result?.match?.id,
+        });
     }
     arenaV3Render();
 }
 
 async function arenaV3UploadAppeal() {
-    const match = arenaV3State.activeMatch;
+    const match = arenaV3State.activeMatch || arenaV3State.result?.match;
     if (!match || !arenaV3State.appealFile || arenaV3State.actionLoading) return;
     arenaV3State.actionLoading = "appeal";
     arenaV3State.appealStatus = "uploading";
@@ -1201,7 +1214,7 @@ async function arenaV3UploadAppeal() {
         );
         arenaV3State.appealStatus = "submitted";
         arenaV3State.appealReason = "";
-        arenaV3State.activeMatch.hasAppeal = true;
+        match.hasAppeal = true;
         arenaV3Track("arena_appeal_submit", { match_id: match.id });
         arenaV3Toast("Appeal yuborildi.");
     } catch (error) {
@@ -1215,7 +1228,7 @@ async function arenaV3UploadAppeal() {
 }
 
 async function arenaV3ConfirmResult() {
-    const match = arenaV3State.activeMatch;
+    const match = arenaV3State.activeMatch || arenaV3State.result?.match;
     if (!match || arenaV3State.actionLoading) return;
     const accepted = await arenaV3ResultConfirmationDialog();
     if (!accepted) return;
@@ -1223,7 +1236,9 @@ async function arenaV3ConfirmResult() {
     try {
         await arenaV3Client.confirmResult(match.id);
         arenaV3State.result = await arenaV3Client.result(match.id);
-        arenaV3State.activeMatch = arenaV3State.result.match;
+        arenaV3State.activeMatch = arenaV3IsActiveStatus(arenaV3State.result.match.status)
+            ? arenaV3State.result.match : null;
+        arenaV3State.view = arenaV3State.activeMatch ? "active" : "result";
         arenaV3Toast("Natija tasdiqlandi.");
     } catch (error) {
         arenaV3Toast(error.message, "error");
@@ -1506,6 +1521,10 @@ function arenaV3Bind(page) {
     page.querySelector("[data-arena-v3-history-more]")?.addEventListener("click", () => arenaV3LoadHistory(false));
     page.querySelectorAll("[data-arena-v3-history-result]").forEach((button) =>
         button.addEventListener("click", () => arenaV3ShowHistoryResult(Number(button.dataset.arenaV3HistoryResult))));
+    page.querySelector("[data-arena-v3-back-history]")?.addEventListener("click", () => {
+        arenaV3State.view = "history";
+        arenaV3Render();
+    });
     page.querySelectorAll("[data-arena-v3-period]").forEach((button) =>
         button.addEventListener("click", () => arenaV3LoadRanking(button.dataset.arenaV3Period)));
     page.querySelectorAll("[data-arena-v3-section-retry]").forEach((button) =>

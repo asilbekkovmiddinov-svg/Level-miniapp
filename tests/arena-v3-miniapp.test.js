@@ -72,6 +72,18 @@ test("CANCELLED and FINISHED never render as Active Match", async () => {
     }
 });
 
+test("history terminal result never re-enters Active Match state", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8",
+    );
+    assert.match(source, /arenaV3State\.activeMatch = null;\s*arenaV3State\.view = "result"/);
+    assert.match(source, /<h3>Match natijasi<\/h3>/);
+    assert.doesNotMatch(
+        source,
+        /arenaV3State\.activeMatch = arenaV3State\.result\.match;\s*arenaV3State\.view = "active"/,
+    );
+});
+
 test("PLAYING remains visible as Active Match", async () => {
     const client = new ArenaV3Client({
         initDataProvider: () => "auth",
