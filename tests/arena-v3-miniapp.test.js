@@ -61,8 +61,8 @@ test("Arena V3 open and active use authenticated backend contracts", async () =>
     assert.ok(calls.every(([, options]) => options.headers["X-Telegram-Init-Data"] === "signed-init-data"));
 });
 
-test("CANCELLED and FINISHED never render as Active Match", async () => {
-    for (const status of ["CANCELLED", "FINISHED"]) {
+test("terminal and removed legacy statuses never render as Active Match", async () => {
+    for (const status of ["CANCELLED", "FINISHED", "AI_REVIEW"]) {
         const client = new ArenaV3Client({
             initDataProvider: () => "auth",
             fetchImpl: async () => response({ match: { ...match, status } }),
