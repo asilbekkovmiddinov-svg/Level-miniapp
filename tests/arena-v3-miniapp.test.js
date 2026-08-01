@@ -10,7 +10,6 @@ const {
     ARENA_V3_TIMELINE,
     arenaV3StatusIndex,
     arenaV3ScreenshotSeconds,
-    arenaV3AIVisualStep,
     normalizeArenaV3Screenshot,
     normalizeArenaV3Result,
     normalizeArenaV3Profile,
@@ -127,12 +126,12 @@ test("match payload is normalized and malformed payload rejected", () => {
     assert.throws(() => normalizeArenaV3Match({ id: "17", status: "OPEN" }), ArenaV3ClientError);
 });
 
-test("status timeline matches the frozen Arena V3 lifecycle", () => {
+test("status timeline exposes only the simplified Arena V4 lifecycle", () => {
     assert.deepEqual(ARENA_V3_TIMELINE.map(([status]) => status), [
-        "OPEN", "READY", "WAITING_ROOM_CODE", "PLAYING",
-        "WAITING_SCREENSHOT", "AI_REVIEW", "FINISHED",
+        "OPEN", "READY", "PLAYING", "WAITING_SCREENSHOT",
+        "WAITING_ADMIN", "FINISHED",
     ]);
-    assert.equal(arenaV3StatusIndex("AI_REVIEW"), 5);
+    assert.equal(arenaV3StatusIndex("WAITING_ADMIN"), 4);
     assert.equal(arenaV3StatusIndex("CANCELLED"), -1);
 });
 
@@ -433,20 +432,36 @@ test("video appeal uses multipart auth idempotency and upload progress", async (
     const file = new Blob(["video"], { type: "video/mp4" });
     Object.defineProperty(file, "name", { value: "appeal.mp4" });
     const progress = [];
-    await client.uploadAppeal(17, file, (value) => progress.push(value));
-    assert.equal(xhr.url, "/arena/17/video-appeal?reason_code=AI_CONFLICT");
+    await client.uploadAppeal(17, file, "Hisob noto‘g‘ri", (value) => progress.push(value));
+    assert.equal(xhr.url, "/arena/17/appeal?reason=Hisob+noto%25E2%2580%2598g%25E2%2580%2598ri".replaceAll("%25", "%"));
     assert.equal(xhr.headers["X-Telegram-Init-Data"], "auth");
     assert.match(xhr.headers["Idempotency-Key"], /^arena-v3-appeal-17-/);
     assert.ok(xhr.body instanceof FormData);
     assert.deepEqual(progress, [50, 100]);
 });
 
+test("result confirmation uses authenticated idempotent V4 endpoint", async () => {
+    let call;
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async (url, options) => {
+            call = { url, options };
+            return response({ match_id: 17, both_confirmed: false });
+        },
+    });
+    await client.confirmResult(17);
+    assert.equal(call.url, "/arena/17/confirm-result");
+    assert.equal(call.options.method, "POST");
+    assert.equal(call.options.headers["X-Telegram-Init-Data"], "auth");
+    assert.match(call.options.headers["Idempotency-Key"], /^arena-v3-confirm-result-17-/);
+});
+
 test("Sprint 4 surfaces contain infinite history, podium, appeal states and analytics hooks", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/arena-v3.css"), "utf8");
     assert.match(source, /IntersectionObserver/);
-    assert.match(source, /Waiting Review/);
-    assert.match(source, /Settlement/);
+    assert.match(source, /Admin tekshirmoqda/);
+    assert.match(source, /rewardHoldStatus/);
     assert.match(source, /arena_profile_open/);
     assert.match(source, /arena_history_open/);
     assert.match(source, /arena_ranking_open/);
@@ -477,18 +492,16 @@ test("screenshot list and public result use authenticated user routes", async ()
                 file_size: 100, width: 1280, height: 720,
                 validation_status: "VALID", uploaded_at: "2026-07-30T10:02:00Z",
             }] });
-            return response({ match: { ...match, status: "FINISHED" }, ai_review: {
-                id: 9, match_id: 17, status: "COMPLETED", winner_player_id: 1,
-                score: "2-1", confidence: "0.96", reason: "Matching evidence",
-                conflict_type: null, started_at: "2026-07-30T10:03:00Z",
-                completed_at: "2026-07-30T10:03:10Z",
+            return response({ match: {
+                ...match, status: "FINISHED", winner_id: 1,
+                owner_score: 2, opponent_score: 1,
             } });
         },
     });
     assert.equal((await client.screenshots(17))[0].mimeType, "image/jpeg");
     const result = await client.result(17);
-    assert.equal(result.aiReview.score, "2-1");
-    assert.equal(result.aiReview.confidence, 0.96);
+    assert.equal(result.match.ownerScore, 2);
+    assert.equal(result.match.winnerId, 1);
     assert.deepEqual(calls, ["/arena/17/screenshots", "/arena/17/result"]);
 });
 
@@ -537,45 +550,40 @@ test("legacy shared username never autofills another player", () => {
     delete globalThis.localStorage;
 });
 
-test("AI review presentation follows backend state without settlement actions", () => {
-    assert.equal(arenaV3AIVisualStep(null), 0);
-    assert.equal(arenaV3AIVisualStep({ status: "PENDING" }), 0);
-    assert.equal(arenaV3AIVisualStep({ status: "COMPLETED" }), 4);
+test("V4 review presentation hides technical processing states", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
-    for (const label of ["Uploading", "Validating", "Analyzing", "Comparing", "Finalizing"]) {
-        assert.match(source, new RegExp(label));
+    for (const label of ["Confidence", "Validating", "Analyzing", "Comparing", "Finalizing"]) {
+        assert.doesNotMatch(source, new RegExp(label));
     }
-    assert.match(source, /APPEAL_REQUIRED/);
+    assert.match(source, /Admin tomonidan tekshirildi/);
     assert.doesNotMatch(source, /\/settle|\/payout|walletRequest/);
 });
 
-test("result normalization preserves winner score confidence and failure reason", () => {
+test("result normalization preserves authoritative score and reward lock", () => {
     const result = normalizeArenaV3Result({
-        match: { ...match, status: "FINISHED" },
-        ai_review: {
-            id: 9, status: "COMPLETED", winner_player_id: 1, score: "3-2",
-            confidence: "0.91", reason: "Both screenshots agree",
-        },
+        match: { ...match, status: "FINISHED", winner_id: 1,
+            owner_score: 3, opponent_score: 2,
+            reward_hold_status: "LOCKED", winner_reward_efc: "900.00" },
     });
-    assert.equal(result.aiReview.winnerPlayerId, 1);
-    assert.equal(result.aiReview.score, "3-2");
-    assert.equal(result.aiReview.confidence, 0.91);
+    assert.equal(result.match.winnerId, 1);
+    assert.equal(result.match.ownerScore, 3);
+    assert.equal(result.match.rewardHoldStatus, "LOCKED");
     assert.equal(normalizeArenaV3Screenshot({
         id: 1, player_id: 2, validation_status: "PENDING",
     }).playerId, 2);
 });
 
-test("Sprint 3 UI includes preview progress AI result and responsive states", () => {
+test("Sprint 7 UI includes screenshot admin result appeal and lock states", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8");
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/arena-v3.css"), "utf8");
     assert.match(source, /accept="image\/png,image\/jpeg"/);
     assert.match(source, /Screenshot preview/);
     assert.match(source, /Upload Screenshot/);
-    assert.match(source, /AI VERIFIED RESULT/);
-    assert.match(source, /Submit Appeal/);
-    assert.match(source, /video-appeal/);
+    assert.match(source, /Admin tomonidan tekshirildi/);
+    assert.match(source, /Norozilik bildirish/);
+    assert.match(source, /confirm-result/);
     assert.match(css, /arena-v3x-upload-progress/);
-    assert.match(css, /arena-v3x-ai-orb/);
+    assert.match(css, /arena-v3x-reward-lock/);
     assert.match(css, /arena-v3x-result/);
     assert.match(css, /@media\(max-width:380px\)/);
     assert.match(css, /prefers-reduced-motion:reduce/);
