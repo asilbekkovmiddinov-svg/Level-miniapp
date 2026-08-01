@@ -9,6 +9,7 @@ const {
     normalizeArenaV3Match,
     ARENA_V3_TIMELINE,
     arenaV3StatusIndex,
+    arenaV3IsActiveStatus,
     arenaV3ScreenshotSeconds,
     normalizeArenaV3Screenshot,
     normalizeArenaV3Result,
@@ -58,6 +59,26 @@ test("Arena V3 open and active use authenticated backend contracts", async () =>
         "https://api.test/arena/active",
     ]);
     assert.ok(calls.every(([, options]) => options.headers["X-Telegram-Init-Data"] === "signed-init-data"));
+});
+
+test("CANCELLED and FINISHED never render as Active Match", async () => {
+    for (const status of ["CANCELLED", "FINISHED"]) {
+        const client = new ArenaV3Client({
+            initDataProvider: () => "auth",
+            fetchImpl: async () => response({ match: { ...match, status } }),
+        });
+        assert.equal(await client.active(), null);
+        assert.equal(arenaV3IsActiveStatus(status), false);
+    }
+});
+
+test("PLAYING remains visible as Active Match", async () => {
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async () => response({ match: { ...match, status: "PLAYING" } }),
+    });
+    assert.equal((await client.active()).status, "PLAYING");
+    assert.equal(arenaV3IsActiveStatus("PLAYING"), true);
 });
 
 test("Arena V3 create sends validated architecture fields and idempotency", async () => {
@@ -505,14 +526,14 @@ test("screenshot list and public result use authenticated user routes", async ()
     assert.deepEqual(calls, ["/arena/17/screenshots", "/arena/17/result"]);
 });
 
-test("5 minute screenshot countdown starts after each supported match duration", () => {
+test("10 minute screenshot countdown starts after each supported match duration", () => {
     const started = "2026-07-30T10:00:00.000Z";
     for (const matchTime of [6, 8, 10, 12, 15]) {
         const windowStart = Date.parse(started) + (matchTime * 60000);
         const value = { playingStartedAt: started, matchTime };
-        assert.equal(arenaV3ScreenshotSeconds(value, windowStart), 300);
-        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 285000), 15);
-        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 301000), 0);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart), 600);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 585000), 15);
+        assert.equal(arenaV3ScreenshotSeconds(value, windowStart + 601000), 0);
     }
 });
 
