@@ -60,6 +60,16 @@ test("live info uses existing Arena and winner read data with honest fallbacks",
     assert.match(liveSource, /updateHomePremiumLiveInfo\(data, payload\)/);
 });
 
+test("live info metrics use optimized contextual artwork", () => {
+    const live = index.match(/<div class="home-v4-live-strip"[\s\S]*?<\/div>/)?.[0] || "";
+    for (const asset of ["live-online.webp", "live-matches.webp", "live-prize.webp", "live-winners.webp"]) {
+        assert.match(live, new RegExp(`assets/home/${asset}`));
+    }
+    assert.equal((live.match(/loading="lazy"/g) || []).length, 4);
+    assert.equal((live.match(/aria-hidden="true"/g) || []).length, 4);
+    assert.match(styles, /\.home-v4-live-strip article>img/);
+});
+
 test("premium controller normalizes safe URLs and numeric metrics", () => {
     assert.equal(home.homePremiumSafeUrl("http://example.com/a.png"), "");
     assert.equal(home.homePremiumSafeUrl("https://example.com/a.png"), "https://example.com/a.png");
