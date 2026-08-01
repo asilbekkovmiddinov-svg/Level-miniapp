@@ -137,6 +137,13 @@ class ArenaV3Client {
         return normalizeArenaV3Result(await this.request(`/arena/${Number(matchId)}/result`));
     }
 
+    async confirmResult(matchId) {
+        return this.request(`/arena/${Number(matchId)}/confirm-result`, {
+            method: "POST",
+            idempotencyKey: arenaV3Key(`confirm-result-${Number(matchId)}`),
+        });
+    }
+
     async profile() {
         return normalizeArenaV3Profile(await this.request("/arena/profile"));
     }
@@ -158,15 +165,19 @@ class ArenaV3Client {
         return Array.isArray(rows) ? rows.map(normalizeArenaV3RankingPlayer) : [];
     }
 
-    uploadAppeal(matchId, file, onProgress = () => {}) {
+    uploadAppeal(matchId, file, reason, onProgress = () => {}) {
         if (!file || !String(file.type || "").startsWith("video/")) {
             return Promise.reject(new ArenaV3ClientError("Faqat video fayl yuborish mumkin.", 400));
+        }
+        if (!String(reason || "").trim()) {
+            return Promise.reject(new ArenaV3ClientError("Appeal sababini yozing.", 400));
         }
         const initData = this.initDataProvider();
         if (!initData) return Promise.reject(new ArenaV3ClientError("Telegram tasdiqlashi topilmadi.", 401));
         return new Promise((resolve, reject) => {
             const xhr = this.xhrFactory();
-            xhr.open("POST", `${this.baseUrl}/arena/${Number(matchId)}/video-appeal?reason_code=AI_CONFLICT`);
+            const query = new URLSearchParams({ reason: String(reason || "").trim() });
+            xhr.open("POST", `${this.baseUrl}/arena/${Number(matchId)}/appeal?${query}`);
             xhr.setRequestHeader("X-Telegram-Init-Data", initData);
             xhr.setRequestHeader("Idempotency-Key", arenaV3Key(`appeal-${Number(matchId)}`));
             xhr.responseType = "json";
@@ -308,27 +319,9 @@ function normalizeArenaV3Screenshot(value) {
     };
 }
 
-function normalizeArenaV3AIReview(value) {
-    if (!value) return null;
-    return {
-        id: value.id,
-        status: value.status,
-        winnerPlayerId: value.winner_player_id ?? null,
-        score: value.score || null,
-        confidence: value.confidence == null ? null : Number(value.confidence),
-        reason: value.reason || null,
-        conflictType: value.conflict_type || null,
-        startedAt: value.started_at || null,
-        completedAt: value.completed_at || null,
-    };
-}
-
 function normalizeArenaV3Result(value) {
     if (!value?.match) throw new ArenaV3ClientError("Arena result javobi noto‘g‘ri.");
-    return {
-        match: normalizeArenaV3Match(value.match),
-        aiReview: normalizeArenaV3AIReview(value.ai_review),
-    };
+    return { match: normalizeArenaV3Match(value.match) };
 }
 
 function normalizeArenaV3Profile(value) {
@@ -348,6 +341,8 @@ function normalizeArenaV3Profile(value) {
         bestStreak: Number(value.best_streak) || 0,
         totalEfcWon: Number(value.total_efc_won) || 0,
         totalEfcLost: Number(value.total_efc_lost) || 0,
+        lockedRewardsEfc: Number(value.locked_rewards_efc) || 0,
+        pendingAppeals: Number(value.pending_appeals) || 0,
     };
 }
 
@@ -374,6 +369,9 @@ function normalizeArenaV3Match(value) {
         ownerUsername: value.owner_efootball_username || "O‘yinchi",
         opponentUsername: value.opponent_efootball_username || null,
         stake: String(value.stake_efc ?? "0"),
+        totalPool: String(value.total_pool_efc ?? "0"),
+        commission: String(value.commission_efc ?? "0"),
+        winnerReward: String(value.winner_reward_efc ?? "0"),
         matchType: value.match_type || "STANDARD",
         matchTime: Number(value.match_time_minutes) || 10,
         status: value.status,
@@ -390,6 +388,13 @@ function normalizeArenaV3Match(value) {
         settlementStatus: value.settlement_status || null,
         settledAt: value.settled_at || null,
         finishedAt: value.finished_at || null,
+        appealDeadlineAt: value.appeal_deadline_at || null,
+        hasAppeal: Boolean(value.has_appeal),
+        rewardHoldStatus: value.reward_hold_status || "NONE",
+        currentResultType: value.current_result_type || null,
+        rewardReleaseAt: value.reward_release_at || null,
+        ownerResultConfirmedAt: value.owner_result_confirmed_at || null,
+        opponentResultConfirmedAt: value.opponent_result_confirmed_at || null,
         createdAt: value.created_at || null,
         updatedAt: value.updated_at || null,
     };
@@ -411,13 +416,12 @@ function arenaV3Escape(value) {
 }
 
 const ARENA_V3_TIMELINE = Object.freeze([
-    ["OPEN", "Open"],
-    ["READY", "Ready"],
-    ["WAITING_ROOM_CODE", "Room Code"],
-    ["PLAYING", "Playing"],
-    ["WAITING_SCREENSHOT", "Screenshot"],
-    ["AI_REVIEW", "AI Review"],
-    ["FINISHED", "Finished"],
+    ["OPEN", "Match yaratildi"],
+    ["READY", "Raqib topildi"],
+    ["PLAYING", "O‘yin boshlandi"],
+    ["WAITING_SCREENSHOT", "Screenshot yuboring"],
+    ["WAITING_ADMIN", "Admin tekshirmoqda"],
+    ["FINISHED", "Natija"],
 ]);
 
 const arenaV3State = {
@@ -448,6 +452,7 @@ const arenaV3State = {
     appealFile: null,
     appealProgress: 0,
     appealStatus: null,
+    appealReason: "",
 };
 
 const arenaV3Client = new ArenaV3Client();
@@ -526,9 +531,9 @@ function arenaV3Hero() {
     const user = arenaV3TelegramUser();
     const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "O‘yinchi";
     return `<header class="arena-v3x-hero">
-        <div class="arena-v3x-brand"><span>LEVEL</span><b>ARENA</b><i>V3</i></div>
+        <div class="arena-v3x-brand"><span>LEVEL</span><b>ARENA</b><i>V4</i></div>
         <section><small>WELCOME TO THE NEXT LEVEL</small><h2>Battle. Prove. Win.</h2>
-            <p>eFootball 1v1 — avtomatik AI natija va xavfsiz EFC settlement.</p></section>
+            <p>eFootball 1v1 — admin tomonidan tekshirilgan xavfsiz natija.</p></section>
         <footer><span class="arena-v3x-user-avatar">${arenaV3Initial(name)}</span>
             <div><small>PLAYER</small><strong>${arenaV3Escape(name)}</strong></div>
             <i class="arena-v3x-live-dot"></i><b>ONLINE</b></footer>
@@ -620,7 +625,8 @@ function arenaV3CreateView() {
 
 function arenaV3StatusIndex(status) {
     if (status === "CANCELLED") return -1;
-    return ARENA_V3_TIMELINE.findIndex(([key]) => key === status);
+    const visibleStatus = status === "WAITING_ROOM_CODE" ? "READY" : status;
+    return ARENA_V3_TIMELINE.findIndex(([key]) => key === visibleStatus);
 }
 
 function arenaV3IsOwner(match) {
@@ -697,68 +703,76 @@ function arenaV3ScreenshotPanel(match) {
     </section>`;
 }
 
-function arenaV3AIVisualStep(review) {
-    if (!review || review.status === "PENDING") return 0;
-    if (review.status !== "RUNNING") return 4;
-    const started = new Date(review.startedAt).getTime();
-    const elapsed = Number.isFinite(started) ? Math.max(0, Date.now() - started) : 0;
-    return Math.min(4, 1 + Math.floor(elapsed / 4000));
+function arenaV3AdminReviewPanel() {
+    return `<section class="arena-v3x-stage-card arena-v3x-admin-review">
+        <span class="arena-v3x-shield">🛡</span><small>ADMIN REVIEW</small>
+        <h3>Admin tekshirmoqda</h3>
+        <p>Screenshotlar qabul qilindi. Yakuniy hisob admin tomonidan tekshiriladi.</p>
+        <i class="arena-v3x-spinner"></i></section>`;
 }
 
-function arenaV3AIReviewPanel() {
-    const review = arenaV3State.result?.aiReview;
-    if (review?.status === "APPEAL_REQUIRED") {
-        const status = arenaV3State.appealStatus;
-        return `<section class="arena-v3x-stage-card arena-v3x-appeal">
-            <span>⚠</span><small>AI CONFLICT</small><h3>Appeal Required</h3>
-            <p>Ikki screenshot natijasi bir-biriga mos kelmadi. Match xavfsiz tarzda to‘xtatildi va wallet settlement bajarilmaydi.</p>
-            <div><b>${arenaV3Escape(review.conflictType || "RESULT_CONFLICT")}</b>
-                <small>${status === "submitted" ? "Waiting Review" : status === "uploading" ? "Uploading" : "Video dalil yuboring"}</small></div>
-            ${status === "submitted" ? `<p class="arena-v3x-uploaded-note">✓ Submitted · Waiting Review</p>` :
-                `<label class="arena-v3x-file-picker"><span class="arena-v3x-upload-icon">▶</span>
-                    <span>${arenaV3State.appealFile ? arenaV3Escape(arenaV3State.appealFile.name) : "Video tanlang"}</span>
-                    <input type="file" accept="video/*" data-arena-v3-appeal-file></label>
-                ${arenaV3State.evidenceError ? `<p class="arena-v3x-inline-error">${arenaV3Escape(arenaV3State.evidenceError)}</p>` : ""}
-                <button class="arena-v3x-primary" data-arena-v3-appeal-upload ${!arenaV3State.appealFile ? "disabled" : ""}>
-                    ${arenaV3State.evidenceError ? "Retry" : "Submit Appeal"}</button>
-                <div class="arena-v3x-upload-progress"><i style="width:${arenaV3State.appealProgress}%"></i>
-                    <span>${arenaV3State.appealProgress}%</span></div>`}</section>`;
-    }
-    if (review?.status === "FAILED") {
-        return `<section class="arena-v3x-stage-card arena-v3x-ai-error">
-            <span>!</span><small>AI FAILED</small><h3>Tahlil yakunlanmadi</h3>
-            <p>${arenaV3Escape(review.reason || "AI screenshotni ishonchli tahlil qila olmadi.")}</p>
-            <button data-arena-v3-retry-result>Qayta tekshirish</button></section>`;
-    }
-    const active = arenaV3AIVisualStep(review);
-    const labels = ["Uploading", "Validating", "Analyzing", "Comparing", "Finalizing"];
-    return `<section class="arena-v3x-stage-card arena-v3x-ai-review">
-        <div class="arena-v3x-ai-orb"><i></i><b>AI</b></div>
-        <small>AI MATCH REVIEW</small><h3>Natija tahlil qilinmoqda</h3>
-        <p>Bu jarayonda hech qanday wallet amali MiniApp tomonidan bajarilmaydi.</p>
-        <ol>${labels.map((label, index) => `<li class="${index < active ? "is-done" : index === active ? "is-active" : ""}">
-            <i>${index < active ? "✓" : index + 1}</i><span>${label}</span></li>`).join("")}</ol>
-        <div class="arena-v3x-ai-progress"><i style="width:${Math.max(8, (active + 1) * 20)}%"></i></div>
-    </section>`;
+function arenaV3RewardSeconds(match, now = Date.now()) {
+    const deadline = new Date(match?.rewardReleaseAt).getTime();
+    return Number.isFinite(deadline) ? Math.max(0, Math.ceil((deadline - now) / 1000)) : 0;
+}
+
+function arenaV3RewardClock(match) {
+    const seconds = arenaV3RewardSeconds(match);
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function arenaV3CanAppeal(match) {
+    const deadline = new Date(match?.appealDeadlineAt).getTime();
+    const ownConfirmed = arenaV3IsOwner(match)
+        ? match.ownerResultConfirmedAt : match.opponentResultConfirmedAt;
+    return match.status === "FINISHED" && !match.hasAppeal && !ownConfirmed
+        && Number.isFinite(deadline) && deadline > Date.now();
+}
+
+function arenaV3AppealForm(match) {
+    if (!arenaV3CanAppeal(match)) return "";
+    return `<section class="arena-v3x-appeal-form"><h4>Norozilik bildirish</h4>
+        <p>Video va sabab majburiy. Muddati tugagach appeal yopiladi.</p>
+        <textarea data-arena-v3-appeal-reason maxlength="500" placeholder="Sababni yozing">${arenaV3Escape(arenaV3State.appealReason)}</textarea>
+        <label class="arena-v3x-file-picker"><span class="arena-v3x-upload-icon">▶</span>
+            <span>${arenaV3State.appealFile ? arenaV3Escape(arenaV3State.appealFile.name) : "Video tanlang"}</span>
+            <input type="file" accept="video/*" data-arena-v3-appeal-file></label>
+        <button class="arena-v3x-primary" data-arena-v3-appeal-upload
+            ${!arenaV3State.appealFile || !arenaV3State.appealReason.trim() ? "disabled" : ""}>Yuborish</button></section>`;
 }
 
 function arenaV3ResultPanel(match) {
-    const review = arenaV3State.result?.aiReview;
-    if (!review || review.status !== "COMPLETED") return arenaV3AIReviewPanel();
-    const ownerWinner = Number(review.winnerPlayerId) === Number(match.ownerId);
-    const winner = review.winnerPlayerId == null
-        ? "Draw"
-        : ownerWinner ? match.ownerUsername : match.opponentUsername;
+    const ownId = Number(arenaV3TelegramUser().id);
+    const cancelled = match.currentResultType === "CANCEL";
+    const isDraw = match.currentResultType === "DRAW"
+        || (!cancelled && match.winnerId == null);
+    const ownWon = Number(match.winnerId) === ownId;
+    const winner = cancelled ? "Cancel" : isDraw ? "Draw" : Number(match.winnerId) === Number(match.ownerId)
+        ? match.ownerUsername : match.opponentUsername;
+    const title = cancelled ? "Match bekor qilindi" : isDraw ? "Durrang"
+        : ownWon ? "Siz g‘olib bo‘ldingiz" : "Siz yutqazdingiz";
+    const ownConfirmed = arenaV3IsOwner(match)
+        ? match.ownerResultConfirmedAt : match.opponentResultConfirmedAt;
+    const bothConfirmed = match.ownerResultConfirmedAt && match.opponentResultConfirmedAt;
+    const locked = match.rewardHoldStatus === "LOCKED";
     return `<section class="arena-v3x-stage-card arena-v3x-result">
-        <div class="arena-v3x-result-crown">♛</div><small>AI VERIFIED RESULT</small>
-        <h3>${arenaV3Escape(winner || "Draw")}</h3><p>WINNER</p>
-        <div><span>Score<b>${arenaV3Escape(review.score || "—")}</b></span>
-            <span>Confidence<b>${review.confidence == null ? "—" : `${Math.round(review.confidence * 100)}%`}</b></span>
-            <span>Stake<b>${arenaV3Escape(match.stake)} EFC</b></span>
-            <span>Match Type<b>${arenaV3Escape(match.matchType)}</b></span>
-            <span>Finished<b>${arenaV3Escape(arenaV3FullDate(match.finishedAt))}</b></span>
-            <span>Settlement<b>${arenaV3Escape(match.settlementStatus || "PENDING")}</b></span></div>
-        <button class="arena-v3x-primary" data-arena-v3-continue>Continue</button></section>`;
+        <div class="arena-v3x-result-crown">♛</div><small>YAKUNIY NATIJA</small>
+        <h3>${arenaV3Escape(title)}</h3><p>${arenaV3Escape(winner || "Draw")}</p>
+        <div class="arena-v3x-admin-badge"><span>🛡</span><b>Admin tomonidan tekshirildi</b></div>
+        <div><span>Hisob<b>${arenaV3Escape(`${match.ownerScore ?? "—"} : ${match.opponentScore ?? "—"}`)}</b></span>
+            <span>Reward<b>${arenaV3Escape(ownWon ? match.winnerReward : isDraw ? match.stake : "0")} EFC</b></span>
+            <span>Platform fee<b>${arenaV3Escape(match.commission)} EFC</b></span>
+            <span>Status<b>${arenaV3Escape(match.rewardHoldStatus)}</b></span></div>
+        ${locked ? `<div class="arena-v3x-reward-lock"><span>🔒</span><section><small>MUKOFOT VAQTINCHA BLOKLANGAN</small>
+            <b data-arena-v3-reward-clock>${arenaV3RewardClock(match)}</b><p>${ownWon || isDraw || cancelled
+                ? "Mukofot norozilik muddati tugaguncha bloklangan"
+                : "Natijani tasdiqlash muddati"}</p></section></div>` : ""}
+        ${locked && !ownConfirmed ? `<button class="arena-v3x-primary" data-arena-v3-confirm-result>Natijani tasdiqlash</button>
+            <p class="arena-v3x-confirm-warning">Tasdiqlasangiz, norozilik bildirish huquqidan voz kechasiz. Ikkala o‘yinchi tasdiqlagach reward darhol ochiladi.</p>` : ""}
+        ${ownConfirmed && !bothConfirmed ? `<p class="arena-v3x-uploaded-note">✓ Siz tasdiqladingiz · Raqib kutilmoqda</p>` : ""}
+        ${bothConfirmed ? `<p class="arena-v3x-uploaded-note">✓ Ikkala o‘yinchi tasdiqladi</p>` : ""}
+        ${match.hasAppeal ? `<p class="arena-v3x-uploaded-note">⚠ Appeal admin ko‘rib chiqishida</p>` : arenaV3AppealForm(match)}
+        <button class="arena-v3x-secondary" data-arena-v3-continue>Davom etish</button></section>`;
 }
 
 function arenaV3PanelHeader(kicker, title) {
@@ -795,6 +809,10 @@ function arenaV3ProfileView() {
         <article class="arena-v3x-username"><span>eFootball username</span>
             <strong>${arenaV3Escape(arenaV3StoredUsername() || "Kiritilmagan")}</strong>
             <small>Backend tahrirlash endpointi mavjud bo‘lganda edit ochiladi.</small></article>
+        <div class="arena-v3x-v4-summary">
+            <article><span>🔒</span><small>Locked Rewards</small><b>${arenaV3Escape(profile.lockedRewardsEfc)} EFC</b></article>
+            <article><span>⚠</span><small>Pending Appeal</small><b>${arenaV3Escape(profile.pendingAppeals)}</b></article>
+        </div>
         <div class="arena-v3x-stats">${stats.map(([label, value]) =>
             `<article><small>${label}</small><b data-arena-v3-counter="${arenaV3Escape(value)}">${arenaV3Escape(value)}</b></article>`).join("")}</div>
     </section>`;
@@ -804,23 +822,24 @@ function arenaV3HistoryCard(match) {
     const ownId = Number(arenaV3TelegramUser().id);
     const owner = ownId === Number(match.ownerId);
     const opponent = owner ? match.opponentUsername : match.ownerUsername;
-    const result = arenaV3State.historyResults[match.id];
-    const review = result?.aiReview;
-    const winner = match.winnerId == null ? "Draw"
+    const winner = match.currentResultType === "CANCEL" ? "Cancel"
+        : match.winnerId == null ? "Draw"
         : Number(match.winnerId) === Number(match.ownerId) ? match.ownerUsername : match.opponentUsername;
-    const score = review?.score || (
-        match.ownerScore != null && match.opponentScore != null ? `${match.ownerScore}-${match.opponentScore}` : "—"
-    );
+    const score = match.ownerScore != null && match.opponentScore != null
+        ? `${match.ownerScore} : ${match.opponentScore}` : "—";
+    const ownWon = Number(match.winnerId) === ownId;
+    const reward = ownWon ? match.winnerReward
+        : match.winnerId == null ? match.stake : "0";
     return `<article class="arena-v3x-history-card">
         <i class="arena-v3x-history-dot"></i><header><span class="arena-v3x-avatar">${arenaV3Initial(opponent)}</span>
             <section><small>OPPONENT</small><strong>${arenaV3Escape(opponent || "O‘yinchi")}</strong>
                 <em>${arenaV3Escape(arenaV3FullDate(match.finishedAt || match.updatedAt))}</em></section>
             <b>${arenaV3Escape(score)}</b></header>
         <div><span>Winner<b>${arenaV3Escape(winner || "Draw")}</b></span>
-            <span>Stake<b>${arenaV3Escape(match.stake)} EFC</b></span>
-            <span>Type<b>${arenaV3Escape(match.matchType)}</b></span>
-            <span>AI Confidence<b>${review?.confidence == null ? "—" : `${Math.round(review.confidence * 100)}%`}</b></span></div>
-        <footer><b>${arenaV3Escape(match.status)}</b><button data-arena-v3-history-result="${match.id}">Result Details</button></footer>
+            <span>Reward<b>${arenaV3Escape(reward)} EFC</b></span>
+            <span>Fee<b>${arenaV3Escape(match.commission)} EFC</b></span>
+            <span>Appeal<b>${match.hasAppeal ? "Pending" : arenaV3CanAppeal(match) ? "Available" : "Closed"}</b></span></div>
+        <footer><b>🛡 ADMIN VERIFIED</b><button data-arena-v3-history-result="${match.id}">Natijani ko‘rish</button></footer>
     </article>`;
 }
 
@@ -904,11 +923,7 @@ function arenaV3StageAction(match) {
     if (match.status === "WAITING_SCREENSHOT") {
         return arenaV3ScreenshotPanel(match);
     }
-    if (match.status === "AI_REVIEW") {
-        return arenaV3State.result?.aiReview?.status === "COMPLETED"
-            ? arenaV3ResultPanel(match)
-            : arenaV3AIReviewPanel();
-    }
+    if (match.status === "WAITING_ADMIN") return arenaV3AdminReviewPanel();
     if (match.status === "FINISHED") return arenaV3ResultPanel(match);
     return "";
 }
@@ -1033,12 +1048,12 @@ async function arenaV3RefreshEvidence(match) {
         arenaV3State.result = null;
         return;
     }
-    if (["PLAYING", "WAITING_SCREENSHOT", "AI_REVIEW", "FINISHED"].includes(match.status)) {
+    if (["PLAYING", "WAITING_SCREENSHOT", "WAITING_ADMIN", "FINISHED"].includes(match.status)) {
         try {
             arenaV3State.screenshots = await arenaV3Client.screenshots(match.id);
         } catch (_) {}
     }
-    if (["AI_REVIEW", "FINISHED"].includes(match.status)) {
+    if (match.status === "FINISHED") {
         try {
             arenaV3State.result = await arenaV3Client.result(match.id);
         } catch (error) {
@@ -1058,6 +1073,8 @@ function arenaV3TickClocks() {
         countdown.parentElement?.classList.toggle("is-urgent", seconds <= 10);
         if (seconds <= 0) document.querySelector("[data-arena-v3-upload]")?.setAttribute("disabled", "");
     }
+    const rewardClock = document.querySelector("[data-arena-v3-reward-clock]");
+    if (rewardClock && match) rewardClock.textContent = arenaV3RewardClock(match);
 }
 
 function arenaV3Select(view) {
@@ -1164,14 +1181,18 @@ async function arenaV3UploadAppeal() {
     arenaV3State.evidenceError = null;
     arenaV3Render();
     try {
-        await arenaV3Client.uploadAppeal(match.id, arenaV3State.appealFile, (progress) => {
+        await arenaV3Client.uploadAppeal(
+            match.id, arenaV3State.appealFile, arenaV3State.appealReason, (progress) => {
             arenaV3State.appealProgress = progress;
             const bar = document.querySelector(".arena-v3x-upload-progress i");
             const label = document.querySelector(".arena-v3x-upload-progress span");
             if (bar) bar.style.width = `${progress}%`;
             if (label) label.textContent = `${progress}%`;
-        });
+            },
+        );
         arenaV3State.appealStatus = "submitted";
+        arenaV3State.appealReason = "";
+        arenaV3State.activeMatch.hasAppeal = true;
         arenaV3Track("arena_appeal_submit", { match_id: match.id });
         arenaV3Toast("Appeal yuborildi.");
     } catch (error) {
@@ -1182,6 +1203,50 @@ async function arenaV3UploadAppeal() {
         arenaV3State.actionLoading = null;
         arenaV3Render();
     }
+}
+
+async function arenaV3ConfirmResult() {
+    const match = arenaV3State.activeMatch;
+    if (!match || arenaV3State.actionLoading) return;
+    const accepted = await arenaV3ResultConfirmationDialog();
+    if (!accepted) return;
+    arenaV3State.actionLoading = "confirm-result";
+    try {
+        await arenaV3Client.confirmResult(match.id);
+        arenaV3State.result = await arenaV3Client.result(match.id);
+        arenaV3State.activeMatch = arenaV3State.result.match;
+        arenaV3Toast("Natija tasdiqlandi.");
+    } catch (error) {
+        arenaV3Toast(error.message, "error");
+    } finally {
+        arenaV3State.actionLoading = null;
+        arenaV3Render();
+    }
+}
+
+function arenaV3ResultConfirmationDialog() {
+    return new Promise((resolve) => {
+        const modal = document.createElement("div");
+        modal.className = "arena-v3x-modal";
+        modal.innerHTML = `<section role="dialog" aria-modal="true" aria-labelledby="arenaV3ResultConfirmTitle">
+            <button type="button" data-close aria-label="Yopish">×</button><small>CONFIRM</small>
+            <h3 id="arenaV3ResultConfirmTitle">Natijani tasdiqlaysizmi?</h3>
+            <p>Natijani tasdiqlaganingizdan so'ng ushbu match bo'yicha norozilik (appeal) yubora olmaysiz.</p>
+            <p>Davom etasizmi?</p>
+            <div class="arena-v3x-modal-actions"><button type="button" data-close>Bekor qilish</button>
+                <button class="arena-v3x-primary" type="button" data-confirm>Ha, tasdiqlayman</button></div></section>`;
+        document.body.appendChild(modal);
+        let resolved = false;
+        const finish = (accepted) => {
+            if (resolved) return;
+            resolved = true;
+            modal.remove();
+            resolve(accepted);
+        };
+        modal.querySelectorAll("[data-close]").forEach((button) =>
+            button.addEventListener("click", () => finish(false)));
+        modal.querySelector("[data-confirm]").addEventListener("click", () => finish(true));
+    });
 }
 
 async function arenaV3OpenDetail(matchId) {
@@ -1417,6 +1482,12 @@ function arenaV3Bind(page) {
     page.querySelector("[data-arena-v3-appeal-file]")?.addEventListener("change", (event) =>
         arenaV3SelectAppeal(event.currentTarget));
     page.querySelector("[data-arena-v3-appeal-upload]")?.addEventListener("click", arenaV3UploadAppeal);
+    page.querySelector("[data-arena-v3-appeal-reason]")?.addEventListener("input", (event) => {
+        arenaV3State.appealReason = event.currentTarget.value;
+        const button = page.querySelector("[data-arena-v3-appeal-upload]");
+        if (button) button.disabled = !arenaV3State.appealFile || !arenaV3State.appealReason.trim();
+    });
+    page.querySelector("[data-arena-v3-confirm-result]")?.addEventListener("click", arenaV3ConfirmResult);
     page.querySelector("[data-arena-v3-history-more]")?.addEventListener("click", () => arenaV3LoadHistory(false));
     page.querySelectorAll("[data-arena-v3-history-result]").forEach((button) =>
         button.addEventListener("click", () => arenaV3ShowHistoryResult(Number(button.dataset.arenaV3HistoryResult))));
@@ -1483,9 +1554,7 @@ if (typeof module !== "undefined") {
         arenaV3IsOwner,
         arenaV3ScreenshotSeconds,
         arenaV3EvidenceState,
-        arenaV3AIVisualStep,
         normalizeArenaV3Screenshot,
-        normalizeArenaV3AIReview,
         normalizeArenaV3Result,
         normalizeArenaV3Profile,
         normalizeArenaV3RankingPlayer,
