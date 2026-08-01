@@ -10,6 +10,7 @@ const {
     wheelRewardedSlotState,
     wheelRewardedSlotsMarkup,
     registerWheelAdsgramNoFillDiagnostics,
+    showWheelAdsgramAd,
     WHEEL_ADSGRAM_BLOCK_ID,
     WHEEL_REWARDED_ADS,
 } = require("../miniapp/pages/wheel.js");
@@ -316,6 +317,39 @@ test("Adsgram no-fill listener suppresses the SDK default alert without handling
     } finally {
         console.info = originalInfo;
     }
+});
+
+test("Adsgram no-fill event rejects a hanging show and clears loading", async () => {
+    const listeners = {};
+    const controller = {
+        addEventListener(name, callback) { listeners[name] = callback; },
+        removeEventListener(name, callback) {
+            if (listeners[name] === callback) delete listeners[name];
+        },
+        show: () => new Promise(() => {}),
+    };
+    const pending = showWheelAdsgramAd(controller, 1000);
+    await Promise.resolve();
+    listeners.onBannerNotFound({ description: "No banner found" });
+    await assert.rejects(
+        pending,
+        (error) => error.code === "ADSGRAM_NO_FILL"
+            && /reklama mavjud emas/.test(error.message),
+    );
+    assert.equal(listeners.onBannerNotFound, undefined);
+});
+
+test("Adsgram hanging SDK show has a short recoverable load timeout", async () => {
+    const controller = {
+        addEventListener() {},
+        removeEventListener() {},
+        show: () => new Promise(() => {}),
+    };
+    await assert.rejects(
+        showWheelAdsgramAd(controller, 5),
+        (error) => error.code === "ADSGRAM_LOAD_TIMEOUT"
+            && /Reklama ochilmadi/.test(error.message),
+    );
 });
 
 test("provider diagnostics include independent provider attempts", () => {

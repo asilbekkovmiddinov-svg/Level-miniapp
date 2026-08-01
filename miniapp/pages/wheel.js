@@ -556,6 +556,44 @@ function registerWheelAdsgramNoFillDiagnostics(controller) {
     return controller;
 }
 
+function showWheelAdsgramAd(controller, timeoutMs = 20000) {
+    if (!controller?.show) {
+        return Promise.reject(new Error("Adsgram SDK yuklanmadi."));
+    }
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        let timeoutId;
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            controller.removeEventListener?.("onBannerNotFound", onNoFill);
+            callback(value);
+        };
+        const onNoFill = () => {
+            const error = new Error(
+                "Hozir reklama mavjud emas. Birozdan keyin qayta urinib ko‘ring."
+            );
+            error.code = "ADSGRAM_NO_FILL";
+            finish(reject, error);
+        };
+        controller.addEventListener?.("onBannerNotFound", onNoFill);
+        timeoutId = setTimeout(() => {
+            const error = new Error(
+                "Reklama ochilmadi. Internetni tekshirib, qayta urinib ko‘ring."
+            );
+            error.code = "ADSGRAM_LOAD_TIMEOUT";
+            finish(reject, error);
+        }, timeoutMs);
+        Promise.resolve()
+            .then(() => controller.show())
+            .then(
+                (result) => finish(resolve, result),
+                (error) => finish(reject, error),
+            );
+    });
+}
+
 function getWheelAdsgramController() {
     if (wheelAdsgramController) return wheelAdsgramController;
     if (!globalThis.Adsgram?.init) throw new Error("Adsgram SDK yuklanmadi.");
@@ -684,7 +722,7 @@ async function watchWheelRewardedAdSlot(slotId) {
                 ADSGRAM_AVAILABLE: Boolean(globalThis.Adsgram?.init),
                 ADSGRAM: async () => {
                     const controller = getWheelAdsgramController();
-                    return controller.show();
+                    return showWheelAdsgramAd(controller);
                 },
             }),
             claimReward: claimAdsgramRewardWithRetry,
@@ -696,6 +734,10 @@ async function watchWheelRewardedAdSlot(slotId) {
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
         await refreshWheelState();
     } catch (error) {
+        if (["ADSGRAM_NO_FILL", "ADSGRAM_LOAD_TIMEOUT"].includes(error?.code)) {
+            wheelAdsgramController?.destroy?.();
+            wheelAdsgramController = null;
+        }
         if (hint) hint.textContent = error?.message || "Reklama yakunlanmadi";
         await refreshWheelState();
     } finally {
@@ -1093,6 +1135,7 @@ if (typeof module !== "undefined") {
         wheelDiscMarkup,
         wheelPageMarkup,
         getWheelAdsgramController,
+        showWheelAdsgramAd,
         registerWheelAdsgramNoFillDiagnostics,
         claimAdsgramRewardWithRetry,
         runAdsgramRewardedFlow,
