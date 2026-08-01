@@ -1208,9 +1208,7 @@ async function arenaV3UploadAppeal() {
 async function arenaV3ConfirmResult() {
     const match = arenaV3State.activeMatch;
     if (!match || arenaV3State.actionLoading) return;
-    const accepted = globalThis.confirm?.(
-        "Natijani tasdiqlasangiz, norozilik bildirish huquqidan voz kechasiz. Davom etasizmi?"
-    );
+    const accepted = await arenaV3ResultConfirmationDialog();
     if (!accepted) return;
     arenaV3State.actionLoading = "confirm-result";
     try {
@@ -1224,6 +1222,31 @@ async function arenaV3ConfirmResult() {
         arenaV3State.actionLoading = null;
         arenaV3Render();
     }
+}
+
+function arenaV3ResultConfirmationDialog() {
+    return new Promise((resolve) => {
+        const modal = document.createElement("div");
+        modal.className = "arena-v3x-modal";
+        modal.innerHTML = `<section role="dialog" aria-modal="true" aria-labelledby="arenaV3ResultConfirmTitle">
+            <button type="button" data-close aria-label="Yopish">×</button><small>CONFIRM</small>
+            <h3 id="arenaV3ResultConfirmTitle">Natijani tasdiqlaysizmi?</h3>
+            <p>Natijani tasdiqlaganingizdan so'ng ushbu match bo'yicha norozilik (appeal) yubora olmaysiz.</p>
+            <p>Davom etasizmi?</p>
+            <div class="arena-v3x-modal-actions"><button type="button" data-close>Bekor qilish</button>
+                <button class="arena-v3x-primary" type="button" data-confirm>Ha, tasdiqlayman</button></div></section>`;
+        document.body.appendChild(modal);
+        let resolved = false;
+        const finish = (accepted) => {
+            if (resolved) return;
+            resolved = true;
+            modal.remove();
+            resolve(accepted);
+        };
+        modal.querySelectorAll("[data-close]").forEach((button) =>
+            button.addEventListener("click", () => finish(false)));
+        modal.querySelector("[data-confirm]").addEventListener("click", () => finish(true));
+    });
 }
 
 async function arenaV3OpenDetail(matchId) {

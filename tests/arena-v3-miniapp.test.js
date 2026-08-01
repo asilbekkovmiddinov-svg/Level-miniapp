@@ -582,6 +582,15 @@ test("Sprint 7 UI includes screenshot admin result appeal and lock states", () =
     assert.match(source, /Admin tomonidan tekshirildi/);
     assert.match(source, /Norozilik bildirish/);
     assert.match(source, /confirm-result/);
+    assert.match(source, /Natijani tasdiqlaganingizdan so'ng ushbu match bo'yicha norozilik \(appeal\) yubora olmaysiz\./);
+    assert.match(source, /Ha, tasdiqlayman/);
+    assert.match(source, /Bekor qilish/);
+    assert.doesNotMatch(source, /globalThis\.confirm/);
+    assert.ok(
+        source.indexOf("await arenaV3ResultConfirmationDialog()")
+        < source.indexOf("await arenaV3Client.confirmResult(match.id)"),
+        "confirmation dialog must resolve before the backend call",
+    );
     assert.match(css, /arena-v3x-upload-progress/);
     assert.match(css, /arena-v3x-reward-lock/);
     assert.match(css, /arena-v3x-result/);
