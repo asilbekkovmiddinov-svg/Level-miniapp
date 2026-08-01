@@ -427,7 +427,7 @@ const ARENA_V3_TIMELINE = Object.freeze([
 
 const ARENA_V3_ACTIVE_STATUSES = new Set([
     "OPEN", "READY", "WAITING_ROOM_CODE", "PLAYING",
-    "WAITING_SCREENSHOT", "WAITING_ADMIN", "AI_REVIEW",
+    "WAITING_SCREENSHOT", "WAITING_ADMIN",
 ]);
 
 function arenaV3IsActiveStatus(status) {
