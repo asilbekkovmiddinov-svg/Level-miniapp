@@ -1351,8 +1351,23 @@ async function arenaV3UploadScreenshot() {
         if (arenaV3State.screenshotPreview) URL.revokeObjectURL(arenaV3State.screenshotPreview);
         arenaV3State.screenshotPreview = null;
         arenaV3Render();
-        arenaV3Toast("Screenshot qabul qilindi.");
+        arenaV3Toast("✅ Screenshot muvaffaqiyatli yuborildi");
     } catch (error) {
+        if ([0, 408].includes(Number(error?.status))) {
+            try {
+                const screenshots = await arenaV3Client.screenshots(match.id);
+                const playerId = Number(arenaV3TelegramUser().id);
+                if (playerId && screenshots.some((item) => item.playerId === playerId)) {
+                    arenaV3State.screenshots = screenshots;
+                    arenaV3State.screenshotFile = null;
+                    if (arenaV3State.screenshotPreview) URL.revokeObjectURL(arenaV3State.screenshotPreview);
+                    arenaV3State.screenshotPreview = null;
+                    arenaV3Render();
+                    arenaV3Toast("✅ Screenshot muvaffaqiyatli yuborildi");
+                    return;
+                }
+            } catch (_) {}
+        }
         arenaV3State.evidenceError = error.message;
         arenaV3Render();
         arenaV3Toast(error.message, "error");
