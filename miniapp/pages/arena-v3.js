@@ -68,7 +68,9 @@ class ArenaV3Client {
 
     async active() {
         const payload = await this.request("/arena/active");
-        return payload?.match ? normalizeArenaV3Match(payload.match) : null;
+        if (!payload?.match) return null;
+        const match = normalizeArenaV3Match(payload.match);
+        return arenaV3IsActiveStatus(match.status) ? match : null;
     }
 
     async detail(matchId) {
@@ -423,6 +425,15 @@ const ARENA_V3_TIMELINE = Object.freeze([
     ["WAITING_ADMIN", "Admin tekshirmoqda"],
     ["FINISHED", "Natija"],
 ]);
+
+const ARENA_V3_ACTIVE_STATUSES = new Set([
+    "OPEN", "READY", "WAITING_ROOM_CODE", "PLAYING",
+    "WAITING_SCREENSHOT", "WAITING_ADMIN", "AI_REVIEW",
+]);
+
+function arenaV3IsActiveStatus(status) {
+    return ARENA_V3_ACTIVE_STATUSES.has(String(status || ""));
+}
 
 const arenaV3State = {
     view: "home",
@@ -1027,7 +1038,6 @@ async function loadArenaV3Page() {
                 try {
                     const terminal = await arenaV3Client.result(previousMatch.id);
                     arenaV3State.result = terminal;
-                    if (terminal.match.status === "FINISHED") arenaV3State.activeMatch = terminal.match;
                 } catch (_) {}
             }
             await arenaV3RefreshEvidence(arenaV3State.activeMatch);
@@ -1271,8 +1281,10 @@ async function arenaV3RunAction(key, action, success) {
         control.setAttribute("aria-busy", "true");
     });
     try {
-        arenaV3State.activeMatch = await action();
-        arenaV3State.view = "active";
+        const updatedMatch = await action();
+        arenaV3State.activeMatch = arenaV3IsActiveStatus(updatedMatch?.status)
+            ? updatedMatch : null;
+        arenaV3State.view = arenaV3State.activeMatch ? "active" : "home";
         arenaV3Render();
         arenaV3Toast(success);
     } catch (error) {
@@ -1550,6 +1562,7 @@ if (typeof module !== "undefined") {
         arenaV3Skeleton,
         arenaV3MatchCard,
         arenaV3StatusIndex,
+        arenaV3IsActiveStatus,
         arenaV3PlayingClock,
         arenaV3IsOwner,
         arenaV3ScreenshotSeconds,
