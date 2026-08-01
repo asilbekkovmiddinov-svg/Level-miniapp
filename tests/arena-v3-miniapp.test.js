@@ -9,6 +9,7 @@ const {
     normalizeArenaV3Match,
     ARENA_V3_TIMELINE,
     arenaV3StatusIndex,
+    arenaV3IsActiveStatus,
     arenaV3ScreenshotSeconds,
     normalizeArenaV3Screenshot,
     normalizeArenaV3Result,
@@ -58,6 +59,26 @@ test("Arena V3 open and active use authenticated backend contracts", async () =>
         "https://api.test/arena/active",
     ]);
     assert.ok(calls.every(([, options]) => options.headers["X-Telegram-Init-Data"] === "signed-init-data"));
+});
+
+test("CANCELLED and FINISHED never render as Active Match", async () => {
+    for (const status of ["CANCELLED", "FINISHED"]) {
+        const client = new ArenaV3Client({
+            initDataProvider: () => "auth",
+            fetchImpl: async () => response({ match: { ...match, status } }),
+        });
+        assert.equal(await client.active(), null);
+        assert.equal(arenaV3IsActiveStatus(status), false);
+    }
+});
+
+test("PLAYING remains visible as Active Match", async () => {
+    const client = new ArenaV3Client({
+        initDataProvider: () => "auth",
+        fetchImpl: async () => response({ match: { ...match, status: "PLAYING" } }),
+    });
+    assert.equal((await client.active()).status, "PLAYING");
+    assert.equal(arenaV3IsActiveStatus("PLAYING"), true);
 });
 
 test("Arena V3 create sends validated architecture fields and idempotency", async () => {
