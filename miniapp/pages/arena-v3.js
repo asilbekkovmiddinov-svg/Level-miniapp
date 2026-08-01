@@ -353,7 +353,11 @@ function normalizeArenaV3RankingPlayer(value, index) {
         rank: Number(value?.rank) || index + 1,
         username: value?.username || value?.display_name || "O‘yinchi",
         avatar: value?.avatar_url || null,
+        totalMatches: Number(value?.total_matches) || 0,
         wins: Number(value?.wins) || 0,
+        losses: Number(value?.losses) || 0,
+        goalsFor: Number(value?.goals_for) || 0,
+        totalEfcWon: Number(value?.total_efc_won) || 0,
         winRate: Number(value?.win_rate) || 0,
     };
 }
@@ -876,7 +880,6 @@ function arenaV3HistoryView() {
 
 function arenaV3RankingView() {
     const filters = [["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["all", "All Time"]];
-    const podium = arenaV3State.ranking.slice(0, 3);
     return `<section class="arena-v3x-panel arena-v3x-ranking">${arenaV3PanelHeader("LEADERBOARD", "Top Players")}
         <div class="arena-v3x-rank-filters">${filters.map(([key, label]) =>
             `<button data-arena-v3-period="${key}" class="${arenaV3State.rankingPeriod === key ? "is-active" : ""}"
@@ -884,12 +887,20 @@ function arenaV3RankingView() {
         ${arenaV3State.sectionLoading ? arenaV3Skeleton(3) : arenaV3State.sectionError
             ? `<div class="arena-v3x-error"><span>UNAVAILABLE</span><h3>Ranking hozircha ochilmagan</h3>
                 <p>${arenaV3Escape(arenaV3State.sectionError)}</p><button data-arena-v3-section-retry>Retry</button></div>`
-            : `<div class="arena-v3x-podium">${podium.map((row, index) => `<article class="is-${index + 1}">
-                ${arenaV3Avatar(row.username, row.avatar)}<i>${row.rank}</i><strong>${arenaV3Escape(row.username)}</strong>
-                <small>${row.wins} wins · ${row.winRate}%</small></article>`).join("")}</div>
-              <div class="arena-v3x-rank-list">${arenaV3State.ranking.slice(3).map((row) =>
-                `<article><b>#${row.rank}</b>${arenaV3Avatar(row.username, row.avatar)}
-                    <strong>${arenaV3Escape(row.username)}</strong><span>${row.wins} wins</span><em>${row.winRate}%</em></article>`).join("")}</div>
+            : `<div class="arena-v3x-rank-table">
+                ${arenaV3State.ranking.map((row) => `<article>
+                    <b class="arena-v3x-rank-position">#${row.rank}</b>
+                    ${arenaV3Avatar(row.username, row.avatar)}
+                    <section><strong>${arenaV3Escape(row.username)}</strong>
+                        <small>${row.winRate}% g‘alaba</small></section>
+                    <div class="arena-v3x-rank-metrics">
+                        <span><small>O‘yin</small><b>${row.totalMatches}</b></span>
+                        <span><small>G‘alaba</small><b>${row.wins}</b></span>
+                        <span><small>Mag‘lubiyat</small><b>${row.losses}</b></span>
+                        <span><small>Gollar</small><b>${row.goalsFor}</b></span>
+                        <span class="is-efc"><small>Yutilgan EFC</small><b>${arenaV3Escape(row.totalEfcWon)} EFC</b></span>
+                    </div>
+                </article>`).join("")}</div>
               ${!arenaV3State.ranking.length ? `<div class="arena-v3x-empty"><span>♛</span><h4>Ranking bo‘sh</h4></div>` : ""}`}
     </section>`;
 }
@@ -1054,10 +1065,15 @@ async function loadArenaV3Page() {
                 try {
                     const terminal = await arenaV3Client.result(previousMatch.id);
                     arenaV3State.result = terminal;
+                    if (!arenaV3IsActiveStatus(terminal.match.status)) {
+                        arenaV3State.view = "result";
+                    }
                 } catch (_) {}
             }
             await arenaV3RefreshEvidence(arenaV3State.activeMatch);
-            if (arenaV3State.view === "active") arenaV3Render();
+            if (arenaV3State.view === "active" || arenaV3State.view === "result") {
+                arenaV3Render();
+            }
             if (previous && arenaV3State.activeMatch?.status !== previous) {
                 arenaV3Toast(`Status: ${arenaV3State.activeMatch?.status || "Yakunlandi"}`);
             }
@@ -1071,7 +1087,6 @@ async function loadArenaV3Page() {
 async function arenaV3RefreshEvidence(match) {
     if (!match) {
         arenaV3State.screenshots = [];
-        arenaV3State.result = null;
         return;
     }
     if (["PLAYING", "WAITING_SCREENSHOT", "WAITING_ADMIN", "FINISHED"].includes(match.status)) {
@@ -1089,7 +1104,7 @@ async function arenaV3RefreshEvidence(match) {
 }
 
 function arenaV3TickClocks() {
-    const match = arenaV3State.activeMatch;
+    const match = arenaV3State.activeMatch || arenaV3State.result?.match;
     const clock = document.querySelector("[data-arena-v3-clock]");
     if (clock && match) clock.textContent = arenaV3PlayingClock(match);
     const countdown = document.querySelector("[data-arena-v3-countdown]");
