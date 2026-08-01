@@ -472,6 +472,12 @@ function arenaV3TelegramUser() {
     return globalThis.Telegram?.WebApp?.initDataUnsafe?.user || {};
 }
 
+function arenaV3ScreenshotAccepted(screenshots, playerId) {
+    const id = Number(playerId);
+    return id > 0 && Array.isArray(screenshots)
+        && screenshots.some((item) => item.playerId === id);
+}
+
 function arenaV3Initial(value) {
     return Array.from(String(value || "L").trim())[0]?.toLocaleUpperCase("uz-UZ") || "L";
 }
@@ -1357,7 +1363,7 @@ async function arenaV3UploadScreenshot() {
             try {
                 const screenshots = await arenaV3Client.screenshots(match.id);
                 const playerId = Number(arenaV3TelegramUser().id);
-                if (playerId && screenshots.some((item) => item.playerId === playerId)) {
+                if (arenaV3ScreenshotAccepted(screenshots, playerId)) {
                     arenaV3State.screenshots = screenshots;
                     arenaV3State.screenshotFile = null;
                     if (arenaV3State.screenshotPreview) URL.revokeObjectURL(arenaV3State.screenshotPreview);
@@ -1600,6 +1606,7 @@ if (typeof module !== "undefined") {
         arenaV3MatchCard,
         arenaV3StatusIndex,
         arenaV3IsActiveStatus,
+        arenaV3ScreenshotAccepted,
         arenaV3PlayingClock,
         arenaV3IsOwner,
         arenaV3ScreenshotSeconds,
