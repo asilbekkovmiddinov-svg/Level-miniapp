@@ -19,6 +19,12 @@ test("premium hero exposes Telegram identity and notification/settings actions",
     assert.match(controllerSource, /Telegram\?\.WebApp\?\.initDataUnsafe\?\.user/);
 });
 
+test("Home hero clearly identifies the production UI as test mode", () => {
+    assert.match(index, /class="home-test-mode-badge"[^>]*role="status"/);
+    assert.match(index, /TEST REJIMIDA/);
+    assert.match(styles, /\.home-test-mode-badge/);
+});
+
 test("wallet hero preserves authoritative balance targets and actions", () => {
     for (const id of ["efcBalance", "uzsBalance", "lockedEfcBalance", "lockedUzsBalance"]) {
         assert.match(index, new RegExp(`id="${id}"`));
