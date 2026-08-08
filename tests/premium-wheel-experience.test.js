@@ -45,11 +45,11 @@ test("Wheel remains accessible, low-end aware and haptic", () => {
 
 
 test("Wheel lower summary keeps rewarded, remaining and last-win cards in one compact row", () => {
-    assert.match(source, /<div class="wheel-compact-row">[\s\S]*id="wheelAdCard"[\s\S]*wheel-remaining-card[\s\S]*wheel-last-win[\s\S]*<\/div>/);
+    assert.match(source, /<div class="wheel-compact-row">[\s\S]*id="wheelFreeCard"[\s\S]*id="wheelAdCard"[\s\S]*wheel-remaining-card[\s\S]*wheel-last-win[\s\S]*<\/div>/);
     assert.match(source, /<span>Reklama ko‘rish<\/span>/);
     assert.match(css, /\.wheel-compact-row\{[^}]*display:flex[^}]*align-items:stretch/);
     assert.match(css, /\.wheel-compact-row>\.wheel-rewarded-card\{[^}]*flex:1\.6 1 0/);
-    assert.match(css, /\.wheel-compact-row>\.wheel-remaining-card,\.wheel-compact-row>\.wheel-last-win\{[^}]*flex:1 1 0/);
+    assert.match(css, /\.wheel-compact-row>\.wheel-free-card,\.wheel-compact-row>\.wheel-remaining-card,\.wheel-compact-row>\.wheel-last-win\{[^}]*flex:1 1 0/);
     assert.match(css, /@media\(max-width:390px\)\{\.wheel-compact-row\{/);
     assert.doesNotMatch(css, /\.wheel-compact-row[^}]*overflow-x\s*:\s*(auto|scroll)/);
 });
@@ -61,4 +61,13 @@ test("compact Wheel polish preserves countdown and READY hooks", () => {
     assert.match(source, /updateWheelTimerCard\("Ad"/);
     assert.match(source, /updateWheelRewardedSlots\(current, now\)/);
     assert.match(source, /normalizeWheelLastWin\(wheelData\?\.last_win\)/);
+});
+
+
+test("free spin card shares the compact row without changing its timer contract", () => {
+    assert.match(source, /id="wheelFreeCard" class="wheel-timer-card wheel-free-card/);
+    assert.match(source, /id="wheelFreeCountdown"/);
+    assert.match(source, /id="wheelFreeBadge"/);
+    assert.match(source, /updateWheelTimerCard\("Free"/);
+    assert.match(css, /\.wheel-compact-row \.wheel-free-card>#wheelFreeCountdown/);
 });
