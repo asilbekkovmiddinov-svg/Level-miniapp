@@ -1,5 +1,5 @@
 const promotionsAdminState = {
-    items: [], filter: "ALL", search: "", sort: "PRIORITY", loading: false, analytics: null, period: "7D",
+    items: [], filter: "ALL", search: "", sort: "PRIORITY", loading: false, analytics: null, userMetrics: null, period: "7D",
 };
 
 const promotionsAdminApi = new PromotionsAdminApi({
@@ -125,6 +125,15 @@ function renderPromotionsAdminList() {
     document.getElementById("promotionsAdminStats").innerHTML = promotionsAdminStats();
 }
 
+function promotionsAdminUserMetrics() {
+    const metrics = promotionsAdminState.userMetrics;
+    if (!metrics) return "";
+    return `<section class="pac-user-metrics" aria-label="Foydalanuvchilar statistikasi">
+        <article><span>👥</span><div><small>JAMI FOYDALANUVCHILAR</small><strong>${Number(metrics.total_users || 0).toLocaleString("uz-UZ")}</strong><em>Barcha ro‘yxatdan o‘tganlar</em></div></article>
+        <article><span>📈</span><div><small>OYLIK FAOL FOYDALANUVCHILAR</small><strong>${Number(metrics.monthly_active_users || 0).toLocaleString("uz-UZ")}</strong><em>So‘nggi ${Number(metrics.active_window_days || 30)} kun</em></div></article>
+    </section>`;
+}
+
 function promotionsAdminShell() {
     return `<div class="pac-shell">
         <nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button class="active">Promotions</button><button onclick="openPage('coin-promotions-admin')">Coin Promotions</button><button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button></nav>
@@ -132,6 +141,7 @@ function promotionsAdminShell() {
             <div><small>LEVEL_GROUP • ADMIN</small><h2>Marketing CMS</h2><p>Aksiyalarni telefoningizdan boshqaring.</p></div>
             <button id="promotionsAdminCreate" type="button"><span>＋</span> Yangi aksiya</button>
         </section>
+        ${promotionsAdminUserMetrics()}
         <section id="promotionsAdminStats" class="pac-stats">${promotionsAdminStats()}</section>
         ${promotionsAnalyticsDashboard()}
         <section class="pac-toolbar">
@@ -194,14 +204,19 @@ async function loadPromotionsAdminPage(force = false) {
     showPage("promotionsAdminPage", "Marketing CMS");
     document.body.classList.add("promotions-admin-open");
     const page = document.getElementById("promotionsAdminPage");
-    if (!force && promotionsAdminState.items.length && promotionsAdminState.analytics) {
+    if (!force && promotionsAdminState.items.length && promotionsAdminState.analytics && promotionsAdminState.userMetrics) {
         page.innerHTML = promotionsAdminShell(); bindPromotionsAdmin(); renderPromotionsAdminList(); return;
     }
     page.innerHTML = promotionsAdminSkeleton();
     try {
-        const [items, analytics] = await Promise.all([promotionsAdminApi.list(), promotionsAdminApi.analytics(promotionsAdminState.period)]);
+        const [items, analytics, userMetrics] = await Promise.all([
+            promotionsAdminApi.list(),
+            promotionsAdminApi.analytics(promotionsAdminState.period),
+            promotionsAdminApi.userMetrics(),
+        ]);
         promotionsAdminState.items = PromotionsAdminCore.normalizeList(items);
         promotionsAdminState.analytics = PromotionsAnalyticsCore.normalize(analytics);
+        promotionsAdminState.userMetrics = userMetrics;
         page.innerHTML = promotionsAdminShell(); bindPromotionsAdmin(); renderPromotionsAdminList();
     } catch (error) {
         page.innerHTML = promotionsAdminError(error);
