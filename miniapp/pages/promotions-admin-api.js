@@ -44,6 +44,7 @@
         }
 
         list() { return this.request("/admin/promotions?include_deleted=true"); }
+        userMetrics() { return this.request("/admin/metrics/users"); }
         create(data) { return this.request("/admin/promotions", { method: "POST", body: data }); }
         update(id, data) { return this.request(`/admin/promotions/${Number(id)}`, { method: "PATCH", body: data }); }
         remove(id) { return this.request(`/admin/promotions/${Number(id)}`, { method: "DELETE" }); }
