@@ -291,13 +291,11 @@ test("manual Wheel button click does not pass the browser event as a spin type",
     assert.match(source, /typeof arguments\[0\] === "string" \? arguments\[0\] : null/);
 });
 
-test("Adsgram no-fill listener suppresses the SDK default alert without handling show rejection", async () => {
-    let listenerName = null;
-    let listener = null;
+test("Adsgram diagnostics register the official rewarded lifecycle events", async () => {
+    const listeners = {};
     const controller = {
         addEventListener(name, callback) {
-            listenerName = name;
-            listener = callback;
+            listeners[name] = callback;
         },
         show: async () => {
             throw new Error("adsgram-no-fill");
@@ -309,10 +307,20 @@ test("Adsgram no-fill listener suppresses the SDK default alert without handling
 
     try {
         assert.equal(registerWheelAdsgramNoFillDiagnostics(controller), controller);
-        assert.equal(listenerName, "onBannerNotFound");
-        listener({ description: "No banner found" });
+        assert.deepEqual(Object.keys(listeners), [
+            "onStart",
+            "onReward",
+            "onComplete",
+            "onSkip",
+            "onError",
+            "onBannerNotFound",
+            "onNonStopShow",
+            "onTooLongSession",
+        ]);
+        listeners.onBannerNotFound({ description: "No banner found" });
         assert.equal(logs.length, 1);
-        assert.match(logs[0][0], /adsgram_banner_not_found/);
+        assert.match(logs[0][0], /adsgram_event/);
+        assert.equal(logs[0][1].event, "onBannerNotFound");
         await assert.rejects(controller.show(), /adsgram-no-fill/);
     } finally {
         console.info = originalInfo;
@@ -328,7 +336,7 @@ test("Adsgram no-fill event rejects a hanging show and clears loading", async ()
         },
         show: () => new Promise(() => {}),
     };
-    const pending = showWheelAdsgramAd(controller, 1000);
+    const pending = showWheelAdsgramAd(controller);
     await Promise.resolve();
     listeners.onBannerNotFound({ description: "No banner found" });
     await assert.rejects(
@@ -339,16 +347,40 @@ test("Adsgram no-fill event rejects a hanging show and clears loading", async ()
     assert.equal(listeners.onBannerNotFound, undefined);
 });
 
-test("Adsgram hanging SDK show has a short recoverable load timeout", async () => {
+test("Adsgram video is not interrupted by the removed 20 second wrapper timeout", async () => {
     const controller = {
         addEventListener() {},
         removeEventListener() {},
-        show: () => new Promise(() => {}),
+        show: () => new Promise((resolve) => {
+            setTimeout(() => resolve({ done: true, error: false }), 25);
+        }),
     };
-    await assert.rejects(
-        showWheelAdsgramAd(controller, 5),
-        (error) => error.code === "ADSGRAM_LOAD_TIMEOUT"
-            && /Reklama ochilmadi/.test(error.message),
+    assert.deepEqual(
+        await showWheelAdsgramAd(controller),
+        { done: true, error: false },
+    );
+});
+
+test("ten completed rewarded videos each reach exactly one backend claim", async () => {
+    const claimedTokens = [];
+    for (let attempt = 1; attempt <= 10; attempt += 1) {
+        const token = `reward-token-${attempt}`;
+        await runAdsgramRewardedFlow({
+            createSession: async () => ({ token }),
+            showAd: async () => showWheelAdsgramAd({
+                addEventListener() {},
+                removeEventListener() {},
+                show: async () => ({ done: true, error: false }),
+            }),
+            claimReward: async (claimedToken) => {
+                claimedTokens.push(claimedToken);
+                return { remaining_ad_spins: 1 };
+            },
+        });
+    }
+    assert.deepEqual(
+        claimedTokens,
+        Array.from({ length: 10 }, (_, index) => `reward-token-${index + 1}`),
     );
 });
 
