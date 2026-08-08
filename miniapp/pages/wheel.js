@@ -547,26 +547,37 @@ function wheelNextSpinHint(state, now = wheelNow()) {
 }
 
 function registerWheelAdsgramNoFillDiagnostics(controller) {
-    controller?.addEventListener?.("onBannerNotFound", (event) => {
-        console.info("[WheelAds] adsgram_banner_not_found", {
-            blockId: WHEEL_ADSGRAM_BLOCK_ID,
-            description: event?.description || null,
+    const eventNames = [
+        "onStart",
+        "onReward",
+        "onComplete",
+        "onSkip",
+        "onError",
+        "onBannerNotFound",
+        "onNonStopShow",
+        "onTooLongSession",
+    ];
+    eventNames.forEach((eventName) => {
+        controller?.addEventListener?.(eventName, (event) => {
+            console.info("[WheelAds] adsgram_event", {
+                blockId: WHEEL_ADSGRAM_BLOCK_ID,
+                event: eventName,
+                description: event?.description || null,
+            });
         });
     });
     return controller;
 }
 
-function showWheelAdsgramAd(controller, timeoutMs = 20000) {
+function showWheelAdsgramAd(controller) {
     if (!controller?.show) {
         return Promise.reject(new Error("Adsgram SDK yuklanmadi."));
     }
     return new Promise((resolve, reject) => {
         let settled = false;
-        let timeoutId;
         const finish = (callback, value) => {
             if (settled) return;
             settled = true;
-            clearTimeout(timeoutId);
             controller.removeEventListener?.("onBannerNotFound", onNoFill);
             callback(value);
         };
@@ -578,13 +589,6 @@ function showWheelAdsgramAd(controller, timeoutMs = 20000) {
             finish(reject, error);
         };
         controller.addEventListener?.("onBannerNotFound", onNoFill);
-        timeoutId = setTimeout(() => {
-            const error = new Error(
-                "Reklama ochilmadi. Internetni tekshirib, qayta urinib ko‘ring."
-            );
-            error.code = "ADSGRAM_LOAD_TIMEOUT";
-            finish(reject, error);
-        }, timeoutMs);
         Promise.resolve()
             .then(() => controller.show())
             .then(
@@ -734,7 +738,7 @@ async function watchWheelRewardedAdSlot(slotId) {
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
         await refreshWheelState();
     } catch (error) {
-        if (["ADSGRAM_NO_FILL", "ADSGRAM_LOAD_TIMEOUT"].includes(error?.code)) {
+        if (error?.code === "ADSGRAM_NO_FILL") {
             wheelAdsgramController?.destroy?.();
             wheelAdsgramController = null;
         }
