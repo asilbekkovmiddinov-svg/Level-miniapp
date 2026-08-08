@@ -467,10 +467,12 @@ function renderWheelInfo() {
 
     region.innerHTML = `<div class="wheel-stats">
         <article id="wheelFreeCard" class="wheel-timer-card ${cooldown.freeReady ? "is-ready" : cooldown.freeCooldown ? "is-cooldown" : ""}"><i>☀️</i><span>Bugungi bepul spin</span><b id="wheelFreeCountdown" ${cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeCooldown ? formatWheelCountdown(cooldown.freeAt) : ""}</b><em id="wheelFreeBadge" ${cooldown.freeReady || cooldown.freeCooldown ? "" : "hidden"}>${cooldown.freeReady ? "🟢 READY" : "🟡 COOLDOWN"}</em></article>
-        <article id="wheelAdCard" class="wheel-timer-card wheel-rewarded-card ${cooldown.adRewardReady ? "is-ready" : cooldown.adCooldown ? "is-cooldown" : ""}"><i>▶️</i><span>Rewarded Spin</span><b id="wheelAdCountdown" hidden></b><em id="wheelAdBadge" ${cooldown.adRewardReady || cooldown.adCooldown || cooldown.adReady ? "" : "hidden"}>${cooldown.adRewardReady ? "🟢 AD READY" : cooldown.adReady ? "🎁 SPIN READY" : "🟡 COOLDOWN"}</em>
-            <div class="wheel-ad-slots" role="group" aria-label="Rewarded reklama slotlari">${wheelRewardedSlotsMarkup(cooldown)}</div></article>
-        <article class="wheel-remaining-card"><i>✨</i><span>Qolgan spinlar</span><b>${cooldown.remaining}</b></article>
-        <article class="wheel-last-win"><i>${lastPrize.icon}</i><span>Oxirgi yutuq</span><b>${escapeWheelText(lastPrize.label)}</b><small>${escapeWheelText(lastPrize.time)}</small><em>LAST WIN</em></article>
+        <div class="wheel-compact-row">
+            <article id="wheelAdCard" class="wheel-timer-card wheel-rewarded-card ${cooldown.adRewardReady ? "is-ready" : cooldown.adCooldown ? "is-cooldown" : ""}"><i>▶️</i><span>Reklama ko‘rish</span><b id="wheelAdCountdown" hidden></b><em id="wheelAdBadge" ${cooldown.adRewardReady || cooldown.adCooldown || cooldown.adReady ? "" : "hidden"}>${cooldown.adRewardReady ? "🟢 AD READY" : cooldown.adReady ? "🎁 SPIN READY" : "🟡 COOLDOWN"}</em>
+                <div class="wheel-ad-slots" role="group" aria-label="Rewarded reklama slotlari">${wheelRewardedSlotsMarkup(cooldown)}</div></article>
+            <article class="wheel-remaining-card"><i>✨</i><span>Qolgan spinlar</span><b>${cooldown.remaining}</b></article>
+            <article class="wheel-last-win"><i>${lastPrize.icon}</i><span>Oxirgi yutuq</span><b>${escapeWheelText(lastPrize.label)}</b><small>${escapeWheelText(lastPrize.time)}</small><em>LAST WIN</em></article>
+        </div>
     </div>`;
 
     wheelCooldownSnapshot = cooldown;

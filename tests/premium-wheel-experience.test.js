@@ -42,3 +42,23 @@ test("Wheel remains accessible, low-end aware and haptic", () => {
     assert.match(designRuntime, /\.wheel-spin-button/);
     assert.ok(html.indexOf("motion-engine.css") < html.indexOf("premium-wheel.css"));
 });
+
+
+test("Wheel lower summary keeps rewarded, remaining and last-win cards in one compact row", () => {
+    assert.match(source, /<div class="wheel-compact-row">[\s\S]*id="wheelAdCard"[\s\S]*wheel-remaining-card[\s\S]*wheel-last-win[\s\S]*<\/div>/);
+    assert.match(source, /<span>Reklama ko‘rish<\/span>/);
+    assert.match(css, /\.wheel-compact-row\{[^}]*display:flex[^}]*align-items:stretch/);
+    assert.match(css, /\.wheel-compact-row>\.wheel-rewarded-card\{[^}]*flex:1\.6 1 0/);
+    assert.match(css, /\.wheel-compact-row>\.wheel-remaining-card,\.wheel-compact-row>\.wheel-last-win\{[^}]*flex:1 1 0/);
+    assert.match(css, /@media\(max-width:390px\)\{\.wheel-compact-row\{/);
+    assert.doesNotMatch(css, /\.wheel-compact-row[^}]*overflow-x\s*:\s*(auto|scroll)/);
+});
+
+test("compact Wheel polish preserves countdown and READY hooks", () => {
+    for (const id of ["wheelAdCard", "wheelAdCountdown", "wheelAdBadge"]) {
+        assert.match(source, new RegExp(`id="${id}"`));
+    }
+    assert.match(source, /updateWheelTimerCard\("Ad"/);
+    assert.match(source, /updateWheelRewardedSlots\(current, now\)/);
+    assert.match(source, /normalizeWheelLastWin\(wheelData\?\.last_win\)/);
+});
