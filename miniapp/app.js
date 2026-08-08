@@ -34,6 +34,8 @@ window.addEventListener("load", async () => {
     }
 });
 
+let pageReturnTarget = null;
+
 async function openCoinOrderDeepLink() {
     const params = new URLSearchParams(window.location.search);
     const type = String(params.get("coin_order_type") || "").toUpperCase();
@@ -84,12 +86,18 @@ function bindHeaderButtons() {
         refreshBtn.addEventListener("click", refreshEverything);
     }
 
-    if (backBtn) {
-        backBtn.addEventListener("click", loadHome);
-    }
+    if (backBtn) backBtn.addEventListener("click", handlePageBack);
 }
 
-async function openPage(page) {
+async function handlePageBack() {
+    const target = pageReturnTarget;
+    pageReturnTarget = null;
+    if (target) await openPage(target);
+    else await loadHome();
+}
+
+async function openPage(page, options = {}) {
+    pageReturnTarget = options.returnPage || null;
     if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
     if (page !== "coin-promotions-admin") document.body.classList.remove("coin-promotion-admin-open");
     if (page !== "promotions-admin") {
@@ -97,7 +105,7 @@ async function openPage(page) {
     }
     switch (page) {
         case "shop":
-            await loadShopPage();
+            await loadShopPage(options);
             break;
         case "p2p":
             await loadP2PPage();

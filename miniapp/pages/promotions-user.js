@@ -32,10 +32,23 @@ function movePromotionSlide(index) {
 }
 
 function bindPromotionsHome() {
-    document.querySelector("#homePromotions [data-open-promotions]")?.addEventListener("click", () => openPage("promotions"));
-    const carousel = document.getElementById("promotionsCarousel"); if (!carousel) return;
+    const carousel = document.getElementById("promotionsCarousel");
+    if (!carousel) {
+        document.querySelector("#homePromotions [data-open-promotions]")?.addEventListener("click", () => openPage("promotions"));
+        return;
+    }
     carousel.querySelectorAll("[data-carousel-index]").forEach((button) => button.onclick = () => movePromotionSlide(Number(button.dataset.carouselIndex)));
-    carousel.querySelector("[data-open-promotions]")?.addEventListener("click", () => openPage("promotions"));
+    carousel.querySelector("[data-open-promotions]")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const item = promotionsUserState.items[promotionsUserState.index];
+        if (PromotionsUserCore.resolveAction(item).target === "shop") activatePromotion(item.id);
+        else openPage("promotions");
+    });
+    carousel.querySelector(".pux-slide.is-active")?.addEventListener("click", (event) => {
+        if (event.target.closest("[data-carousel-index]")) return;
+        const item = promotionsUserState.items[promotionsUserState.index];
+        if (PromotionsUserCore.resolveAction(item).target === "shop") activatePromotion(item.id);
+    });
     let startX = 0;
     carousel.addEventListener("touchstart", (event) => { startX = event.touches[0].clientX; }, { passive: true });
     carousel.addEventListener("touchend", (event) => { const delta = event.changedTouches[0].clientX - startX; if (Math.abs(delta) > 42) movePromotionSlide(promotionsUserState.index + (delta < 0 ? 1 : -1)); }, { passive: true });
@@ -48,7 +61,7 @@ function scheduleCarousel() {
 
 function promotionCard(item) {
     const action = PromotionsUserCore.resolveAction(item);
-    return `<article class="pux-card" data-promotion-id="${item.id}">${promotionImage(item, "pux-card-image")}<div class="pux-shade"></div>
+    return `<article class="pux-card" data-promotion-id="${item.id}" ${action.target === "shop" ? `data-coin-shop-promotion="${item.id}" role="button" tabindex="0"` : ""}>${promotionImage(item, "pux-card-image")}<div class="pux-shade"></div>
         <div class="pux-card-copy">${item.badge ? `<em>${promotionsEscape(item.badge)}</em>` : ""}<h2>${promotionsEscape(item.title)}</h2><h3>${promotionsEscape(item.subtitle || "")}</h3><p>${promotionsEscape(item.description || "")}</p>
         <div class="pux-countdown" data-end-at="${promotionsEscape(item.end_at || "")}"><span>⏱</span><b>${PromotionsUserCore.countdown(item.end_at)}</b></div>
         ${action.type !== "none" ? `<button type="button" data-promotion-action="${item.id}">${promotionsEscape(item.button_text || "Batafsil")} <i>›</i></button>` : ""}</div></article>`;
@@ -64,14 +77,21 @@ function renderPromotionsPage() {
 
 function bindPromotionsPage() {
     document.querySelector("[data-promotions-retry]")?.addEventListener("click", () => loadUserPromotions(true));
-    document.querySelectorAll("[data-promotion-action]").forEach((button) => button.onclick = () => activatePromotion(Number(button.dataset.promotionAction)));
+    document.querySelectorAll("[data-promotion-action]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); activatePromotion(Number(button.dataset.promotionAction)); });
+    document.querySelectorAll("[data-coin-shop-promotion]").forEach((card) => {
+        const open = () => activatePromotion(Number(card.dataset.coinShopPromotion));
+        card.onclick = open;
+        card.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } };
+    });
 }
 
 async function activatePromotion(id) {
     const item = promotionsUserState.items.find((value) => value.id === id); if (!item) return;
     const action = PromotionsUserCore.resolveAction(item);
     await promotionsUserApi.click(id).catch(() => {});
-    if (action.type === "page") await openPage(action.target);
+    if (action.type === "page" && action.target === "shop") {
+        await openPage("shop", { returnPage: "promotions", shopTarget: PromotionsUserCore.coinPackageTarget(item) });
+    } else if (action.type === "page") await openPage(action.target);
     else if (action.type === "url") {
         if (globalThis.Telegram?.WebApp?.openLink) globalThis.Telegram.WebApp.openLink(action.target);
         else window.open(action.target, "_blank", "noopener");

@@ -42,6 +42,17 @@
         return { type: "none", target: "" };
     }
 
+    function coinPackageTarget(item) {
+        const packageId = Number(item?.coin_package_id);
+        if (Number.isInteger(packageId) && packageId > 0) return { productId: packageId, coinAmount: null };
+        const target = safeText(item?.button_target).trim();
+        const productMatch = target.match(/^(?:package|product|id):\s*(\d+)$/i);
+        if (productMatch) return { productId: Number(productMatch[1]), coinAmount: null };
+        const coinMatch = target.match(/^(?:coins?:\s*)?(\d+)$/i);
+        if (coinMatch) return { productId: null, coinAmount: Number(coinMatch[1]) };
+        return { productId: null, coinAmount: null };
+    }
+
     function save(storage, items, savedAt = Date.now()) { storage?.setItem(CACHE_KEY, JSON.stringify({ savedAt, items })); }
     function load(storage, now = Date.now(), maxAge = 86400000) {
         try {
@@ -49,5 +60,5 @@
             return cached && now - Number(cached.savedAt) <= maxAge ? normalize(cached.items, now) : [];
         } catch (_error) { return []; }
     }
-    return { CACHE_KEY, normalize, remaining, countdown, resolveAction, save, load };
+    return { CACHE_KEY, normalize, remaining, countdown, resolveAction, coinPackageTarget, save, load };
 });
