@@ -129,9 +129,93 @@ function promotionsAdminUserMetrics() {
     const metrics = promotionsAdminState.userMetrics;
     if (!metrics) return "";
     return `<section class="pac-user-metrics" aria-label="Foydalanuvchilar statistikasi">
-        <article><span>👥</span><div><small>JAMI FOYDALANUVCHILAR</small><strong>${Number(metrics.total_users || 0).toLocaleString("uz-UZ")}</strong><em>Barcha ro‘yxatdan o‘tganlar</em></div></article>
+        <button class="pac-user-metric-open" type="button" onclick="openAdminUserDirectory()"><span>👥</span><div><small>JAMI FOYDALANUVCHILAR</small><strong>${Number(metrics.total_users || 0).toLocaleString("uz-UZ")}</strong><em>Ro‘yxatni ko‘rish ›</em></div></button>
         <article><span>📈</span><div><small>OYLIK FAOL FOYDALANUVCHILAR</small><strong>${Number(metrics.monthly_active_users || 0).toLocaleString("uz-UZ")}</strong><em>So‘nggi ${Number(metrics.active_window_days || 30)} kun</em></div></article>
     </section>`;
+}
+
+const adminUserDirectoryState = { q: "", status: "ALL", page: 1, perPage: 20, loading: false };
+let adminUserSearchTimer = null;
+
+function adminUserDisplayName(user) {
+    return [user.first_name, user.last_name].filter(Boolean).join(" ") || "Nomsiz foydalanuvchi";
+}
+
+function adminUserDirectoryMarkup(payload) {
+    const e = PromotionsAdminCore.escapeHtml;
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    const pages = Math.max(0, Number(payload?.pages) || 0);
+    return `<div class="pac-users-list">
+        ${items.length ? items.map((user) => `<article>
+            <span class="pac-user-avatar">${e((user.first_name || user.username || "U").slice(0, 1).toUpperCase())}</span>
+            <div><strong>${e(adminUserDisplayName(user))}</strong><b>${user.username ? `@${e(user.username)}` : "Username mavjud emas"}</b><small>ID: ${e(user.telegram_id)} • ${promotionsAdminDate(user.last_seen_at, true)}</small></div>
+            <em class="${user.is_active ? "is-active" : ""}">${user.is_active ? "FAOL" : "NOFAOL"}</em>
+        </article>`).join("") : `<div class="pac-users-empty">Foydalanuvchi topilmadi.</div>`}
+    </div>
+    <footer class="pac-users-pagination">
+        <button type="button" onclick="changeAdminUserPage(-1)" ${Number(payload?.page) <= 1 ? "disabled" : ""}>‹ Oldingi</button>
+        <span>${Number(payload?.page) || 1} / ${pages || 1}</span>
+        <button type="button" onclick="changeAdminUserPage(1)" ${!pages || Number(payload?.page) >= pages ? "disabled" : ""}>Keyingi ›</button>
+    </footer>`;
+}
+
+async function loadAdminUserDirectory() {
+    const body = document.getElementById("adminUserDirectoryBody");
+    if (!body || adminUserDirectoryState.loading) return;
+    adminUserDirectoryState.loading = true;
+    body.innerHTML = `<div class="pac-users-loading">Yuklanmoqda…</div>`;
+    try {
+        const payload = await promotionsAdminApi.userList(adminUserDirectoryState);
+        body.innerHTML = adminUserDirectoryMarkup(payload);
+    } catch (error) {
+        body.innerHTML = `<div class="pac-users-error">!
+            <strong>Ro‘yxat yuklanmadi</strong><small>${PromotionsAdminCore.escapeHtml(error.message || "Qayta urinib ko‘ring.")}</small>
+            <button type="button" onclick="loadAdminUserDirectory()">Qayta urinish</button></div>`;
+    } finally {
+        adminUserDirectoryState.loading = false;
+    }
+}
+
+function openAdminUserDirectory() {
+    document.getElementById("adminUserDirectory")?.remove();
+    adminUserDirectoryState.q = "";
+    adminUserDirectoryState.status = "ALL";
+    adminUserDirectoryState.page = 1;
+    const overlay = document.createElement("div");
+    overlay.id = "adminUserDirectory";
+    overlay.className = "pac-users-overlay";
+    overlay.innerHTML = `<section class="pac-users-sheet" role="dialog" aria-modal="true" aria-labelledby="adminUsersTitle">
+        <header><div><small>ADMIN ONLY</small><h2 id="adminUsersTitle">Foydalanuvchilar</h2></div><button type="button" onclick="closeAdminUserDirectory()" aria-label="Yopish">×</button></header>
+        <div class="pac-users-tools"><label><span>⌕</span><input id="adminUserSearch" type="search" placeholder="Username yoki Telegram ID"></label>
+            <select id="adminUserStatus" aria-label="Faollik filtri"><option value="ALL">Barchasi</option><option value="ACTIVE">Faol</option><option value="INACTIVE">Nofaol</option></select></div>
+        <div id="adminUserDirectoryBody"></div>
+    </section>`;
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) closeAdminUserDirectory(); });
+    document.body.appendChild(overlay);
+    document.getElementById("adminUserSearch").addEventListener("input", (event) => {
+        clearTimeout(adminUserSearchTimer);
+        adminUserSearchTimer = setTimeout(() => {
+            adminUserDirectoryState.q = event.target.value.trim();
+            adminUserDirectoryState.page = 1;
+            loadAdminUserDirectory();
+        }, 300);
+    });
+    document.getElementById("adminUserStatus").addEventListener("change", (event) => {
+        adminUserDirectoryState.status = event.target.value;
+        adminUserDirectoryState.page = 1;
+        loadAdminUserDirectory();
+    });
+    loadAdminUserDirectory();
+}
+
+function closeAdminUserDirectory() {
+    clearTimeout(adminUserSearchTimer);
+    document.getElementById("adminUserDirectory")?.remove();
+}
+
+function changeAdminUserPage(direction) {
+    adminUserDirectoryState.page = Math.max(1, adminUserDirectoryState.page + Number(direction || 0));
+    loadAdminUserDirectory();
 }
 
 function promotionsAdminShell() {
