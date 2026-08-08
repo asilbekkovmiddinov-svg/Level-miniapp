@@ -26,6 +26,12 @@ test("every navigation opens at the top through one router", () => {
     assert.doesNotMatch(navbar, /switch \(page\)/);
 });
 
+test("internal router preserves the explicit promotion return target", () => {
+    assert.match(app, /async function openPage\(page, options = \{\}\)/);
+    assert.match(app, /pageReturnTarget = options\.returnPage \|\| null/);
+    assert.match(app, /async function handlePageBack/);
+});
+
 test("hidden page state wins over module-specific display declarations", () => {
     assert.match(home, /#homePage\{[^}]*display:grid/);
     assert.match(polish, /\.page\[hidden\]\{display:none!important\}/);

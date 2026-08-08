@@ -25,7 +25,7 @@ const SHOP_REGIONS = [
     "🇲🇾 Malayziya",
 ];
 
-async function loadShopPage() {
+async function loadShopPage(options = {}) {
     Navbar.setActive("shop");
     showPage("shopPage", "Coin Shop");
 
@@ -52,7 +52,7 @@ async function loadShopPage() {
         }
 
         products = (result.data || []).map(CoinPromotionCore.normalizeProduct);
-        renderShopCategories();
+        if (!openTargetedShopProduct(options.shopTarget)) renderShopCategories();
         startShopPromotionRefresh();
         startShopPromotionCountdown();
 
@@ -65,6 +65,22 @@ async function loadShopPage() {
             </div>
         `;
     }
+}
+
+function openTargetedShopProduct(target = {}) {
+    const productId = Number(target?.productId);
+    const coinAmount = Number(target?.coinAmount);
+    const product = products.find((item) => Number.isInteger(productId) && productId > 0
+        ? item.id === productId
+        : Number.isFinite(coinAmount) && coinAmount > 0 && item.coin_amount === coinAmount);
+    if (!product) return false;
+    selectedShopCategory = product.category;
+    selectedShopProduct = product;
+    shopOrderAttempt = null;
+    renderProductList(products.filter((item) => item.category === product.category), product.category);
+    document.querySelector(`[data-product-id="${product.id}"]`)?.classList.add("is-targeted");
+    document.querySelector(`[data-product-id="${product.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    return true;
 }
 
 function renderShopCategories() {

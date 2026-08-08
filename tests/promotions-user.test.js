@@ -33,6 +33,14 @@ test("action routing covers backend button_action contract", () => {
     assert.equal(Core.resolveAction({ button_action: "URL", button_target: "javascript:alert(1)" }).type, "none");
 });
 
+test("coin shop promotion target supports dynamic package id and coin amount", () => {
+    assert.deepEqual(Core.coinPackageTarget({ coin_package_id: 17, button_target: "840" }), { productId: 17, coinAmount: null });
+    assert.deepEqual(Core.coinPackageTarget({ button_target: "product:17" }), { productId: 17, coinAmount: null });
+    assert.deepEqual(Core.coinPackageTarget({ button_target: "coins:840" }), { productId: null, coinAmount: 840 });
+    assert.deepEqual(Core.coinPackageTarget({ button_target: "840" }), { productId: null, coinAmount: 840 });
+    assert.deepEqual(Core.coinPackageTarget({ button_target: "unknown" }), { productId: null, coinAmount: null });
+});
+
 test("last successful promotions cache supports offline and rejects stale data", () => {
     const memory = new Map();
     const storage = { setItem: (key, value) => memory.set(key, value), getItem: (key) => memory.get(key) };
@@ -56,7 +64,7 @@ test("public API sends authenticated active, view and click requests", async () 
 test("user Promotions UI includes carousel, swipe, loop, retry and auto refresh", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/promotions-user.js"), "utf8");
     const index = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
-    for (const expected of ["pux-carousel", "touchstart", "touchend", "data-carousel-index", "IntersectionObserver", "data-promotions-retry", "setInterval(() => loadUserPromotions(), 30000)", "loadPromotionsPage", "startPromotionsAutoRefresh"]) assert.match(source, new RegExp(expected.replace(/[()]/g, "\\$&")));
+    for (const expected of ["pux-carousel", "touchstart", "touchend", "data-carousel-index", "IntersectionObserver", "data-promotions-retry", "data-coin-shop-promotion", "returnPage: \"promotions\"", "setInterval(() => loadUserPromotions(), 30000)", "loadPromotionsPage", "startPromotionsAutoRefresh"]) assert.match(source, new RegExp(expected.replace(/[()]/g, "\\$&")));
     assert.match(index, /id="homePromotions"/); assert.match(index, /id="promotionsPage"/);
     assert.match(index, /promotions-user\.css/); assert.match(index, /pages\/promotions-user\.js/);
 });
