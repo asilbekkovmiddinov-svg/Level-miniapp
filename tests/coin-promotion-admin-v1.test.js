@@ -46,17 +46,32 @@ test("form validates price, quantity and schedule before submit", () => {
     assert.throws(() => Core.payload({ ...base, end_at: "2026-07-19T10:00" }, packages), /Start time/);
 });
 
+test("coin package form validates authoritative package fields", () => {
+    assert.deepEqual(Core.packagePayload({ coin_amount: "840", price_uzs: "70000", scope: "ANDROID" }), {
+        coin_amount: 840, price_uzs: 70000, scope: "ANDROID", is_active: true,
+    });
+    assert.throws(() => Core.packagePayload({ coin_amount: 0, price_uzs: 1, scope: "ALL" }), /Coin miqdori/);
+    assert.throws(() => Core.packagePayload({ coin_amount: 1, price_uzs: 0, scope: "ALL" }), /Narx/);
+    assert.throws(() => Core.packagePayload({ coin_amount: 1, price_uzs: 1, scope: "OTHER" }), /noto‘g‘ri/);
+    assert.equal(Core.packagePayload({ coin_amount: 1, price_uzs: 1, scope: "ALL", is_active: "false" }).is_active, false);
+});
+
 test("Admin API uses exact backend routes and verified initData", async () => {
     const calls = [];
     const api = new CoinPromotionAdminApi({
         baseUrl: "https://backend.example", initDataProvider: () => "verified-admin",
         fetchImpl: async (url, options) => { calls.push([url, options]); return response(200, []); },
     });
-    await api.list(); await api.packages(); await api.create({ title: "A" }); await api.update(4, { title: "B" });
+    await api.list(); await api.packages(); await api.createPackage({ coin_amount: 840 }); await api.updatePackage(7, { coin_amount: 840 });
+    await api.activatePackage(7); await api.deactivatePackage(7); await api.create({ title: "A" }); await api.update(4, { title: "B" });
     await api.activate(4); await api.pause(4); await api.deactivate(4); await api.remove(4); await api.restore(4);
     assert.deepEqual(calls.map(([url, options]) => [url, options.method]), [
         ["https://backend.example/admin/coin-promotions?include_deleted=true", "GET"],
-        ["https://backend.example/products/active", "GET"],
+        ["https://backend.example/admin/coin-packages", "GET"],
+        ["https://backend.example/admin/coin-packages", "POST"],
+        ["https://backend.example/admin/coin-packages/7", "PUT"],
+        ["https://backend.example/admin/coin-packages/7/activate", "POST"],
+        ["https://backend.example/admin/coin-packages/7/deactivate", "POST"],
         ["https://backend.example/admin/coin-promotions", "POST"],
         ["https://backend.example/admin/coin-promotions/4", "PUT"],
         ["https://backend.example/admin/coin-promotions/4/activate", "POST"],
@@ -79,11 +94,14 @@ test("Admin API maps authentication errors", async () => {
 test("Coin Promotion Admin page exposes required premium management UX", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/coin-promotion-admin.js"), "utf8");
     const css = fs.readFileSync(path.join(__dirname, "../miniapp/coin-promotion-admin.css"), "utf8");
+    const packageCss = fs.readFileSync(path.join(__dirname, "../miniapp/coin-package-admin.css"), "utf8");
     const html = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
     const app = fs.readFileSync(path.join(__dirname, "../miniapp/app.js"), "utf8");
     const promotions = fs.readFileSync(path.join(__dirname, "../miniapp/pages/promotions-admin.js"), "utf8");
     for (const expected of ["Coin Promotions", "Original", "Promotion", "Qoldi", "Reserved", "Sotilgan", "START", "END", "openCoinPromotionForm", "saveCoinPromotion", "activate", "pause", "deactivate", "remove", "restore", "Qayta urinish"]) assert.match(source, new RegExp(expected));
     assert.match(css, /cpa-skeleton/); assert.match(css, /prefers-reduced-motion/);
+    assert.match(packageCss, /cpa-package-card/);
+    for (const expected of ["Coin Packages", "Add Coin Package", "openCoinPackageForm", "saveCoinPackage", "deactivatePackage", "activatePackage"]) assert.match(source, new RegExp(expected));
     assert.match(html, /id="coinPromotionAdminPage"/); assert.match(html, /coin-promotion-admin\.js/);
     assert.match(app, /query\.get\("admin"\) === "coin-promotions"/);
     assert.match(source, /openPage\('promotions-admin'\)/);

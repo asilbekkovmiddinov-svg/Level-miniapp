@@ -37,7 +37,20 @@
             id: number(item.id), title: text(item.title || item.name),
             coin_amount: number(item.coin_amount ?? item.coins_amount),
             price: number(item.price ?? item.price_uzs), category: text(item.category),
+            scope: text(item.scope || item.region || item.platform || "ALL").toUpperCase(),
+            is_active: item.is_active !== false,
         })).filter((item) => item.id > 0);
+    }
+
+    function packagePayload(values) {
+        const coinAmount = number(values.coin_amount);
+        const price = number(values.price_uzs);
+        const scope = text(values.scope).toUpperCase();
+        if (coinAmount <= 0) throw new Error("Coin miqdori 0 dan katta bo‘lishi kerak.");
+        if (price <= 0) throw new Error("Narx 0 dan katta bo‘lishi kerak.");
+        if (!["ALL", "ANDROID", "JAPAN", "TURKEY"].includes(scope)) throw new Error("Platform/region noto‘g‘ri.");
+        const active = ![false, "false", "INACTIVE"].includes(values.is_active);
+        return { coin_amount: coinAmount, price_uzs: price, scope, is_active: active };
     }
 
     function payload(values, packages) {
@@ -72,5 +85,5 @@
         })[char]);
     }
 
-    return { STATUSES, escapeHtml, normalize, normalizeList, normalizePackages, payload };
+    return { STATUSES, escapeHtml, normalize, normalizeList, normalizePackages, packagePayload, payload };
 });

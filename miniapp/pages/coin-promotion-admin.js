@@ -1,5 +1,5 @@
 const coinPromotionAdminApi = new CoinPromotionAdminApi({ baseUrl: API_URL, initDataProvider: () => telegramInitData() });
-const coinPromotionAdminState = { items: [], packages: [], filter: "ALL", editing: null, loading: false };
+const coinPromotionAdminState = { items: [], packages: [], filter: "ALL", editing: null, editingPackage: null, loading: false };
 const cpaEscape = CoinPromotionAdminCore.escapeHtml;
 
 function cpaMoney(value) { return Number(value || 0).toLocaleString("uz-UZ"); }
@@ -37,11 +37,21 @@ function renderCoinPromotionAdminPage() {
     document.getElementById("coinPromotionAdminPage").innerHTML = `<div class="cpa-shell">
         <nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button onclick="openPage('promotions-admin')">Promotions</button><button class="active">Coin Promotions</button><button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button></nav>
         <header class="cpa-hero"><div><small>LEVEL_GROUP ADMIN</small><h2>Coin Promotions</h2><p>Cheklangan Coin aksiyalarini boshqaring</p></div><button onclick="openCoinPromotionForm()">＋ Create</button></header>
+        <section class="cpa-package-panel"><header><div><small>PACKAGE SOURCE</small><h2>Coin Packages</h2><p>Coin Shop va yangi promotionlar uchun yagona paketlar ro‘yxati.</p></div><button onclick="openCoinPackageForm()">＋ Add Coin Package</button></header>
+        <div class="cpa-package-list">${state.packages.length ? state.packages.map(coinPackageAdminCard).join("") : `<div class="cpa-empty"><span>🪙</span><h2>Paket topilmadi</h2></div>`}</div></section>
         <div class="cpa-stats"><span><b>${state.items.length}</b>Total</span><span><b>${state.items.filter((x) => x.status === "ACTIVE").length}</b>Active</span><span><b>${state.items.reduce((sum, x) => sum + x.sold_quantity, 0)}</b>Sold</span><span><b>${state.items.reduce((sum, x) => sum + x.remaining_quantity, 0)}</b>Remaining</span></div>
         <nav class="cpa-filters">${CoinPromotionAdminCore.STATUSES.map((status) => `<button class="${state.filter === status ? "active" : ""}" onclick="setCoinPromotionFilter('${status}')">${status}</button>`).join("")}</nav>
         <section class="cpa-list">${items.length ? items.map(coinPromotionAdminCard).join("") : `<div class="cpa-empty"><span>🔥</span><h2>Promotion topilmadi</h2><p>Yangi Coin Promotion yarating.</p></div>`}</section>
         <div id="coinPromotionAdminModal"></div>
     </div>`;
+}
+
+function coinPackageAdminCard(pack) {
+    return `<article class="cpa-package-card ${pack.is_active ? "is-active" : "is-inactive"}">
+        <div><small>${cpaEscape(pack.scope)}</small><h3>${cpaMoney(pack.coin_amount)} Coins</h3><p>${cpaMoney(pack.price)} UZS</p></div>
+        <b>${pack.is_active ? "ACTIVE" : "INACTIVE"}</b>
+        <footer><button onclick="openCoinPackageForm(${pack.id})">✏ Edit</button><button onclick="runCoinPackageAction(${pack.id},'${pack.is_active ? "deactivatePackage" : "activatePackage"}')">${pack.is_active ? "⏸ Deactivate" : "▶ Activate"}</button></footer>
+    </article>`;
 }
 
 function coinPromotionAdminCard(item) {
@@ -64,7 +74,7 @@ function openCoinPromotionForm(id = null) {
     const item = coinPromotionAdminState.items.find((entry) => entry.id === Number(id));
     coinPromotionAdminState.editing = item || null;
     const value = (key, fallback = "") => cpaEscape(item?.[key] ?? fallback);
-    const packages = coinPromotionAdminState.packages;
+    const packages = coinPromotionAdminState.packages.filter((pack) => pack.is_active || pack.id === item?.coin_package_id);
     document.getElementById("coinPromotionAdminModal").innerHTML = `<div class="cpa-modal"><form id="coinPromotionForm" onsubmit="saveCoinPromotion(event)">
         <header><div><small>${item ? "UPDATE" : "CREATE"}</small><h2>${item ? "Promotionni tahrirlash" : "Yangi Coin Promotion"}</h2></div><button type="button" onclick="closeCoinPromotionForm()">×</button></header>
         <label>Coin package<select name="coin_package_id" required>${packages.map((pack) => `<option value="${pack.id}" ${pack.id === item?.coin_package_id ? "selected" : ""}>${cpaEscape(pack.title || `${pack.coin_amount} Coins`)} — ${cpaMoney(pack.price)} UZS</option>`).join("")}</select></label>
@@ -74,6 +84,38 @@ function openCoinPromotionForm(id = null) {
         <div class="cpa-form-grid"><label>Start time<input name="start_at" type="datetime-local" required value="${item ? cpaDate(item.start_at, true) : ""}"></label><label>End time<input name="end_at" type="datetime-local" required value="${item ? cpaDate(item.end_at, true) : ""}"></label></div>
         <footer><button type="button" onclick="closeCoinPromotionForm()">Cancel</button><button class="primary" type="submit">${item ? "Save changes" : "Create promotion"}</button></footer>
     </form></div>`;
+}
+
+function openCoinPackageForm(id = null) {
+    const item = coinPromotionAdminState.packages.find((entry) => entry.id === Number(id));
+    coinPromotionAdminState.editingPackage = item || null;
+    const value = (key, fallback = "") => cpaEscape(item?.[key] ?? fallback);
+    document.getElementById("coinPromotionAdminModal").innerHTML = `<div class="cpa-modal"><form id="coinPackageForm" onsubmit="saveCoinPackage(event)">
+        <header><div><small>${item ? "UPDATE PACKAGE" : "NEW PACKAGE"}</small><h2>${item ? "Coin paketni tahrirlash" : "Yangi Coin Package"}</h2></div><button type="button" onclick="closeCoinPromotionForm()">×</button></header>
+        <label>Coin miqdori<input name="coin_amount" type="number" min="1" required value="${value("coin_amount")}" placeholder="840"></label>
+        <label>Oddiy narxi (UZS)<input name="price_uzs" type="number" min="1" required value="${value("price")}" placeholder="70000"></label>
+        <label>Platform / region<select name="scope" required>${["ALL", "ANDROID", "JAPAN", "TURKEY"].map((scope) => `<option value="${scope}" ${scope === (item?.scope || "ALL") ? "selected" : ""}>${scope}</option>`).join("")}</select></label>
+        <label>Status<select name="is_active" required><option value="true" ${item?.is_active !== false ? "selected" : ""}>ACTIVE</option><option value="false" ${item?.is_active === false ? "selected" : ""}>INACTIVE</option></select></label>
+        <footer><button type="button" onclick="closeCoinPromotionForm()">Cancel</button><button class="primary" type="submit">${item ? "Save changes" : "Add package"}</button></footer>
+    </form></div>`;
+}
+
+async function saveCoinPackage(event) {
+    event.preventDefault();
+    const form = event.currentTarget; const submit = form.querySelector("button[type=submit]"); submit.disabled = true;
+    try {
+        const data = CoinPromotionAdminCore.packagePayload(Object.fromEntries(new FormData(form)));
+        if (coinPromotionAdminState.editingPackage) await coinPromotionAdminApi.updatePackage(coinPromotionAdminState.editingPackage.id, data);
+        else await coinPromotionAdminApi.createPackage(data);
+        Modal.success(coinPromotionAdminState.editingPackage ? "Coin package yangilandi." : "Coin package yaratildi.");
+        closeCoinPromotionForm(); await loadCoinPromotionAdminPage();
+    } catch (error) { Modal.error(error?.message || "Coin package saqlanmadi."); submit.disabled = false; }
+}
+
+async function runCoinPackageAction(id, action) {
+    if (!confirm("Coin package holatini o‘zgartirasizmi?")) return;
+    try { await coinPromotionAdminApi[action](id); Modal.success("Coin package yangilandi."); await loadCoinPromotionAdminPage(); }
+    catch (error) { Modal.error(error?.message || "Amal bajarilmadi."); }
 }
 
 function closeCoinPromotionForm() { const modal = document.getElementById("coinPromotionAdminModal"); if (modal) modal.innerHTML = ""; }

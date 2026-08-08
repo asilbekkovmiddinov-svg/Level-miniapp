@@ -33,7 +33,11 @@
             return payload;
         }
         list() { return this.request("/admin/coin-promotions?include_deleted=true"); }
-        packages() { return this.request("/products/active"); }
+        packages(activeOnly = false) { return this.request(`/admin/coin-packages${activeOnly ? "?active_only=true" : ""}`); }
+        createPackage(data) { return this.request("/admin/coin-packages", { method: "POST", body: data }); }
+        updatePackage(id, data) { return this.request(`/admin/coin-packages/${Number(id)}`, { method: "PUT", body: data }); }
+        activatePackage(id) { return this.request(`/admin/coin-packages/${Number(id)}/activate`, { method: "POST" }); }
+        deactivatePackage(id) { return this.request(`/admin/coin-packages/${Number(id)}/deactivate`, { method: "POST" }); }
         create(data) { return this.request("/admin/coin-promotions", { method: "POST", body: data }); }
         update(id, data) { return this.request(`/admin/coin-promotions/${Number(id)}`, { method: "PUT", body: data }); }
         remove(id) { return this.request(`/admin/coin-promotions/${Number(id)}`, { method: "DELETE" }); }
