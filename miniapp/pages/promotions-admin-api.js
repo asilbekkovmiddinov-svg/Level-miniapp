@@ -45,6 +45,10 @@
 
         list() { return this.request("/admin/promotions?include_deleted=true"); }
         userMetrics() { return this.request("/admin/metrics/users"); }
+        userList({ q = "", status = "ALL", page = 1, perPage = 20 } = {}) {
+            const params = new URLSearchParams({ q, status, page: String(page), per_page: String(perPage) });
+            return this.request(`/admin/metrics/users/list?${params.toString()}`);
+        }
         create(data) { return this.request("/admin/promotions", { method: "POST", body: data }); }
         update(id, data) { return this.request(`/admin/promotions/${Number(id)}`, { method: "PATCH", body: data }); }
         remove(id) { return this.request(`/admin/promotions/${Number(id)}`, { method: "DELETE" }); }
