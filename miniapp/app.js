@@ -97,6 +97,7 @@ async function handlePageBack() {
 }
 
 async function openPage(page, options = {}) {
+    if (page !== "wall-rush" && window.wallRushController) window.wallRushController.stop();
     pageReturnTarget = options.returnPage || null;
     if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
     if (page !== "coin-promotions-admin") document.body.classList.remove("coin-promotion-admin-open");
@@ -115,6 +116,9 @@ async function openPage(page, options = {}) {
             break;
         case "arena":
             await loadArenaPage();
+            break;
+        case "wall-rush":
+            await loadWallRushPage();
             break;
         case "orders":
             await loadOrdersPage();
