@@ -44,3 +44,21 @@ test("MiniApp navigation exposes Wall Rush and cleans realtime resources", () =>
     assert.match(app, /window\.wallRushController.*\.stop/);
     assert.match(app, /case "wall-rush"/);
 });
+
+
+test("TADS fullscreen reward is verified by backend wallet state", () => {
+    assert.match(html, /https:\/\/w\.tads\.me\/widget\.js/);
+    assert.match(source, /widgetId: "11416"/);
+    assert.match(source, /type: "fullscreen"/);
+    assert.match(source, /debug: false/);
+    assert.match(source, /onShowReward: \(\) => this\.confirmTadsReward\(\)/);
+    assert.match(source, /this\.api\.wallet\(\)/);
+    assert.doesNotMatch(source, /game_tickets\s*\+=|game_tickets\+\+/);
+});
+
+test("TADS no-fill keeps Free Play available", () => {
+    assert.match(source, /onAdsNotFound/);
+    assert.match(source, /Hozir reklama topilmadi\. Bepul o‘yin ochiq\./);
+    assert.match(source, /join\('FREE'\)/);
+    assert.match(css, /\.wr-ad-card/);
+});
