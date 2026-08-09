@@ -62,6 +62,14 @@ test("TADS fullscreen reward is verified by backend wallet state", () => {
     assert.doesNotMatch(source, /game_tickets\s*\+=|game_tickets\+\+/);
 });
 
+test("rewarded ad cooldown shows a live mm:ss countdown", () => {
+    assert.match(source, /adCooldownRemainingMs\(\)/);
+    assert.match(source, /Keyingi reklamagacha \$\{minutes\}:\$\{rest\}/);
+    assert.match(source, /setInterval\(\(\) => this\.updateAdCountdown\(\), 1000\)/);
+    assert.match(source, /button\.disabled = !this\.adAvailable\(\)/);
+    assert.match(source, /this\.adState = ""/);
+});
+
 test("TADS no-fill keeps Free Play available", () => {
     assert.match(source, /onAdsNotFound/);
     assert.match(source, /Hozir reklama topilmadi\. Bepul o‘yin ochiq\./);
