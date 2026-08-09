@@ -90,6 +90,9 @@ function bindHeaderButtons() {
 }
 
 async function handlePageBack() {
+    if (document.getElementById("wallRushPage")?.classList.contains("active-page")) {
+        await window.wallRushController?.leave?.();
+    }
     const target = pageReturnTarget;
     pageReturnTarget = null;
     if (target) await openPage(target);
