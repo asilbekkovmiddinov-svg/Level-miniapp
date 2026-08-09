@@ -236,10 +236,8 @@ const wallRushController = {
         (this.match.walls || []).forEach((wall) => {
             const item = document.createElement("i");
             item.className = `wr-wall ${wall.orientation.toLowerCase()}`;
-            item.style.gridRow = String(wall.row * 2 + (wall.orientation === "HORIZONTAL" ? 2 : 1));
-            item.style.gridColumn = String(wall.column * 2 + (wall.orientation === "VERTICAL" ? 2 : 1));
-            if (wall.orientation === "HORIZONTAL") item.style.gridColumnEnd = "span 3";
-            else item.style.gridRowEnd = "span 3";
+            item.style.left = `${((wall.column + 1) / 9) * 100}%`;
+            item.style.top = `${((wall.row + 1) / 13) * 100}%`;
             board.appendChild(item);
         });
     },
