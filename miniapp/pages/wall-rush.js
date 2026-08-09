@@ -50,7 +50,6 @@ const wallRushController = {
     timer: null,
     adTimer: null,
     actionMode: "MOVE",
-    orientation: "HORIZONTAL",
     tadsController: null,
     adState: "",
 
@@ -196,10 +195,7 @@ const wallRushController = {
                         <button class="${this.actionMode === "MOVE" ? "active" : ""}" onclick="wallRushController.setMode('MOVE')">⚪ Sharni yurish</button>
                         <button class="${this.actionMode === "WALL" ? "active" : ""}" onclick="wallRushController.setMode('WALL')">━ Devor qo‘yish</button>
                     </div>
-                    ${this.actionMode === "WALL" ? `<div class="wr-orientation">
-                        <button class="${this.orientation === "HORIZONTAL" ? "active" : ""}" onclick="wallRushController.setOrientation('HORIZONTAL')">Gorizontal</button>
-                        <button class="${this.orientation === "VERTICAL" ? "active" : ""}" onclick="wallRushController.setOrientation('VERTICAL')">Vertikal</button>
-                    </div>` : ""}
+                    ${this.actionMode === "WALL" ? '<small class="wr-wall-hint">Maydondagi chiziqlar orasiga bosing</small>' : ""}
                 </section>`}
             </div>`;
     },
@@ -217,13 +213,16 @@ const wallRushController = {
     renderBoard() {
         const board = document.getElementById("wrBoard");
         if (!board) return;
+        board.classList.toggle("wall-mode", this.actionMode === "WALL");
         for (let row = 0; row < 13; row += 1) {
             for (let column = 0; column < 9; column += 1) {
                 const cell = document.createElement("button");
                 cell.className = "wr-cell";
                 cell.style.gridRow = String(row * 2 + 1);
                 cell.style.gridColumn = String(column * 2 + 1);
-                cell.onclick = () => this.play(row, column);
+                cell.onclick = () => {
+                    if (this.actionMode === "MOVE") this.play(row, column);
+                };
                 if (this.match.red[0] === row && this.match.red[1] === column) {
                     cell.innerHTML = '<i class="wr-ball red"></i>';
                 }
@@ -233,6 +232,7 @@ const wallRushController = {
                 board.appendChild(cell);
             }
         }
+        if (this.actionMode === "WALL") this.renderWallTargets(board);
         (this.match.walls || []).forEach((wall) => {
             const item = document.createElement("i");
             item.className = `wr-wall ${wall.orientation.toLowerCase()}`;
@@ -240,6 +240,26 @@ const wallRushController = {
             item.style.gridColumn = String(wall.column * 2 + (wall.orientation === "VERTICAL" ? 2 : 1));
             board.appendChild(item);
         });
+    },
+
+    renderWallTargets(board) {
+        for (let row = 0; row < 12; row += 1) {
+            for (let column = 0; column < 8; column += 1) {
+                ["HORIZONTAL", "VERTICAL"].forEach((orientation) => {
+                    const target = document.createElement("button");
+                    target.className = `wr-wall-target ${orientation.toLowerCase()}`;
+                    target.setAttribute("aria-label", orientation === "HORIZONTAL"
+                        ? "Gorizontal devor qo‘yish"
+                        : "Vertikal devor qo‘yish");
+                    target.style.gridRow = String(row * 2 + (orientation === "HORIZONTAL" ? 2 : 1));
+                    target.style.gridColumn = String(column * 2 + (orientation === "VERTICAL" ? 2 : 1));
+                    if (orientation === "HORIZONTAL") target.style.gridColumnEnd = "span 3";
+                    else target.style.gridRowEnd = "span 3";
+                    target.onclick = () => this.play(row, column, orientation);
+                    board.appendChild(target);
+                });
+            }
+        }
     },
 
     adCooldownRemainingMs() {
@@ -377,12 +397,7 @@ const wallRushController = {
         this.render();
     },
 
-    setOrientation(value) {
-        this.orientation = value;
-        this.render();
-    },
-
-    async play(row, column) {
+    async play(row, column, orientation = null) {
         if (!this.match || this.match.status !== "ACTIVE") return;
         if (this.match.current_turn_player_id !== TELEGRAM_ID) return;
         try {
@@ -390,7 +405,7 @@ const wallRushController = {
                 action: this.actionMode,
                 row,
                 column,
-                orientation: this.actionMode === "WALL" ? this.orientation : null,
+                orientation: this.actionMode === "WALL" ? orientation : null,
                 expected_version: this.match.version,
                 idempotency_key: crypto.randomUUID?.() || `wr-${Date.now()}-${Math.random()}`,
             };
