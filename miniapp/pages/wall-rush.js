@@ -175,7 +175,7 @@ const wallRushController = {
                     <article class="${this.match.red_player_id === TELEGRAM_ID ? "is-me" : ""}">
                         <i class="red"></i><span>QIZIL</span><b>${this.match.red_walls_remaining} devor</b>
                     </article>
-                    <div><small>NAVBAT</small><strong id="wrTimer">15.0</strong></div>
+                    <div><small>NAVBAT</small><strong id="wrTimer">30.0</strong></div>
                     <article class="${this.match.blue_player_id === TELEGRAM_ID ? "is-me" : ""}">
                         <i class="blue"></i><span>KO‘K</span><b>${this.match.blue_walls_remaining} devor</b>
                     </article>
