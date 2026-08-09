@@ -62,3 +62,16 @@ test("TADS no-fill keeps Free Play available", () => {
     assert.match(source, /join\('FREE'\)/);
     assert.match(css, /\.wr-ad-card/);
 });
+
+
+test("ticket search can be cancelled and back navigation leaves queue", () => {
+    assert.match(source, /\/cancel-waiting/);
+    assert.match(source, /Qidirishni to‘xtatish/);
+    assert.match(source, /async cancelSearch\(\)/);
+    assert.match(source, /async leave\(\)/);
+    assert.match(app, /wallRushController\?\.leave/);
+});
+
+test("rendered HTML contains no escaped newline artifacts", () => {
+    assert.doesNotMatch(html, /\\n/);
+});
