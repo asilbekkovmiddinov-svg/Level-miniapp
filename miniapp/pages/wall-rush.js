@@ -29,6 +29,9 @@ class WallRushClient {
     action(matchId, payload) {
         return this.request(`/wall-rush/matches/${matchId}/actions`, "POST", payload);
     }
+    cancelWaiting(matchId) {
+        return this.request(`/wall-rush/matches/${matchId}/cancel-waiting`, "POST");
+    }
     timeout(matchId) {
         return this.request(`/wall-rush/matches/${matchId}/timeout`, "POST");
     }
@@ -158,6 +161,7 @@ const wallRushController = {
                     <h2>Raqib qidirilmoqda</h2>
                     <p>Ticket raqib topilmaguncha sarflanmaydi.</p>
                     <div class="wr-search"><i></i><i></i><i></i></div>
+                    <button class="wr-cancel-search" onclick="wallRushController.cancelSearch()">Qidirishni to‘xtatish</button>
                 </section>
             </div>`;
     },
@@ -302,6 +306,27 @@ const wallRushController = {
         }
         this.adState = "Tasdiq kechikmoqda. Birozdan keyin yangilang.";
         this.render();
+    },
+
+    async cancelSearch() {
+        if (!this.match || this.match.status !== "WAITING") return;
+        try {
+            await this.api.cancelWaiting(this.match.id);
+            this.stop();
+            this.match = null;
+            this.wallet = await this.api.wallet();
+            this.render();
+        } catch (error) {
+            Modal.error(error.message);
+        }
+    },
+
+    async leave() {
+        if (this.match?.status === "WAITING") {
+            try { await this.api.cancelWaiting(this.match.id); } catch (_error) {}
+        }
+        this.stop();
+        this.match = null;
     },
 
     async join(mode) {
