@@ -40,7 +40,15 @@ test("board is 9 by 13 and supports one selected action", () => {
     assert.match(source, /column < 9/);
     assert.match(source, /actionMode: "MOVE"/);
     assert.match(source, /setMode\('WALL'\)/);
+    assert.match(source, /renderWallTargets\(board\)/);
+    assert.match(source, /this\.play\(row, column, orientation\)/);
+    assert.doesNotMatch(source, /setOrientation\(/);
+    assert.doesNotMatch(source, />Gorizontal<|>Vertikal</);
     assert.match(css, /aspect-ratio:9\/13/);
+    assert.match(css, /\.wr-wall\.horizontal\{[^}]*height:9px/);
+    assert.match(css, /\.wr-wall\.vertical\{[^}]*width:9px/);
+    assert.match(css, /\.wr-wall-target\.horizontal\{height:24px/);
+    assert.match(css, /\.wr-wall-target\.vertical\{width:24px/);
 });
 
 test("MiniApp navigation exposes Wall Rush and cleans realtime resources", () => {
