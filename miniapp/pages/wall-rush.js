@@ -238,6 +238,8 @@ const wallRushController = {
             item.className = `wr-wall ${wall.orientation.toLowerCase()}`;
             item.style.gridRow = String(wall.row * 2 + (wall.orientation === "HORIZONTAL" ? 2 : 1));
             item.style.gridColumn = String(wall.column * 2 + (wall.orientation === "VERTICAL" ? 2 : 1));
+            if (wall.orientation === "HORIZONTAL") item.style.gridColumnEnd = "span 3";
+            else item.style.gridRowEnd = "span 3";
             board.appendChild(item);
         });
     },
