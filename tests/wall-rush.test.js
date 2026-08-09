@@ -15,6 +15,12 @@ test("Wall Rush uses authenticated backend matchmaking and actions", () => {
     assert.match(source, /idempotency_key/);
 });
 
+test("turn timer starts at 30 seconds and follows the backend deadline", () => {
+    assert.match(source, /id="wrTimer">30\.0<\/strong>/);
+    assert.match(source, /turn_deadline_at/);
+    assert.doesNotMatch(source, /id="wrTimer">15\.0<\/strong>/);
+});
+
 test("Wall Rush reconnects through authoritative WebSocket state", () => {
     assert.match(source, /\/wall-rush\/ws\?init_data=/);
     assert.match(source, /message\.type === "MATCH_STATE"/);
