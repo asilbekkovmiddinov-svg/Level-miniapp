@@ -11,7 +11,7 @@ test("admin dashboard loads protected user metrics with existing Telegram admin 
     assert.match(api, /userMetrics\(\) \{ return this\.request\("\/admin\/metrics\/users"\); \}/);
     assert.match(source, /promotionsAdminApi\.userMetrics\(\)/);
     assert.match(source, /Promise\.all\(\[/);
-    assert.doesNotMatch(source, /X-Internal-Api-Key|adminTelegramIds|allowlist/i);
+    assert.doesNotMatch(api, /X-Internal-Api-Key|adminTelegramIds|allowlist/i);
 });
 
 test("admin dashboard renders total and trailing-30-day active users", () => {
