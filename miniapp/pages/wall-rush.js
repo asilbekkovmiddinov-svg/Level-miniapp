@@ -285,6 +285,8 @@ const wallRushController = {
     },
 };
 
+window.wallRushController = wallRushController;
+
 async function loadWallRushPage() {
     await wallRushController.open();
 }
