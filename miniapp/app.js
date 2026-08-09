@@ -118,7 +118,7 @@ async function openPage(page, options = {}) {
             await loadWheelPage();
             break;
         case "arena":
-            await loadArenaPage();
+            Modal.alert("Arena", "Tez orada");
             break;
         case "wall-rush":
             await loadWallRushPage();
