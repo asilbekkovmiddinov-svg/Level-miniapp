@@ -80,7 +80,9 @@ test("overlay cleanup removes all matching overlays idempotently", () => {
     }
 });
 
-test("non-Arena navigation flow remains unchanged", () => {
+test("Arena route shows coming soon without starting Arena navigation", () => {
     assert.doesNotMatch(appSource, /navigationState|setNavigationTriggerState|cleanupNavigationOverlay/);
-    assert.match(appSource, /case "arena":\s*await loadArenaPage\(\)/);
+    const route = appSource.match(/case "arena":[\s\S]*?break;/)?.[0] || "";
+    assert.match(route, /Modal\.alert\("Arena", "Tez orada"\)/);
+    assert.doesNotMatch(route, /loadArenaPage\(/);
 });
