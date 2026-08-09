@@ -47,6 +47,8 @@ const wallRushController = {
     timer: null,
     actionMode: "MOVE",
     orientation: "HORIZONTAL",
+    tadsController: null,
+    adState: "",
 
     async open() {
         Navbar.setActive("wall-rush");
@@ -128,6 +130,12 @@ const wallRushController = {
                 <section class="wr-ticket-strip">
                     <article><span>🎟</span><small>GAME TICKET</small><b>${game}</b></article>
                     <article><span>🏆</span><small>TOURNAMENT</small><b>${tournament}</b></article>
+                </section>
+                <section class="wr-ad-card">
+                    <span>🎬</span>
+                    <div><strong>Reklama ko‘rib ticket oling</strong><small id="wrAdStatus">${this.adStatusText()}</small></div>
+                    <button id="wrTadsButton" onclick="wallRushController.watchAd()" ${this.adAvailable() ? "" : "disabled"}>+1 🎟</button>
+                    <div id="tads-container-11416" hidden></div>
                 </section>
                 <section class="wr-modes">
                     <button onclick="wallRushController.join('FREE')">
@@ -221,6 +229,79 @@ const wallRushController = {
             item.style.gridColumn = String(wall.column * 2 + (wall.orientation === "VERTICAL" ? 2 : 1));
             board.appendChild(item);
         });
+    },
+
+    adAvailable() {
+        const last = this.wallet?.last_rewarded_ad_at;
+        return !last || Date.now() >= new Date(last).getTime() + 3600000;
+    },
+
+    adStatusText() {
+        if (this.adState) return this.adState;
+        if (this.adAvailable()) return "Har 1 soatda bir marta";
+        const last = new Date(this.wallet.last_rewarded_ad_at).getTime();
+        const minutes = Math.max(1, Math.ceil((last + 3600000 - Date.now()) / 60000));
+        return `${minutes} daqiqadan keyin tayyor`;
+    },
+
+    async waitForTads(timeout = 5000) {
+        if (window.tads?.init) return;
+        const started = performance.now();
+        while (!window.tads?.init && performance.now() - started < timeout) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        if (!window.tads?.init) throw new Error("TADS SDK yuklanmadi");
+    },
+
+    async watchAd() {
+        if (!this.adAvailable() || this.adState === "Reklama ochilmoqda…") return;
+        this.adState = "Reklama ochilmoqda…";
+        this.render();
+        try {
+            await this.waitForTads();
+            if (!this.tadsController) {
+                this.tadsController = window.tads.controllers?.["11416"]
+                    || window.tads.init({
+                        widgetId: "11416",
+                        type: "fullscreen",
+                        debug: false,
+                        onShowReward: () => this.confirmTadsReward(),
+                        onAdsNotFound: () => {
+                            this.adState = "Hozir reklama topilmadi. Bepul o‘yin ochiq.";
+                            this.render();
+                        },
+                    });
+            }
+            const controller = await Promise.resolve(this.tadsController);
+            if (typeof controller.loadAd === "function") await controller.loadAd();
+            await controller.showAd();
+        } catch (error) {
+            console.error("TADS show failed", error);
+            this.adState = "Hozir reklama topilmadi. Bepul o‘yin ochiq.";
+            this.render();
+        }
+    },
+
+    async confirmTadsReward() {
+        const before = Number(this.wallet?.game_tickets || 0);
+        this.adState = "Ticket tasdiqlanmoqda…";
+        this.render();
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            try {
+                const wallet = await this.api.wallet();
+                if (Number(wallet.game_tickets || 0) > before) {
+                    this.wallet = wallet;
+                    this.adState = "1 ta Game Ticket berildi";
+                    this.render();
+                    return;
+                }
+            } catch (_error) {
+                // Webhook processing can be briefly delayed; keep polling.
+            }
+        }
+        this.adState = "Tasdiq kechikmoqda. Birozdan keyin yangilang.";
+        this.render();
     },
 
     async join(mode) {
