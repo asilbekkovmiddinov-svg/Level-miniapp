@@ -104,3 +104,20 @@ test("ticket search can be cancelled and back navigation leaves queue", () => {
 test("rendered HTML contains no escaped newline artifacts", () => {
     assert.doesNotMatch(html, /\\n/);
 });
+
+
+test("Free Play and Ticket Match have separate result ratings", () => {
+    assert.match(source, /\/wall-rush\/leaderboard\?mode=/);
+    assert.match(source, /this\.api\.leaderboard\("FREE"\)/);
+    assert.match(source, /this\.api\.leaderboard\("TICKET"\)/);
+    assert.match(source, /setRatingMode\('FREE'\)/);
+    assert.match(source, /setRatingMode\('TICKET'\)/);
+    assert.match(source, />O‘ynagan</);
+    assert.match(source, />Yutgan</);
+    assert.match(source, />Yutqazgan</);
+    assert.match(source, /row\.played/);
+    assert.match(source, /row\.wins/);
+    assert.match(source, /row\.losses/);
+    assert.match(css, /\.wr-rating-row\{display:grid/);
+    assert.match(css, /minmax\(0,1fr\) repeat\(3,44px\)/);
+});
