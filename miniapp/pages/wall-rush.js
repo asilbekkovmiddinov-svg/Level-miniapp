@@ -22,6 +22,9 @@ class WallRushClient {
     }
 
     wallet() { return this.request("/wall-rush/wallet"); }
+    leaderboard(mode) {
+        return this.request(`/wall-rush/leaderboard?mode=${encodeURIComponent(mode)}&limit=20`);
+    }
     active() { return this.request("/wall-rush/matches/active"); }
     join(mode) {
         return this.request("/wall-rush/matchmaking/join", "POST", { mode });
@@ -52,15 +55,26 @@ const wallRushController = {
     actionMode: "MOVE",
     tadsController: null,
     adState: "",
+    ratingMode: "FREE",
+    leaderboards: { FREE: [], TICKET: [] },
 
     async open() {
         Navbar.setActive("wall-rush");
         showPage("wallRushPage", "Wall Rush");
         this.renderLoading();
         try {
-            [this.wallet, this.match] = await Promise.all([
-                this.api.wallet(), this.api.active(),
+            const [wallet, match, freeRating, ticketRating] = await Promise.all([
+                this.api.wallet(),
+                this.api.active(),
+                this.api.leaderboard("FREE"),
+                this.api.leaderboard("TICKET"),
             ]);
+            this.wallet = wallet;
+            this.match = match;
+            this.leaderboards = {
+                FREE: freeRating?.rows || [],
+                TICKET: ticketRating?.rows || [],
+            };
             this.render();
             this.connect();
         } catch (error) {
@@ -154,8 +168,46 @@ const wallRushController = {
                         <span>🎟</span><strong>Ticket Match</strong><small>1 ticket • g‘olibga turnir ticketi</small>
                     </button>
                 </section>
+                ${this.ratingMarkup()}
                 <p class="wr-note">Reklama topilmasa ham bepul rejim doim ochiq qoladi.</p>
             </div>`;
+    },
+
+    setRatingMode(mode) {
+        this.ratingMode = mode;
+        this.render();
+    },
+
+    ratingMarkup() {
+        const rows = this.leaderboards[this.ratingMode] || [];
+        const list = rows.length
+            ? rows.map((row) => {
+                const username = row.username ? `@${this.escape(row.username)}` : "Telegram o‘yinchi";
+                return `
+                    <article class="wr-rating-row">
+                        <b class="wr-rating-rank">#${row.rank}</b>
+                        <div class="wr-rating-player">
+                            <strong>${this.escape(row.display_name)}</strong>
+                            <small>${username}</small>
+                        </div>
+                        <span><b>${row.played}</b><small>O‘ynagan</small></span>
+                        <span><b>${row.wins}</b><small>Yutgan</small></span>
+                        <span><b>${row.losses}</b><small>Yutqazgan</small></span>
+                    </article>`;
+            }).join("")
+            : '<p class="wr-rating-empty">Bu rejimda hali yakunlangan o‘yin yo‘q.</p>';
+        return `
+            <section class="wr-rating">
+                <div class="wr-rating-title">
+                    <div><small>REYTING</small><h3>Wall Rush natijalari</h3></div>
+                    <span>🏅</span>
+                </div>
+                <div class="wr-rating-tabs" role="tablist">
+                    <button class="${this.ratingMode === "FREE" ? "active" : ""}" onclick="wallRushController.setRatingMode('FREE')">Bepul o‘yin</button>
+                    <button class="${this.ratingMode === "TICKET" ? "active" : ""}" onclick="wallRushController.setRatingMode('TICKET')">Ticket Match</button>
+                </div>
+                <div class="wr-rating-list">${list}</div>
+            </section>`;
     },
 
     waitingMarkup() {
@@ -236,10 +288,8 @@ const wallRushController = {
         (this.match.walls || []).forEach((wall) => {
             const item = document.createElement("i");
             item.className = `wr-wall ${wall.orientation.toLowerCase()}`;
-            item.style.gridRow = String(wall.row * 2 + (wall.orientation === "HORIZONTAL" ? 2 : 1));
-            item.style.gridColumn = String(wall.column * 2 + (wall.orientation === "VERTICAL" ? 2 : 1));
-            if (wall.orientation === "HORIZONTAL") item.style.gridColumnEnd = "span 3";
-            else item.style.gridRowEnd = "span 3";
+            item.style.left = `${((wall.column + 1) / 9) * 100}%`;
+            item.style.top = `${((wall.row + 1) / 13) * 100}%`;
             board.appendChild(item);
         });
     },
