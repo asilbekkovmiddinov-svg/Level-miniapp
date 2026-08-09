@@ -48,8 +48,8 @@ const wallRushController = {
     wallet: null,
     socket: null,
     timer: null,
+    adTimer: null,
     actionMode: "MOVE",
-    orientation: "HORIZONTAL",
     tadsController: null,
     adState: "",
 
@@ -70,7 +70,9 @@ const wallRushController = {
 
     stop() {
         clearInterval(this.timer);
+        clearInterval(this.adTimer);
         this.timer = null;
+        this.adTimer = null;
         if (this.socket) this.socket.close();
         this.socket = null;
     },
@@ -105,9 +107,13 @@ const wallRushController = {
 
     render() {
         clearInterval(this.timer);
+        clearInterval(this.adTimer);
+        this.timer = null;
+        this.adTimer = null;
         const root = document.getElementById("wallRushPage");
         if (!this.match) {
             root.innerHTML = this.lobbyMarkup();
+            this.startAdCountdown();
             return;
         }
         if (this.match.status === "WAITING") {
@@ -189,10 +195,7 @@ const wallRushController = {
                         <button class="${this.actionMode === "MOVE" ? "active" : ""}" onclick="wallRushController.setMode('MOVE')">⚪ Sharni yurish</button>
                         <button class="${this.actionMode === "WALL" ? "active" : ""}" onclick="wallRushController.setMode('WALL')">━ Devor qo‘yish</button>
                     </div>
-                    ${this.actionMode === "WALL" ? `<div class="wr-orientation">
-                        <button class="${this.orientation === "HORIZONTAL" ? "active" : ""}" onclick="wallRushController.setOrientation('HORIZONTAL')">Gorizontal</button>
-                        <button class="${this.orientation === "VERTICAL" ? "active" : ""}" onclick="wallRushController.setOrientation('VERTICAL')">Vertikal</button>
-                    </div>` : ""}
+                    ${this.actionMode === "WALL" ? '<small class="wr-wall-hint">Maydondagi chiziqlar orasiga bosing</small>' : ""}
                 </section>`}
             </div>`;
     },
@@ -210,13 +213,16 @@ const wallRushController = {
     renderBoard() {
         const board = document.getElementById("wrBoard");
         if (!board) return;
+        board.classList.toggle("wall-mode", this.actionMode === "WALL");
         for (let row = 0; row < 13; row += 1) {
             for (let column = 0; column < 9; column += 1) {
                 const cell = document.createElement("button");
                 cell.className = "wr-cell";
                 cell.style.gridRow = String(row * 2 + 1);
                 cell.style.gridColumn = String(column * 2 + 1);
-                cell.onclick = () => this.play(row, column);
+                cell.onclick = () => {
+                    if (this.actionMode === "MOVE") this.play(row, column);
+                };
                 if (this.match.red[0] === row && this.match.red[1] === column) {
                     cell.innerHTML = '<i class="wr-ball red"></i>';
                 }
@@ -226,6 +232,7 @@ const wallRushController = {
                 board.appendChild(cell);
             }
         }
+        if (this.actionMode === "WALL") this.renderWallTargets(board);
         (this.match.walls || []).forEach((wall) => {
             const item = document.createElement("i");
             item.className = `wr-wall ${wall.orientation.toLowerCase()}`;
@@ -235,17 +242,63 @@ const wallRushController = {
         });
     },
 
-    adAvailable() {
+    renderWallTargets(board) {
+        for (let row = 0; row < 12; row += 1) {
+            for (let column = 0; column < 8; column += 1) {
+                ["HORIZONTAL", "VERTICAL"].forEach((orientation) => {
+                    const target = document.createElement("button");
+                    target.className = `wr-wall-target ${orientation.toLowerCase()}`;
+                    target.setAttribute("aria-label", orientation === "HORIZONTAL"
+                        ? "Gorizontal devor qo‘yish"
+                        : "Vertikal devor qo‘yish");
+                    target.style.gridRow = String(row * 2 + (orientation === "HORIZONTAL" ? 2 : 1));
+                    target.style.gridColumn = String(column * 2 + (orientation === "VERTICAL" ? 2 : 1));
+                    if (orientation === "HORIZONTAL") target.style.gridColumnEnd = "span 3";
+                    else target.style.gridRowEnd = "span 3";
+                    target.onclick = () => this.play(row, column, orientation);
+                    board.appendChild(target);
+                });
+            }
+        }
+    },
+
+    adCooldownRemainingMs() {
         const last = this.wallet?.last_rewarded_ad_at;
-        return !last || Date.now() >= new Date(last).getTime() + 3600000;
+        if (!last) return 0;
+        return Math.max(0, new Date(last).getTime() + 3600000 - Date.now());
+    },
+
+    adAvailable() {
+        return this.adCooldownRemainingMs() === 0;
     },
 
     adStatusText() {
         if (this.adState) return this.adState;
-        if (this.adAvailable()) return "Har 1 soatda bir marta";
-        const last = new Date(this.wallet.last_rewarded_ad_at).getTime();
-        const minutes = Math.max(1, Math.ceil((last + 3600000 - Date.now()) / 60000));
-        return `${minutes} daqiqadan keyin tayyor`;
+        const remaining = this.adCooldownRemainingMs();
+        if (remaining === 0) return "Har 1 soatda bir marta";
+        const seconds = Math.ceil(remaining / 1000);
+        const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+        const rest = String(seconds % 60).padStart(2, "0");
+        return `Keyingi reklamagacha ${minutes}:${rest}`;
+    },
+
+    startAdCountdown() {
+        this.updateAdCountdown();
+        if (!this.adAvailable()) {
+            this.adTimer = setInterval(() => this.updateAdCountdown(), 1000);
+        }
+    },
+
+    updateAdCountdown() {
+        const status = document.getElementById("wrAdStatus");
+        const button = document.getElementById("wrTadsButton");
+        if (!status || !button) return;
+        status.textContent = this.adStatusText();
+        button.disabled = !this.adAvailable();
+        if (this.adAvailable() && this.adTimer) {
+            clearInterval(this.adTimer);
+            this.adTimer = null;
+        }
     },
 
     async waitForTads(timeout = 5000) {
@@ -296,7 +349,7 @@ const wallRushController = {
                 const wallet = await this.api.wallet();
                 if (Number(wallet.game_tickets || 0) > before) {
                     this.wallet = wallet;
-                    this.adState = "1 ta Game Ticket berildi";
+                    this.adState = "";
                     this.render();
                     return;
                 }
@@ -344,12 +397,7 @@ const wallRushController = {
         this.render();
     },
 
-    setOrientation(value) {
-        this.orientation = value;
-        this.render();
-    },
-
-    async play(row, column) {
+    async play(row, column, orientation = null) {
         if (!this.match || this.match.status !== "ACTIVE") return;
         if (this.match.current_turn_player_id !== TELEGRAM_ID) return;
         try {
@@ -357,7 +405,7 @@ const wallRushController = {
                 action: this.actionMode,
                 row,
                 column,
-                orientation: this.actionMode === "WALL" ? this.orientation : null,
+                orientation: this.actionMode === "WALL" ? orientation : null,
                 expected_version: this.match.version,
                 idempotency_key: crypto.randomUUID?.() || `wr-${Date.now()}-${Math.random()}`,
             };

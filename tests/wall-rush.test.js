@@ -40,7 +40,15 @@ test("board is 9 by 13 and supports one selected action", () => {
     assert.match(source, /column < 9/);
     assert.match(source, /actionMode: "MOVE"/);
     assert.match(source, /setMode\('WALL'\)/);
+    assert.match(source, /renderWallTargets\(board\)/);
+    assert.match(source, /this\.play\(row, column, orientation\)/);
+    assert.doesNotMatch(source, /setOrientation\(/);
+    assert.doesNotMatch(source, />Gorizontal<|>Vertikal</);
     assert.match(css, /aspect-ratio:9\/13/);
+    assert.match(css, /\.wr-wall\.horizontal\{[^}]*height:9px/);
+    assert.match(css, /\.wr-wall\.vertical\{[^}]*width:9px/);
+    assert.match(css, /\.wr-wall-target\.horizontal\{height:24px/);
+    assert.match(css, /\.wr-wall-target\.vertical\{width:24px/);
 });
 
 test("MiniApp navigation exposes Wall Rush and cleans realtime resources", () => {
@@ -60,6 +68,14 @@ test("TADS fullscreen reward is verified by backend wallet state", () => {
     assert.match(source, /onShowReward: \(\) => this\.confirmTadsReward\(\)/);
     assert.match(source, /this\.api\.wallet\(\)/);
     assert.doesNotMatch(source, /game_tickets\s*\+=|game_tickets\+\+/);
+});
+
+test("rewarded ad cooldown shows a live mm:ss countdown", () => {
+    assert.match(source, /adCooldownRemainingMs\(\)/);
+    assert.match(source, /Keyingi reklamagacha \$\{minutes\}:\$\{rest\}/);
+    assert.match(source, /setInterval\(\(\) => this\.updateAdCountdown\(\), 1000\)/);
+    assert.match(source, /button\.disabled = !this\.adAvailable\(\)/);
+    assert.match(source, /this\.adState = ""/);
 });
 
 test("TADS no-fill keeps Free Play available", () => {
