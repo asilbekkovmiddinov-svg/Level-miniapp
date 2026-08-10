@@ -48,10 +48,10 @@ test("board is 9 by 13 and supports one selected action", () => {
     assert.doesNotMatch(source, />Gorizontal<|>Vertikal</);
     assert.match(css, /aspect-ratio:9\/13/);
     assert.match(css, /\.wr-wall\{position:absolute/);
-    assert.match(css, /\.wr-wall\.horizontal\{width:13\.33%;height:9px/);
-    assert.match(css, /\.wr-wall\.vertical\{width:9px;height:9\.23%/);
-    assert.match(css, /\.wr-wall-target\.horizontal::after\{width:75%;height:9px/);
-    assert.match(css, /\.wr-wall-target\.vertical::after\{width:9px;height:75%/);
+    assert.match(css, /\.wr-wall\.horizontal\{width:22\.22%;height:9px/);
+    assert.match(css, /\.wr-wall\.vertical\{width:9px;height:15\.38%/);
+    assert.match(css, /\.wr-wall-target\.horizontal::after\{width:126%;height:9px/);
+    assert.match(css, /\.wr-wall-target\.vertical::after\{width:9px;height:128%/);
     assert.match(css, /\.wr-wall-target:active::after\{opacity:1\}/);
     assert.doesNotMatch(css, /\.wr-wall-target:active\{[^}]*background/);
     assert.match(css, /\.wr-wall-target\.horizontal\{height:24px/);
