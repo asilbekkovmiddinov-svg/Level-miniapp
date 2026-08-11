@@ -52,6 +52,10 @@ const wallRushController = {
     socket: null,
     timer: null,
     adTimer: null,
+    syncTimer: null,
+    syncBusy: false,
+    stopped: false,
+    timeoutRequestedVersion: null,
     actionMode: "MOVE",
     tadsController: null,
     adState: "",
@@ -83,28 +87,77 @@ const wallRushController = {
     },
 
     stop() {
+        this.stopped = true;
         clearInterval(this.timer);
         clearInterval(this.adTimer);
+        clearInterval(this.syncTimer);
         this.timer = null;
         this.adTimer = null;
-        if (this.socket) this.socket.close();
+        this.syncTimer = null;
+        this.syncBusy = false;
+        if (this.socket) {
+            this.socket.onclose = null;
+            this.socket.close();
+        }
         this.socket = null;
     },
 
+    applyMatchState(match) {
+        if (!match) return;
+        const changed = !this.match
+            || Number(match.version) !== Number(this.match.version)
+            || match.status !== this.match.status;
+        if (!changed) return;
+        this.match = match;
+        this.timeoutRequestedVersion = null;
+        this.render();
+    },
+
+    async syncMatchState() {
+        if (this.syncBusy || this.stopped || !this.match) return;
+        if (!["WAITING", "ACTIVE"].includes(this.match.status)) return;
+        this.syncBusy = true;
+        try {
+            const match = await this.api.active();
+            if (match) this.applyMatchState(match);
+        } catch (error) {
+            console.warn("Wall Rush state sync failed:", error);
+        } finally {
+            this.syncBusy = false;
+        }
+    },
+
+    startStateSync() {
+        clearInterval(this.syncTimer);
+        this.syncTimer = setInterval(() => this.syncMatchState(), 1000);
+    },
+
     connect() {
+        this.stopped = false;
+        this.startStateSync();
         if (!telegramInitData() || typeof WebSocket === "undefined") return;
-        if (this.socket) this.socket.close();
+        if (this.socket) {
+            this.socket.onclose = null;
+            this.socket.close();
+        }
         this.socket = new WebSocket(this.api.socketUrl());
         this.socket.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            if (message.type === "MATCH_STATE") {
-                this.match = message.match;
-                this.render();
+            try {
+                const message = JSON.parse(event.data);
+                if (message.type === "MATCH_STATE" && message.match) {
+                    this.applyMatchState(message.match);
+                }
+            } catch (error) {
+                console.warn("Wall Rush realtime message failed:", error);
             }
         };
         this.socket.onclose = () => {
-            if (document.getElementById("wallRushPage")?.classList.contains("active-page")) {
-                setTimeout(() => this.connect(), 1500);
+            this.socket = null;
+            if (!this.stopped
+                && document.getElementById("wallRushPage")?.classList.contains("active-page")) {
+                setTimeout(() => {
+                    if (!this.stopped) this.connect();
+                }, 1500);
             }
         };
     },
@@ -461,8 +514,8 @@ const wallRushController = {
                 expected_version: this.match.version,
                 idempotency_key: crypto.randomUUID?.() || `wr-${Date.now()}-${Math.random()}`,
             };
-            this.match = await this.api.action(this.match.id, body);
-            this.render();
+            const match = await this.api.action(this.match.id, body);
+            this.applyMatchState(match);
         } catch (error) {
             Modal.error(error.message);
         }
@@ -474,7 +527,12 @@ const wallRushController = {
         const left = Math.max(0, new Date(this.match.turn_deadline_at).getTime() - Date.now());
         output.textContent = (left / 1000).toFixed(1);
         output.classList.toggle("urgent", left <= 5000);
-        if (left === 0) this.api.timeout(this.match.id).catch(() => {});
+        if (left === 0 && this.timeoutRequestedVersion !== this.match.version) {
+            this.timeoutRequestedVersion = this.match.version;
+            this.api.timeout(this.match.id)
+                .then((match) => this.applyMatchState(match))
+                .catch(() => this.syncMatchState());
+        }
     },
 
     async reset() {
