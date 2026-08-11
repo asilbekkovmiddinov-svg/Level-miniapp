@@ -321,6 +321,16 @@ const wallRushController = {
         </section>`;
     },
 
+    wallClass(wall) {
+        const orientation = String(wall?.orientation || "").toUpperCase();
+        const direction = orientation === "VERTICAL" ? "vertical" : "horizontal";
+        const owner = Number(wall?.owner_id) === Number(this.match?.red_player_id)
+            ? "owner-red"
+            : Number(wall?.owner_id) === Number(this.match?.blue_player_id)
+                ? "owner-blue" : "owner-neutral";
+        return `wr-wall ${direction} ${owner}`;
+    },
+
     renderBoard() {
         const board = document.getElementById("wrBoard");
         if (!board) return;
@@ -346,12 +356,7 @@ const wallRushController = {
         if (this.actionMode === "WALL") this.renderWallTargets(board);
         (this.match.walls || []).forEach((wall) => {
             const item = document.createElement("i");
-            const orientation = String(wall.orientation || "").toLowerCase();
-            const owner = Number(wall.owner_id) === Number(this.match.red_player_id)
-                ? "owner-red"
-                : Number(wall.owner_id) === Number(this.match.blue_player_id)
-                    ? "owner-blue" : "owner-neutral";
-            item.className = `wr-wall ${orientation} ${owner}`;
+            item.className = this.wallClass(wall);
             item.style.left = `${((wall.column + 1) / 9) * 100}%`;
             item.style.top = `${((wall.row + 1) / 13) * 100}%`;
             board.appendChild(item);
