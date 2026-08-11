@@ -35,7 +35,7 @@ function renderCoinPromotionAdminPage() {
     const state = coinPromotionAdminState;
     const items = state.filter === "ALL" ? state.items : state.items.filter((item) => item.status === state.filter);
     document.getElementById("coinPromotionAdminPage").innerHTML = `<div class="cpa-shell">
-        <nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button onclick="openPage('promotions-admin')">Promotions</button><button class="active">Coin Promotions</button><button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button></nav>
+        <nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button onclick="openPage('promotions-admin')">Promotions</button><button class="active">Coin Promotions</button><button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button><button onclick="openPage('division-admin')">Division</button></nav>
         <header class="cpa-hero"><div><small>LEVEL_GROUP ADMIN</small><h2>Coin Promotions</h2><p>Cheklangan Coin aksiyalarini boshqaring</p></div><button onclick="openCoinPromotionForm()">＋ Create</button></header>
         <section class="cpa-package-panel"><header><div><small>PACKAGE SOURCE</small><h2>Coin Packages</h2><p>Coin Shop va yangi promotionlar uchun yagona paketlar ro‘yxati.</p></div><button onclick="openCoinPackageForm()">＋ Add Coin Package</button></header>
         <div class="cpa-package-list">${state.packages.length ? state.packages.map(coinPackageAdminCard).join("") : `<div class="cpa-empty"><span>🪙</span><h2>Paket topilmadi</h2></div>`}</div></section>
