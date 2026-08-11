@@ -9,7 +9,7 @@ function wheelOrderUser(item) {
     const username = item.username && item.first_name ? ` · @${item.username}` : "";
     return `<strong>${wheelOrderEscape(name)}</strong><small>ID ${Number(item.telegram_id)}${wheelOrderEscape(username)}</small>`;
 }
-function wheelOrderAdminMenu() { return `<nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button onclick="openPage('promotions-admin')">Promotions</button><button onclick="openPage('coin-promotions-admin')">Coin Promotions</button><button class="active">Wheel Coin Orders</button></nav>`; }
+function wheelOrderAdminMenu() { return `<nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button onclick="openPage('promotions-admin')">Promotions</button><button onclick="openPage('coin-promotions-admin')">Coin Promotions</button><button class="active">Wheel Coin Orders</button><button onclick="openPage('division-admin')">Division</button></nav>`; }
 function wheelOrderCard(item) {
     const active = WHEEL_ORDER_ACTIVE_STATUSES.has(item.status);
     return `<article class="woa-card status-${wheelOrderEscape(String(item.status).toLowerCase())}" data-order-id="${Number(item.id)}">
