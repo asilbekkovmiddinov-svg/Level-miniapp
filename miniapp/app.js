@@ -21,6 +21,8 @@ window.addEventListener("load", async () => {
             await loadCoinPromotionAdminPage();
         } else if (query.get("admin") === "promotions") {
             await loadPromotionsAdminPage();
+        } else if (query.get("admin") === "division") {
+            await loadDivisionAdminPage();
         } else {
             await loadHome();
             await openCoinOrderDeepLink();
@@ -145,6 +147,9 @@ async function openPage(page, options = {}) {
             break;
         case "promotions-admin":
             await loadPromotionsAdminPage();
+            break;
+        case "division-admin":
+            await loadDivisionAdminPage();
             break;
         case "coin-promotions-admin":
             await loadCoinPromotionAdminPage();
