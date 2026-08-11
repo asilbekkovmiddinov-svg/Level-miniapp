@@ -99,6 +99,7 @@ function divisionRegistration(overview) {
 function divisionDashboard(overview) {
     const participant = overview.participant;
     const wallet = divisionState.wallet || { tournamentTickets: 0, lockedTournamentTickets: 0 };
+    const matchAccess = divisionMatchAccess(overview.season, wallet);
     return `${divisionHero(overview.season)}
         <section class="division-wallet">
             <article><small>TOURNAMENT TICKET</small><strong>${wallet.tournamentTickets}</strong><span>Mavjud</span></article>
@@ -108,8 +109,8 @@ function divisionDashboard(overview) {
         <section class="division-match-card">
             <small>DIVISION MATCH</small><h3>Raqib bilan o‘ynash</h3>
             <p>Qidiruvda ticket bloklanadi. Match boshlanganda sarflanadi.</p>
-            <button class="division-button" data-division-join ${wallet.tournamentTickets < 1 ? "disabled" : ""}>
-                ${wallet.tournamentTickets < 1 ? "Ticket yetarli emas" : "Raqib qidirish • 1 ticket"}
+            <button class="division-button" data-division-join ${matchAccess.enabled ? "" : "disabled"}>
+                ${matchAccess.label}
             </button>
         </section>
         <section class="division-ranking"><header><div><small>GLOBAL STANDINGS</small><h3>Division reytingi</h3></div><span>30 KUN</span></header>
@@ -119,6 +120,13 @@ function divisionDashboard(overview) {
 function renderDivisionPage() {
     const root = document.getElementById("arenaPage");
     if (!root) return;
+    if (!divisionState.overview?.season) {
+        divisionErrorView({
+            status: 404,
+            message: "Yangi Global Division season tez orada ochiladi.",
+        });
+        return;
+    }
     if (divisionState.match?.status === "WAITING") {
         root.innerHTML = `<div class="division-page">${divisionWaiting(divisionState.match)}</div>`;
     } else if (divisionState.overview?.participant?.status === "APPROVED") {
