@@ -220,7 +220,7 @@ function changeAdminUserPage(direction) {
 
 function promotionsAdminShell() {
     return `<div class="pac-shell">
-        <nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button class="active">Promotions</button><button onclick="openPage('coin-promotions-admin')">Coin Promotions</button><button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button></nav>
+        <nav class="cpa-admin-menu" aria-label="Admin bo‘limlari"><button class="active">Promotions</button><button onclick="openPage('coin-promotions-admin')">Coin Promotions</button><button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button><button onclick="openPage('division-admin')">Division</button></nav>
         <section class="pac-hero">
             <div><small>LEVEL_GROUP • ADMIN</small><h2>Marketing CMS</h2><p>Aksiyalarni telefoningizdan boshqaring.</p></div>
             <button id="promotionsAdminCreate" type="button"><span>＋</span> Yangi aksiya</button>
