@@ -280,15 +280,21 @@ const wallRushController = {
     matchMarkup() {
         const mine = this.match.current_turn_player_id === TELEGRAM_ID;
         const finished = this.match.status === "FINISHED";
+        const redName = this.match.red_username
+            ? "@" + this.match.red_username
+            : this.match.red_display_name || "O‘yinchi";
+        const blueName = this.match.blue_username
+            ? "@" + this.match.blue_username
+            : this.match.blue_display_name || "O‘yinchi";
         return `
             <div class="wr-game">
                 <header class="wr-score">
                     <article class="${this.match.red_player_id === TELEGRAM_ID ? "is-me" : ""}">
-                        <i class="red"></i><span>QIZIL</span><b>${this.match.red_walls_remaining} devor</b>
+                        <i class="red"></i><span>QIZIL<small>${this.escape(redName)}</small></span><b>${this.match.red_walls_remaining} devor</b>
                     </article>
                     <div><small>NAVBAT</small><strong id="wrTimer">30.0</strong></div>
                     <article class="${this.match.blue_player_id === TELEGRAM_ID ? "is-me" : ""}">
-                        <i class="blue"></i><span>KO‘K</span><b>${this.match.blue_walls_remaining} devor</b>
+                        <i class="blue"></i><span>KO‘K<small>${this.escape(blueName)}</small></span><b>${this.match.blue_walls_remaining} devor</b>
                     </article>
                 </header>
                 <div class="wr-finish">🏁 FINISH</div>
@@ -313,6 +319,16 @@ const wallRushController = {
             <p>${won && this.match.mode === "TICKET" ? "+1 Tournament Ticket" : "Yaxshi o‘yin!"}</p>
             <button onclick="wallRushController.reset()">Yana o‘ynash</button>
         </section>`;
+    },
+
+    wallClass(wall) {
+        const orientation = String(wall?.orientation || "").toUpperCase();
+        const direction = orientation === "VERTICAL" ? "vertical" : "horizontal";
+        const owner = Number(wall?.owner_id) === Number(this.match?.red_player_id)
+            ? "owner-red"
+            : Number(wall?.owner_id) === Number(this.match?.blue_player_id)
+                ? "owner-blue" : "owner-neutral";
+        return `wr-wall ${direction} ${owner}`;
     },
 
     renderBoard() {
@@ -340,7 +356,7 @@ const wallRushController = {
         if (this.actionMode === "WALL") this.renderWallTargets(board);
         (this.match.walls || []).forEach((wall) => {
             const item = document.createElement("i");
-            item.className = `wr-wall ${wall.orientation.toLowerCase()}`;
+            item.className = this.wallClass(wall);
             item.style.left = `${((wall.column + 1) / 9) * 100}%`;
             item.style.top = `${((wall.row + 1) / 13) * 100}%`;
             board.appendChild(item);

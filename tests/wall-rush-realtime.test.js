@@ -6,7 +6,17 @@ const vm = require("node:vm");
 function loadController() {
     const context = {
         API_URL: "https://example.test",
+        TELEGRAM_ID: 11,
         window: {},
+        document: {
+            createElement: () => {
+                const node = { innerHTML: "" };
+                Object.defineProperty(node, "textContent", {
+                    set(value) { node.innerHTML = String(value); },
+                });
+                return node;
+            },
+        },
         console,
         crypto: { randomUUID: () => "test-id" },
         setInterval: () => 1,
@@ -56,4 +66,38 @@ test("REST fallback applies an opponent action when WebSocket is unavailable", a
     assert.equal(controller.match.version, 9);
     assert.equal(controller.match.current_turn_player_id, 77);
     assert.equal(renders, 1);
+});
+
+test("player usernames are shown for both colors", () => {
+    const controller = loadController();
+    controller.match = {
+        status: "ACTIVE",
+        current_turn_player_id: 11,
+        red_player_id: 11,
+        blue_player_id: 22,
+        red_username: "red_player",
+        blue_username: "blue_player",
+        red_walls_remaining: 10,
+        blue_walls_remaining: 9,
+    };
+    const markup = controller.matchMarkup();
+    assert.match(markup, /@red_player/);
+    assert.match(markup, /@blue_player/);
+});
+
+test("wall direction and player color are independent", () => {
+    const controller = loadController();
+    controller.match = { red_player_id: 11, blue_player_id: 22 };
+    assert.equal(
+        controller.wallClass({
+            orientation: "VERTICAL", owner_id: 11,
+        }),
+        "wr-wall vertical owner-red",
+    );
+    assert.equal(
+        controller.wallClass({
+            orientation: "HORIZONTAL", owner_id: 22,
+        }),
+        "wr-wall horizontal owner-blue",
+    );
 });
