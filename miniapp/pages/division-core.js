@@ -87,3 +87,13 @@ function divisionRemaining(endAt) {
     const days = Math.ceil(milliseconds / 86400000);
     return days + " kun qoldi";
 }
+
+function divisionMatchAccess(season, wallet) {
+    if (season?.status !== "ACTIVE") {
+        return { enabled: false, label: "Season hali boshlanmagan" };
+    }
+    if ((Number(wallet?.tournamentTickets) || 0) < 1) {
+        return { enabled: false, label: "Ticket yetarli emas" };
+    }
+    return { enabled: true, label: "Raqib qidirish • 1 ticket" };
+}
