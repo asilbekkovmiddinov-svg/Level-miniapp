@@ -90,6 +90,9 @@ function bindHeaderButtons() {
 }
 
 async function handlePageBack() {
+    if (document.getElementById("arenaPage")?.classList.contains("active-page")) {
+        window.divisionController?.stop?.();
+    }
     if (document.getElementById("wallRushPage")?.classList.contains("active-page")) {
         await window.wallRushController?.leave?.();
     }
@@ -100,6 +103,7 @@ async function handlePageBack() {
 }
 
 async function openPage(page, options = {}) {
+    if (page !== "arena") window.divisionController?.stop?.();
     if (page !== "wall-rush" && window.wallRushController) window.wallRushController.stop();
     pageReturnTarget = options.returnPage || null;
     if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
@@ -118,7 +122,8 @@ async function openPage(page, options = {}) {
             await loadWheelPage();
             break;
         case "arena":
-            Modal.alert("Arena", "Tez orada");
+            if (divisionUiEnabled()) await loadDivisionPage();
+            else Modal.alert("Arena", "Tez orada");
             break;
         case "wall-rush":
             await loadWallRushPage();
