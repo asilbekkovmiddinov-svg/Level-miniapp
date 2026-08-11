@@ -88,7 +88,7 @@ function renderProfile() {
                     <span>🛠</span>
                     <span>
                         <strong>Admin Panel</strong>
-                        <small>Promotions, Coin Promotions va Wheel Orders boshqaruvi</small>
+                        <small>Promotions, Wheel Orders va Global Division boshqaruvi</small>
                     </span>
                     <b>›</b>
                 </button>
