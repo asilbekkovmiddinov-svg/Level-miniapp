@@ -1,4 +1,5 @@
 const API_URL = "https://level-backend-jocker7005.waw0.amvera.tech";
+const GLOBAL_DIVISION_UI_ENABLED = false;
 
 const tg = window.Telegram?.WebApp || {
     ready: () => {},
