@@ -6,6 +6,7 @@ const vm = require("node:vm");
 function loadController() {
     const context = {
         API_URL: "https://example.test",
+        TELEGRAM_ID: 11,
         window: {},
         document: {
             createElement: () => {
