@@ -48,12 +48,26 @@ test("form validates price, quantity and schedule before submit", () => {
 
 test("coin package form validates authoritative package fields", () => {
     assert.deepEqual(Core.packagePayload({ coin_amount: "840", price_uzs: "70000", scope: "ANDROID" }), {
-        coin_amount: 840, price_uzs: 70000, scope: "ANDROID", is_active: true,
+        product_type: "COIN", coin_amount: 840, name: null,
+        price_uzs: 70000, scope: "ANDROID", is_active: true,
     });
     assert.throws(() => Core.packagePayload({ coin_amount: 0, price_uzs: 1, scope: "ALL" }), /Coin miqdori/);
     assert.throws(() => Core.packagePayload({ coin_amount: 1, price_uzs: 0, scope: "ALL" }), /Narx/);
     assert.throws(() => Core.packagePayload({ coin_amount: 1, price_uzs: 1, scope: "OTHER" }), /noto‘g‘ri/);
     assert.equal(Core.packagePayload({ coin_amount: 1, price_uzs: 1, scope: "ALL", is_active: "false" }).is_active, false);
+    assert.deepEqual(Core.packagePayload({
+        product_type: "PLAYER", name: "Lionel Messi", price_uzs: "120000", scope: "ANDROID",
+    }), {
+        product_type: "PLAYER", coin_amount: null, name: "Lionel Messi",
+        price_uzs: 120000, scope: "ALL", is_active: true,
+    });
+    assert.deepEqual(Core.packagePayload({
+        product_type: "MANAGER", name: "Pep Guardiola", price_uzs: "90000",
+    }), {
+        product_type: "MANAGER", coin_amount: null, name: "Pep Guardiola",
+        price_uzs: 90000, scope: "ALL", is_active: true,
+    });
+    assert.throws(() => Core.packagePayload({ product_type: "PLAYER", price_uzs: 1 }), /ismini/);
 });
 
 test("Admin API uses exact backend routes and verified initData", async () => {
@@ -101,7 +115,7 @@ test("Coin Promotion Admin page exposes required premium management UX", () => {
     for (const expected of ["Coin Promotions", "Original", "Promotion", "Qoldi", "Reserved", "Sotilgan", "START", "END", "openCoinPromotionForm", "saveCoinPromotion", "activate", "pause", "deactivate", "remove", "restore", "Qayta urinish"]) assert.match(source, new RegExp(expected));
     assert.match(css, /cpa-skeleton/); assert.match(css, /prefers-reduced-motion/);
     assert.match(packageCss, /cpa-package-card/);
-    for (const expected of ["Coin Packages", "Add Coin Package", "openCoinPackageForm", "saveCoinPackage", "deactivatePackage", "activatePackage"]) assert.match(source, new RegExp(expected));
+    for (const expected of ["Mahsulotlar", "Mahsulot qo‘shish", "O‘yinchi ismi", "Murabbiy ismi", "openCoinPackageForm", "saveCoinPackage", "toggleCoinPackageFields", "deactivatePackage", "activatePackage"]) assert.match(source, new RegExp(expected));
     assert.match(html, /id="coinPromotionAdminPage"/); assert.match(html, /coin-promotion-admin\.js/);
     assert.match(app, /query\.get\("admin"\) === "coin-promotions"/);
     assert.match(source, /openPage\('promotions-admin'\)/);

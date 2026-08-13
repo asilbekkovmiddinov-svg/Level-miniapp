@@ -106,3 +106,17 @@ test("Coin Shop UI includes premium promotion, remaining and near-live refresh U
     assert.match(html, /coin-promotion\.css/);
     assert.match(html, /coin-promotion-core\.js/);
 });
+
+test("Shop exposes player and manager categories without changing coin targeting", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/shop.js"), "utf8");
+    for (const expected of ["PLAYERS", "MANAGERS", "O‘yinchilar", "Murabbiylar", "shopProductTitle"]) {
+        assert.match(source, new RegExp(expected));
+    }
+    const player = core.normalizeProduct({
+        id: 9, product_type: "PLAYER", item_name: "Lionel Messi", price_uzs: 120000,
+    });
+    assert.equal(player.product_type, "PLAYER");
+    assert.equal(player.item_name, "Lionel Messi");
+    assert.equal(player.coin_amount, 0);
+    assert.equal(player.display_price, 120000);
+});

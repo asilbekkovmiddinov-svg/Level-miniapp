@@ -57,7 +57,7 @@ function normalizeHistoryItem(kind, item, index = 0) {
         p2p_order: { type: "P2P Order", icon: "P", currency: item.locked_currency || "EFC" },
         p2p_trade: { type: "P2P Trade", icon: "P", currency: "EFC" },
         arena: { type: "Arena Match", icon: "A", currency: "EFC" },
-        shop: { type: "Coin Shop", icon: "C", currency: "UZS" },
+        shop: { type: "Shop", icon: "S", currency: "UZS" },
         wheel_coin: { type: "Wheel Coin", icon: "C", currency: "COIN" },
         wheel: { type: "Wheel Reward", icon: "W", currency: item.currency || "EFC" },
     };
@@ -65,7 +65,7 @@ function normalizeHistoryItem(kind, item, index = 0) {
     const amount = item.amount ?? item.coin_amount ?? item.efc_amount ?? item.stakeEfc ?? item.locked_amount
         ?? item.total_uzs ?? item.total_price ?? item.price_uzs ?? item.price ?? 0;
     const id = item.id ?? item.order_id ?? item.match_id ?? item.transaction_id ?? index + 1;
-    const description = item.description || item.product_name || item.game_type || item.gameType
+    const description = item.description || item.product_title || item.product_name || item.game_type || item.gameType
         || item.order_type || item.transaction_type || definition.type;
     return {
         key: `${kind}-${id}-${index}`,
