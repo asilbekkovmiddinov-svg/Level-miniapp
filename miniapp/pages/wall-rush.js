@@ -1,3 +1,5 @@
+const WALL_RUSH_AD_WATERFALL = globalThis.WallRushAdWaterfall;
+
 class WallRushClient {
     constructor(baseUrl = API_URL) {
         this.baseUrl = String(baseUrl).replace(/\/$/, "");
@@ -16,7 +18,9 @@ class WallRushClient {
         });
         const payload = await response.json().catch(() => null);
         if (!response.ok) {
-            throw new Error(payload?.detail || "Wall Rush so‘rovi bajarilmadi.");
+            const error = new Error(payload?.detail || "Wall Rush so‘rovi bajarilmadi.");
+            error.status = response.status;
+            throw error;
         }
         return payload;
     }
@@ -38,6 +42,15 @@ class WallRushClient {
     timeout(matchId) {
         return this.request(`/wall-rush/matches/${matchId}/timeout`, "POST");
     }
+    createAdsgramSession() {
+        return this.request("/wall-rush/rewards/adsgram/session", "POST");
+    }
+    claimAdsgramReward(token) {
+        return this.request("/wall-rush/rewards/adsgram/claim", "POST", { token });
+    }
+    cancelAdsgramSession(token) {
+        return this.request("/wall-rush/rewards/adsgram/cancel", "POST", { token });
+    }
     socketUrl() {
         const protocol = this.baseUrl.startsWith("https:") ? "wss:" : "ws:";
         const host = this.baseUrl.replace(/^https?:/, "");
@@ -57,7 +70,9 @@ const wallRushController = {
     stopped: false,
     timeoutRequestedVersion: null,
     actionMode: "MOVE",
+    adsgramController: null,
     tadsController: null,
+    adPending: false,
     adState: "",
     ratingMode: "FREE",
     leaderboards: { FREE: [], TICKET: [] },
@@ -390,7 +405,7 @@ const wallRushController = {
     },
 
     adAvailable() {
-        return this.adCooldownRemainingMs() === 0;
+        return this.adCooldownRemainingMs() === 0 && !this.adPending;
     },
 
     adStatusText() {
@@ -431,9 +446,123 @@ const wallRushController = {
         if (!window.tads?.init) throw new Error("TADS SDK yuklanmadi");
     },
 
-    async watchAd() {
-        if (!this.adAvailable() || this.adState === "Reklama ochilmoqda…") return;
-        this.adState = "Reklama ochilmoqda…";
+    getAdsgramController() {
+        if (this.adsgramController) return this.adsgramController;
+        if (!globalThis.Adsgram?.init) {
+            const error = new Error("Adsgram SDK yuklanmadi.");
+            error.code = "ADSGRAM_SDK_UNAVAILABLE";
+            throw error;
+        }
+        this.adsgramController = globalThis.Adsgram.init({
+            blockId: "39763",
+            debug: false,
+        });
+        return this.adsgramController;
+    },
+
+    showAdsgramAd(controller) {
+        if (!controller?.show) {
+            const error = new Error("Adsgram SDK yuklanmadi.");
+            error.code = "ADSGRAM_SDK_UNAVAILABLE";
+            return Promise.reject(error);
+        }
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (callback, value) => {
+                if (settled) return;
+                settled = true;
+                controller.removeEventListener?.("onBannerNotFound", onNoFill);
+                callback(value);
+            };
+            const onNoFill = () => {
+                const error = new Error("Adsgram reklamasi topilmadi.");
+                error.code = "ADSGRAM_NO_FILL";
+                finish(reject, error);
+            };
+            controller.addEventListener?.("onBannerNotFound", onNoFill);
+            Promise.resolve()
+                .then(() => controller.show())
+                .then(
+                    (result) => finish(resolve, result),
+                    (error) => finish(reject, error),
+                );
+        });
+    },
+
+    async claimAdsgramReward(token, attempts = 10) {
+        let lastError;
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+            try {
+                return await this.api.claimAdsgramReward(token);
+            } catch (error) {
+                lastError = error;
+                if (Number(error?.status) !== 425 || attempt === attempts - 1) throw error;
+                await new Promise((resolve) => setTimeout(resolve, 700));
+            }
+        }
+        throw lastError;
+    },
+
+    async cancelAdsgramSession(token) {
+        if (!token) return;
+        try {
+            await this.api.cancelAdsgramSession(token);
+        } catch (error) {
+            console.warn("Adsgram session cleanup failed", error);
+        }
+    },
+
+    resetAdsgramController() {
+        this.adsgramController?.destroy?.();
+        this.adsgramController = null;
+    },
+
+    async runAdsgramPrimary() {
+        const session = await this.api.createAdsgramSession();
+        if (!session?.token) throw new Error("Adsgram reward sessiyasi yaratilmadi.");
+        let timeoutId;
+        let result;
+        try {
+            result = await Promise.race([
+                this.showAdsgramAd(this.getAdsgramController()),
+                new Promise((_, reject) => {
+                    timeoutId = setTimeout(() => {
+                        const error = new Error("Adsgram javobi kutilgan vaqtda kelmadi.");
+                        error.code = "ADSGRAM_TIMEOUT";
+                        reject(error);
+                    }, 90000);
+                }),
+            ]);
+        } catch (error) {
+            await this.cancelAdsgramSession(session.token);
+            this.resetAdsgramController();
+            if (!error.code) error.code = "ADSGRAM_SHOW_FAILED";
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+        if (result?.done !== true || result?.error === true) {
+            await this.cancelAdsgramSession(session.token);
+            const error = new Error("Ticket uchun reklamani oxirigacha ko‘ring.");
+            error.code = "ADSGRAM_NOT_REWARDED";
+            throw error;
+        }
+        try {
+            return await this.claimAdsgramReward(session.token);
+        } catch (error) {
+            error.code = "ADSGRAM_CLAIM_FAILED";
+            throw error;
+        }
+    },
+
+    finishAdUnavailable() {
+        this.adPending = false;
+        this.adState = "Hozir reklama topilmadi. Bepul o‘yin ochiq.";
+        this.render();
+    },
+
+    async runTadsFallback() {
+        this.adState = "Boshqa reklama tekshirilmoqda…";
         this.render();
         try {
             await this.waitForTads();
@@ -444,18 +573,49 @@ const wallRushController = {
                         type: "fullscreen",
                         debug: false,
                         onShowReward: () => this.confirmTadsReward(),
-                        onAdsNotFound: () => {
-                            this.adState = "Hozir reklama topilmadi. Bepul o‘yin ochiq.";
-                            this.render();
-                        },
+                        onAdsNotFound: () => this.finishAdUnavailable(),
                     });
             }
             const controller = await Promise.resolve(this.tadsController);
             if (typeof controller.loadAd === "function") await controller.loadAd();
             await controller.showAd();
         } catch (error) {
-            console.error("TADS show failed", error);
-            this.adState = "Hozir reklama topilmadi. Bepul o‘yin ochiq.";
+            console.error("TADS fallback failed", error);
+            this.finishAdUnavailable();
+        }
+    },
+
+    async watchAd() {
+        if (!this.adAvailable()) return;
+        this.adPending = true;
+        this.adState = "Adsgram reklamasi ochilmoqda…";
+        this.render();
+        try {
+            const outcome = await WALL_RUSH_AD_WATERFALL.run({
+                showAdsgram: () => this.runAdsgramPrimary(),
+                showTads: () => this.runTadsFallback(),
+            });
+            if (outcome.provider === "ADSGRAM" && outcome.reward?.wallet) {
+                this.wallet = outcome.reward.wallet;
+                this.adPending = false;
+                this.adState = "";
+                this.render();
+            }
+        } catch (error) {
+            console.warn("Adsgram primary failed", error);
+            if (error?.code === "ADSGRAM_NOT_REWARDED") {
+                this.adPending = false;
+                this.adState = error.message;
+                this.render();
+                return;
+            }
+            this.adPending = false;
+            this.adState = error?.message || "Reward tasdiqlanmadi.";
+            try {
+                this.wallet = await this.api.wallet();
+            } catch (_walletError) {
+                // Keep the current wallet snapshot if refresh is unavailable.
+            }
             this.render();
         }
     },
@@ -470,6 +630,7 @@ const wallRushController = {
                 const wallet = await this.api.wallet();
                 if (Number(wallet.game_tickets || 0) > before) {
                     this.wallet = wallet;
+                    this.adPending = false;
                     this.adState = "";
                     this.render();
                     return;
@@ -478,6 +639,7 @@ const wallRushController = {
                 // Webhook processing can be briefly delayed; keep polling.
             }
         }
+        this.adPending = false;
         this.adState = "Tasdiq kechikmoqda. Birozdan keyin yangilang.";
         this.render();
     },

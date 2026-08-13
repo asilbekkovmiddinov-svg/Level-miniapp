@@ -67,8 +67,13 @@ test("MiniApp navigation exposes Wall Rush and cleans realtime resources", () =>
 });
 
 
-test("TADS fullscreen reward is verified by backend wallet state", () => {
+test("Adsgram is primary and TADS fullscreen is the verified fallback", () => {
+    assert.match(html, /https:\/\/sad\.adsgram\.ai\/js\/sad\.min\.js/);
     assert.match(html, /https:\/\/w\.tads\.me\/widget\.js/);
+    assert.match(html, /wall-rush-ad-waterfall\.js/);
+    assert.match(source, /blockId: "39763"/);
+    assert.match(source, /showAdsgram: \(\) => this\.runAdsgramPrimary\(\)/);
+    assert.match(source, /showTads: \(\) => this\.runTadsFallback\(\)/);
     assert.match(source, /widgetId: "11416"/);
     assert.match(source, /type: "fullscreen"/);
     assert.match(source, /debug: false/);
@@ -85,7 +90,8 @@ test("rewarded ad cooldown shows a live mm:ss countdown", () => {
     assert.match(source, /this\.adState = ""/);
 });
 
-test("TADS no-fill keeps Free Play available", () => {
+test("Adsgram and TADS no-fill keep Free Play available", () => {
+    assert.match(source, /onBannerNotFound/);
     assert.match(source, /onAdsNotFound/);
     assert.match(source, /Hozir reklama topilmadi\. Bepul o‘yin ochiq\./);
     assert.match(source, /join\('FREE'\)/);
