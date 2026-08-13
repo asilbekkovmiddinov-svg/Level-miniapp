@@ -23,6 +23,8 @@
         );
         return {
             ...product,
+            product_type: String(product.product_type || "COIN").toUpperCase(),
+            item_name: String(product.item_name || product.name || product.title || "").trim(),
             coin_amount: number(product.coin_amount, number(product.coins_amount)),
             original_price: originalPrice,
             promotion_price: hasPromotion ? promotionPrice : null,

@@ -35,6 +35,8 @@
         if (!Array.isArray(list)) throw new Error("Coin packages javobi noto‘g‘ri.");
         return list.map((item) => ({
             id: number(item.id), title: text(item.title || item.name),
+            product_type: text(item.product_type || "COIN").toUpperCase(),
+            name: text(item.name),
             coin_amount: number(item.coin_amount ?? item.coins_amount),
             price: number(item.price ?? item.price_uzs), category: text(item.category),
             scope: text(item.scope || item.region || item.platform || "ALL").toUpperCase(),
@@ -43,14 +45,25 @@
     }
 
     function packagePayload(values) {
+        const productType = text(values.product_type || "COIN").toUpperCase();
         const coinAmount = number(values.coin_amount);
+        const name = text(values.name);
         const price = number(values.price_uzs);
         const scope = text(values.scope).toUpperCase();
-        if (coinAmount <= 0) throw new Error("Coin miqdori 0 dan katta bo‘lishi kerak.");
+        if (!["COIN", "PLAYER", "MANAGER"].includes(productType)) throw new Error("Mahsulot turi noto‘g‘ri.");
+        if (productType === "COIN" && coinAmount <= 0) throw new Error("Coin miqdori 0 dan katta bo‘lishi kerak.");
+        if (productType !== "COIN" && !name) throw new Error("O‘yinchi yoki murabbiy ismini kiriting.");
         if (price <= 0) throw new Error("Narx 0 dan katta bo‘lishi kerak.");
-        if (!["ALL", "ANDROID", "JAPAN", "TURKEY"].includes(scope)) throw new Error("Platform/region noto‘g‘ri.");
+        if (productType === "COIN" && !["ALL", "ANDROID", "JAPAN", "TURKEY"].includes(scope)) throw new Error("Platform/region noto‘g‘ri.");
         const active = ![false, "false", "INACTIVE"].includes(values.is_active);
-        return { coin_amount: coinAmount, price_uzs: price, scope, is_active: active };
+        return {
+            product_type: productType,
+            coin_amount: productType === "COIN" ? coinAmount : null,
+            name: productType === "COIN" ? null : name,
+            price_uzs: price,
+            scope: productType === "COIN" ? scope : "ALL",
+            is_active: active,
+        };
     }
 
     function payload(values, packages) {

@@ -27,7 +27,7 @@ const SHOP_REGIONS = [
 
 async function loadShopPage(options = {}) {
     Navbar.setActive("shop");
-    showPage("shopPage", "Coin Shop");
+    showPage("shopPage", "Shop");
 
     const page = document.getElementById("shopPage");
 
@@ -72,7 +72,8 @@ function openTargetedShopProduct(target = {}) {
     const coinAmount = Number(target?.coinAmount);
     const product = products.find((item) => Number.isInteger(productId) && productId > 0
         ? item.id === productId
-        : Number.isFinite(coinAmount) && coinAmount > 0 && item.coin_amount === coinAmount);
+        : Number.isFinite(coinAmount) && coinAmount > 0
+            && item.product_type === "COIN" && item.coin_amount === coinAmount);
     if (!product) return false;
     selectedShopCategory = product.category;
     selectedShopProduct = product;
@@ -103,6 +104,18 @@ function renderShopCategories() {
                 Ko'rish
             </button>
         </div>
+
+        <div class="list-card">
+            <h3>⚽ O‘yinchilar</h3>
+            <p>eFootball akkauntingiz uchun o‘yinchilar.</p>
+            <button class="red-btn" onclick="openShopCategory('PLAYERS')">Ko‘rish</button>
+        </div>
+
+        <div class="list-card">
+            <h3>🧑‍💼 Murabbiylar</h3>
+            <p>eFootball akkauntingiz uchun murabbiylar.</p>
+            <button class="red-btn" onclick="openShopCategory('MANAGERS')">Ko‘rish</button>
+        </div>
     `;
 }
 
@@ -122,13 +135,13 @@ function renderProductList(list, category) {
     shopView = "list";
     const container = document.getElementById("shopProducts");
 
-    const title = category === "ANDROID_COINS"
-        ? "📱 Android Coinlar"
-        : "🌍 Region orqali Coin";
-
-    const description = category === "ANDROID_COINS"
-        ? "Akkaunt ichiga kirib coin olib beriladi."
-        : "Android va iPhone uchun limit yo'qotmasdan coin olib beriladi.";
+    const categoryContent = {
+        ANDROID_COINS: ["📱 Android Coinlar", "Akkaunt ichiga kirib coin olib beriladi."],
+        REGION_COINS: ["🌍 Region orqali Coin", "Android va iPhone uchun limit yo‘qotmasdan coin olib beriladi."],
+        PLAYERS: ["⚽ O‘yinchilar", "eFootball akkauntingiz uchun o‘yinchilar."],
+        MANAGERS: ["🧑‍💼 Murabbiylar", "eFootball akkauntingiz uchun murabbiylar."],
+    }[category] || ["🛒 Mahsulotlar", "Mavjud mahsulotlar."];
+    const [title, description] = categoryContent;
 
     if (!list.length) {
         container.innerHTML = `
@@ -157,7 +170,7 @@ function renderProductList(list, category) {
         ${list.map((product) => `
             <div class="list-card coin-product-card ${product.has_promotion ? "is-promotion" : ""}" data-product-id="${product.id}">
                 ${product.has_promotion ? '<span class="coin-promotion-badge">🔥 Flash Sale</span>' : ""}
-                <h3>${formatMoney(product.coin_amount)} Coins</h3>
+                <h3>${shopProductTitle(product, true)}</h3>
                 ${shopPriceMarkup(product)}
                 ${shopPromotionMetaMarkup(product)}
 
@@ -199,7 +212,7 @@ function renderRegionSelect() {
 
     container.innerHTML = `
         <div class="list-card">
-            <h3>${formatMoney(selectedShopProduct.coin_amount)} Coins</h3>
+            <h3>${shopProductTitle(selectedShopProduct, true)}</h3>
             ${shopPriceMarkup(selectedShopProduct)}
             ${shopPromotionMetaMarkup(selectedShopProduct)}
             <p>🌍 Regionni tanlang</p>
@@ -233,7 +246,7 @@ async function confirmBuyProduct(region) {
     const regionText = region ? `\nRegion: ${region}` : "";
 
     const confirmed = confirm(
-        `${selectedShopProduct.coin_amount} Coins\nNarx: ${formatMoney(selectedShopProduct.display_price)} UZS${regionText}\n\nBuyurtma berasizmi?`
+        `${shopProductTitle(selectedShopProduct)}\nNarx: ${formatMoney(selectedShopProduct.display_price)} UZS${regionText}\n\nBuyurtma berasizmi?`
     );
 
     if (!confirmed) {
@@ -361,4 +374,13 @@ function startShopPromotionCountdown() {
 
 function formatMoney(value) {
     return Number(value || 0).toLocaleString("uz-UZ");
+}
+
+function shopProductTitle(product, escape = false) {
+    let value = `${formatMoney(product?.coin_amount)} Coins`;
+    if (product?.product_type === "PLAYER") value = `⚽ ${product.item_name || product.title}`;
+    if (product?.product_type === "MANAGER") value = `🧑‍💼 ${product.item_name || product.title}`;
+    return escape ? String(value).replace(/[&<>'"]/g, (char) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+    })[char]) : value;
 }
