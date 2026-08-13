@@ -151,6 +151,9 @@ async function openPage(page, options = {}) {
         case "division-admin":
             await loadDivisionAdminPage();
             break;
+        case "tournament-admin":
+            await loadTournamentAdminPage();
+            break;
         case "coin-promotions-admin":
             await loadCoinPromotionAdminPage();
             break;
