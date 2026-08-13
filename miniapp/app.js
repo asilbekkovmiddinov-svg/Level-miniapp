@@ -3,29 +3,23 @@ window.addEventListener("load", async () => {
 
     try {
         const homeName = document.getElementById("homeName");
-        if (homeName) {
-            homeName.textContent = USERNAME ? `@${USERNAME}` : FIRST_NAME;
-        }
+        if (homeName) homeName.textContent = USERNAME ? `@${USERNAME}` : FIRST_NAME;
 
         await registerUser();
         await updateUserSeen();
+        await requireChannelSubscriptions();
 
         Navbar.init();
         bindMenuButtons();
         bindHeaderButtons();
 
         const query = new URLSearchParams(window.location.search);
-        if (query.get("admin") === "wheel-orders") {
-            await loadWheelOrderAdminPage();
-        } else if (query.get("admin") === "coin-promotions") {
-            await loadCoinPromotionAdminPage();
-        } else if (query.get("admin") === "promotions") {
-            await loadPromotionsAdminPage();
-        } else if (query.get("admin") === "division") {
-            await loadDivisionAdminPage();
-        } else if (query.get("admin") === "tournament") {
-            await loadTournamentAdminPage();
-        } else {
+        if (query.get("admin") === "wheel-orders") await loadWheelOrderAdminPage();
+        else if (query.get("admin") === "coin-promotions") await loadCoinPromotionAdminPage();
+        else if (query.get("admin") === "promotions") await loadPromotionsAdminPage();
+        else if (query.get("admin") === "division") await loadDivisionAdminPage();
+        else if (query.get("admin") === "tournament") await loadTournamentAdminPage();
+        else {
             await loadHome();
             await openCoinOrderDeepLink();
         }
@@ -37,6 +31,24 @@ window.addEventListener("load", async () => {
         window.dispatchEvent(new CustomEvent("levelgroup:app-ready"));
     }
 });
+
+async function requireChannelSubscriptions() {
+    while (true) {
+        const status = await walletRequest("/subscription/status");
+        if (status.subscribed) return;
+
+        const channels = status.missing_channels || [];
+        const names = channels.map((channel) => `• ${channel.title}`).join("\n");
+        const choice = window.confirm(`LEVEL_GROUP’dan foydalanish uchun kanallarga obuna bo‘ling:\n\n${names}\n\nOK — kanallarni ochish, Cancel — qayta tekshirish.`);
+        if (choice) {
+            channels.forEach((channel) => {
+                if (window.Telegram?.WebApp?.openTelegramLink) window.Telegram.WebApp.openTelegramLink(channel.url);
+                else window.open(channel.url, "_blank");
+            });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+}
 
 let pageReturnTarget = null;
 
@@ -54,7 +66,6 @@ function showPage(pageId, title) {
     const pages = pageContent?.querySelectorAll(":scope > .page") || [];
     const nextPage = document.getElementById(pageId);
     if (!nextPage || !nextPage.matches("#pageContent > .page")) return false;
-
     pages.forEach((page) => {
         const active = page === nextPage;
         page.classList.toggle("active-page", active);
@@ -62,34 +73,22 @@ function showPage(pageId, title) {
         page.inert = !active;
         page.setAttribute("aria-hidden", String(!active));
     });
-
     nextPage.scrollTop = 0;
     if (pageContent) pageContent.scrollTop = 0;
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-
     const pageTitle = document.getElementById("pageTitle");
-    if (pageTitle) {
-        pageTitle.textContent = title || "LEVEL_GROUP";
-    }
+    if (pageTitle) pageTitle.textContent = title || "LEVEL_GROUP";
     return true;
 }
 
 function bindMenuButtons() {
-    document.querySelectorAll(".menu-card").forEach((button) => {
-        button.addEventListener("click", async () => {
-            await openPage(button.dataset.page);
-        });
-    });
+    document.querySelectorAll(".menu-card").forEach((button) => button.addEventListener("click", async () => await openPage(button.dataset.page)));
 }
 
 function bindHeaderButtons() {
     const refreshBtn = document.getElementById("refreshBtn");
     const backBtn = document.getElementById("backBtn");
-
-    if (refreshBtn) {
-        refreshBtn.addEventListener("click", refreshEverything);
-    }
-
+    if (refreshBtn) refreshBtn.addEventListener("click", refreshEverything);
     if (backBtn) backBtn.addEventListener("click", handlePageBack);
 }
 
@@ -98,9 +97,7 @@ async function handlePageBack() {
         window.divisionController?.stop?.();
         window.tournamentController?.stop?.();
     }
-    if (document.getElementById("wallRushPage")?.classList.contains("active-page")) {
-        await window.wallRushController?.leave?.();
-    }
+    if (document.getElementById("wallRushPage")?.classList.contains("active-page")) await window.wallRushController?.leave?.();
     const target = pageReturnTarget;
     pageReturnTarget = null;
     if (target) await openPage(target);
@@ -114,64 +111,26 @@ async function openPage(page, options = {}) {
     pageReturnTarget = options.returnPage || null;
     if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
     if (page !== "coin-promotions-admin") document.body.classList.remove("coin-promotion-admin-open");
-    if (page !== "promotions-admin") {
-        document.body.classList.remove("promotions-admin-open");
-    }
+    if (page !== "promotions-admin") document.body.classList.remove("promotions-admin-open");
     switch (page) {
-        case "shop":
-            await loadShopPage(options);
-            break;
-        case "p2p":
-            await loadP2PPage();
-            break;
-        case "wheel":
-            await loadWheelPage();
-            break;
-        case "arena":
-            if (divisionUiEnabled()) await loadDivisionPage();
-            else Modal.alert("Arena", "Tez orada");
-            break;
-        case "wall-rush":
-            await loadWallRushPage();
-            break;
-        case "orders":
-            await loadOrdersPage();
-            break;
-        case "profile":
-            await loadProfilePage();
-            break;
-        case "support":
-            await loadSupportPage();
-            break;
-        case "referral":
-            await loadReferralPage();
-            break;
-        case "wallet":
-            await loadDedicatedWalletPage();
-            break;
-        case "promotions-admin":
-            await loadPromotionsAdminPage();
-            break;
-        case "division-admin":
-            await loadDivisionAdminPage();
-            break;
-        case "tournament-admin":
-            await loadTournamentAdminPage();
-            break;
-        case "coin-promotions-admin":
-            await loadCoinPromotionAdminPage();
-            break;
-        case "wheel-orders-admin":
-            await loadWheelOrderAdminPage();
-            break;
-        case "promotions":
-            await loadPromotionsPage();
-            break;
-        case "notifications":
-            await loadNotificationsPage();
-            break;
-        default:
-            await loadHome();
+        case "shop": await loadShopPage(options); break;
+        case "p2p": await loadP2PPage(); break;
+        case "wheel": await loadWheelPage(); break;
+        case "arena": if (divisionUiEnabled()) await loadDivisionPage(); else Modal.alert("Arena", "Tez orada"); break;
+        case "wall-rush": await loadWallRushPage(); break;
+        case "orders": await loadOrdersPage(); break;
+        case "profile": await loadProfilePage(); break;
+        case "support": await loadSupportPage(); break;
+        case "referral": await loadReferralPage(); break;
+        case "wallet": await loadDedicatedWalletPage(); break;
+        case "promotions-admin": await loadPromotionsAdminPage(); break;
+        case "division-admin": await loadDivisionAdminPage(); break;
+        case "tournament-admin": await loadTournamentAdminPage(); break;
+        case "coin-promotions-admin": await loadCoinPromotionAdminPage(); break;
+        case "wheel-orders-admin": await loadWheelOrderAdminPage(); break;
+        case "promotions": await loadPromotionsPage(); break;
+        case "notifications": await loadNotificationsPage(); break;
+        default: await loadHome();
     }
 }
 
@@ -189,28 +148,19 @@ async function loadHome() {
     startLiveWinners();
 }
 
-async function refreshCurrentPage() {
-    await openPage(Navbar.currentPage || "home");
-}
+async function refreshCurrentPage() { await openPage(Navbar.currentPage || "home"); }
 
 async function refreshEverything() {
     Loader.show();
-
     try {
         await updateUserSeen();
         await refreshCurrentPage();
     } catch (error) {
         console.error(error);
         Modal.error("Ma'lumotlarni yangilab bo'lmadi.");
-    } finally {
-        Loader.hide();
-    }
+    } finally { Loader.hide(); }
 }
 
 setInterval(async () => {
-    try {
-        await updateUserSeen();
-    } catch (e) {
-        console.log(e);
-    }
+    try { await updateUserSeen(); } catch (e) { console.log(e); }
 }, 60000);
