@@ -32,10 +32,11 @@ function divisionSchedulePoll() {
 }
 
 function divisionHero(season) {
+    const duration = Number(season?.durationDays) || 1;
     return `<section class="division-hero">
         <small>LEVEL_GROUP • GLOBAL LEAGUE</small>
         <h2>Global Division</h2>
-        <p>30 kun davomida 1 vs 1 o‘ynang va ochko yig‘ing.</p>
+        <p>${duration} kun davomida 1 vs 1 o‘ynang va ochko yig‘ing.</p>
         <div><span>🏆 G‘alaba <b>+${season?.pointsForWin || 3}</b></span>
         <span>🎟 Match <b>${season?.ticketCost || 1} ticket</b></span>
         <span>⏳ <b>${divisionEscape(divisionRemaining(season?.endsAt))}</b></span></div>
@@ -113,8 +114,12 @@ function divisionDashboard(overview) {
                 ${matchAccess.label}
             </button>
         </section>
-        <section class="division-ranking"><header><div><small>GLOBAL STANDINGS</small><h3>Division reytingi</h3></div><span>30 KUN</span></header>
+        <section class="division-ranking"><header><div><small>GLOBAL STANDINGS</small><h3>Division reytingi</h3></div><span>${overview.season.durationDays} KUN</span></header>
         ${divisionStandingsTable(divisionState.standings)}</section>`;
+}
+
+function divisionPageMarkup(content) {
+    return `<div class="division-page">${competitionTabsMarkup("division")}${content}</div>`;
 }
 
 function renderDivisionPage() {
@@ -128,11 +133,11 @@ function renderDivisionPage() {
         return;
     }
     if (divisionState.match?.status === "WAITING") {
-        root.innerHTML = `<div class="division-page">${divisionWaiting(divisionState.match)}</div>`;
+        root.innerHTML = divisionPageMarkup(divisionWaiting(divisionState.match));
     } else if (divisionState.overview?.participant?.status === "APPROVED") {
-        root.innerHTML = `<div class="division-page">${divisionDashboard(divisionState.overview)}</div>`;
+        root.innerHTML = divisionPageMarkup(divisionDashboard(divisionState.overview));
     } else {
-        root.innerHTML = `<div class="division-page">${divisionRegistration(divisionState.overview)}</div>`;
+        root.innerHTML = divisionPageMarkup(divisionRegistration(divisionState.overview));
     }
     bindDivisionActions(root);
 }
@@ -141,16 +146,17 @@ function divisionErrorView(error) {
     const root = document.getElementById("arenaPage");
     if (!root) return;
     const soon = error?.status === 404 || error?.status === 503;
-    root.innerHTML = `<div class="division-page"><section class="division-card division-error">
+    root.innerHTML = divisionPageMarkup(`<section class="division-card division-error">
         <b>${soon ? "⚔️" : "⚠️"}</b><small>GLOBAL DIVISION</small>
         <h2>${soon ? "Tez orada" : "Ma’lumot yuklanmadi"}</h2>
         <p>${divisionEscape(error?.message || "Keyinroq qayta urinib ko‘ring.")}</p>
         <button class="division-button secondary" data-division-retry>Qayta urinish</button>
-    </section></div>`;
+    </section>`);
     bindDivisionActions(root);
 }
 
 function bindDivisionActions(root) {
+    bindCompetitionTabs(root);
     root.querySelector("[data-division-retry]")?.addEventListener("click", loadDivisionPage);
     root.querySelector("[data-division-apply]")?.addEventListener("click", divisionApply);
     root.querySelector("[data-division-join]")?.addEventListener("click", divisionJoin);
@@ -204,11 +210,13 @@ async function divisionCancel(matchId) {
 }
 
 async function loadDivisionPage() {
+    window.tournamentController?.stop?.();
     divisionStopPolling();
     Navbar.setActive("arena");
-    showPage("arenaPage", "Global Division");
+    showPage("arenaPage", "Arena");
     const root = document.getElementById("arenaPage");
-    root.innerHTML = `<div class="division-page"><div class="division-loading">Division yuklanmoqda…</div></div>`;
+    root.innerHTML = divisionPageMarkup('<div class="division-loading">Division yuklanmoqda…</div>');
+    bindCompetitionTabs(root);
     try {
         const [overview, wallet, standings, match] = await Promise.all([
             divisionApiClient.overview(),

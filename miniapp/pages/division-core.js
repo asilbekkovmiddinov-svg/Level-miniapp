@@ -97,3 +97,25 @@ function divisionMatchAccess(season, wallet) {
     }
     return { enabled: true, label: "Raqib qidirish • 1 ticket" };
 }
+
+function competitionTabsMarkup(active) {
+    return `<nav class="competition-switch" aria-label="Arena musobaqalari">
+        <button type="button" data-competition="division"
+            class="${active === "division" ? "active" : ""}">
+            <span>DIVISION</span><b>Global liga</b>
+        </button>
+        <button type="button" data-competition="tournament"
+            class="${active === "tournament" ? "active" : ""}">
+            <span>TURNIR</span><b>Kuboklar</b>
+        </button>
+    </nav>`;
+}
+
+function bindCompetitionTabs(root) {
+    root.querySelector('[data-competition="division"]')?.addEventListener(
+        "click", () => loadDivisionPage(),
+    );
+    root.querySelector('[data-competition="tournament"]')?.addEventListener(
+        "click", () => loadTournamentPage(),
+    );
+}

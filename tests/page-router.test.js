@@ -44,7 +44,8 @@ test("all module mounts remain isolated direct children of pageContent", () => {
     assert.deepEqual(pageIds, [
         "homePage", "p2pPage", "wallRushPage", "arenaPage", "shopPage", "wheelPage",
         "ordersPage", "profilePage", "supportPage", "referralPage", "walletPage",
-        "promotionsAdminPage", "promotionsPage", "notificationsPage",
+        "promotionsAdminPage", "promotionsPage", "divisionAdminPage",
+        "tournamentAdminPage", "notificationsPage",
         "coinPromotionAdminPage", "wheelOrderAdminPage",
     ]);
 });

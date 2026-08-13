@@ -24,6 +24,7 @@ function divisionAdminMenu() {
         <button onclick="openPage('coin-promotions-admin')">Coin Promotions</button>
         <button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button>
         <button class="active">Division</button>
+        <button onclick="openPage('tournament-admin')">Turnir</button>
     </nav>`;
 }
 
@@ -31,11 +32,12 @@ function divisionAdminCreateMarkup() {
     const now = new Date();
     const closes = new Date(now.getTime() + 2 * 86400000);
     const starts = new Date(now.getTime() + 3 * 86400000);
+    const ends = new Date(now.getTime() + 17 * 86400000);
     return `<div class="division-admin-shell">
         ${divisionAdminMenu()}
         <section class="division-admin-hero">
             <small>LEVEL_GROUP • ADMIN</small><h2>Global Division</h2>
-            <p>Yangi 30 kunlik season yarating.</p>
+            <p>Season muddatini o‘zingiz belgilang.</p>
         </section>
         <form id="divisionSeasonForm" class="division-admin-form">
             <label><span>Season nomi</span>
@@ -46,7 +48,10 @@ function divisionAdminCreateMarkup() {
             <label><span>Season boshlanadi</span>
                 <input name="starts_at" type="datetime-local"
                     required value="${divisionAdminInputDate(starts)}"></label>
-            <article><b>30 kun</b><span>Har match 1 Tournament Ticket · g‘alaba +3 · mag‘lubiyat 0</span></article>
+            <label><span>Season tugaydi</span>
+                <input name="ends_at" type="datetime-local"
+                    required value="${divisionAdminInputDate(ends)}"></label>
+            <article><b>1–365 kun</b><span>Har match 1 Tournament Ticket · g‘alaba +3 · mag‘lubiyat 0</span></article>
             <button class="division-admin-primary" type="submit">Season yaratish</button>
         </form>
     </div>`;
@@ -182,6 +187,7 @@ function bindDivisionAdmin() {
                         data.get("registration_closes_at"),
                     ).toISOString(),
                     starts_at: new Date(data.get("starts_at")).toISOString(),
+                    ends_at: new Date(data.get("ends_at")).toISOString(),
                 });
                 await divisionAdminLoadApplications();
                 divisionAdminRender();

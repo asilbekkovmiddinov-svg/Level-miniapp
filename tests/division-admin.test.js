@@ -57,9 +57,11 @@ test("season creation sends authoritative dates", async () => {
         registration_opens_at: "2026-08-11T12:00:00Z",
         registration_closes_at: "2026-08-13T12:00:00Z",
         starts_at: "2026-08-14T12:00:00Z",
+        ends_at: "2026-08-28T12:00:00Z",
     });
     assert.equal(body.name, "Global Division S1");
     assert.equal(body.starts_at, "2026-08-14T12:00:00Z");
+    assert.equal(body.ends_at, "2026-08-28T12:00:00Z");
 });
 
 test("application filters and decisions use admin endpoints", async () => {
