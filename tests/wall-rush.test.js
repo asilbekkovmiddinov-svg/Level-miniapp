@@ -24,7 +24,7 @@ test("turn timer starts at 30 seconds and follows the backend deadline", () => {
 test("Wall Rush reconnects through authoritative WebSocket state", () => {
     assert.match(source, /\/wall-rush\/ws\?init_data=/);
     assert.match(source, /message\.type === "MATCH_STATE"/);
-    assert.match(source, /setTimeout\(\(\) => this\.connect\(\), 1500\)/);
+    assert.match(source, /setTimeout\(\(\) => \{[\s\S]*?this\.connect\(\);[\s\S]*?\}, 1500\)/);
 });
 
 test("free and ticket modes preserve the agreed economy", () => {

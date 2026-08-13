@@ -23,6 +23,8 @@ window.addEventListener("load", async () => {
             await loadPromotionsAdminPage();
         } else if (query.get("admin") === "division") {
             await loadDivisionAdminPage();
+        } else if (query.get("admin") === "tournament") {
+            await loadTournamentAdminPage();
         } else {
             await loadHome();
             await openCoinOrderDeepLink();
@@ -94,6 +96,7 @@ function bindHeaderButtons() {
 async function handlePageBack() {
     if (document.getElementById("arenaPage")?.classList.contains("active-page")) {
         window.divisionController?.stop?.();
+        window.tournamentController?.stop?.();
     }
     if (document.getElementById("wallRushPage")?.classList.contains("active-page")) {
         await window.wallRushController?.leave?.();
@@ -106,6 +109,7 @@ async function handlePageBack() {
 
 async function openPage(page, options = {}) {
     if (page !== "arena") window.divisionController?.stop?.();
+    if (page !== "arena") window.tournamentController?.stop?.();
     if (page !== "wall-rush" && window.wallRushController) window.wallRushController.stop();
     pageReturnTarget = options.returnPage || null;
     if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");

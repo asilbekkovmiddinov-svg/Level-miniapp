@@ -51,17 +51,17 @@ test("match normalizer preserves locked ticket state and Arena id", () => {
 
 test("matchmaking stays disabled until the season is active", () => {
     assert.deepEqual(
-        context.divisionMatchAccess(
+        { ...context.divisionMatchAccess(
             { status: "REGISTRATION" },
             { tournamentTickets: 2 },
-        ),
+        ) },
         { enabled: false, label: "Season hali boshlanmagan" },
     );
     assert.deepEqual(
-        context.divisionMatchAccess(
+        { ...context.divisionMatchAccess(
             { status: "ACTIVE" },
             { tournamentTickets: 1 },
-        ),
+        ) },
         { enabled: true, label: "Raqib qidirish • 1 ticket" },
     );
 });
