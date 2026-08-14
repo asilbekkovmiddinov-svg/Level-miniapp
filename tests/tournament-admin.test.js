@@ -42,7 +42,7 @@ test("creates Olympic tournament with null group settings", async () => {
         name: "LEVEL Cup",
         format: "SINGLE_ELIMINATION",
         max_participants: 16,
-        ticket_cost: 1,
+        ticket_cost: 10,
         group_count: null,
         qualifiers_per_group: null,
         registration_opens_at: "2026-08-13T10:00:00Z",
@@ -53,6 +53,7 @@ test("creates Olympic tournament with null group settings", async () => {
     assert.equal(request.url, "https://api.example/admin/tournaments");
     const body = JSON.parse(request.options.body);
     assert.equal(body.format, "SINGLE_ELIMINATION");
+    assert.equal(body.ticket_cost, 10);
     assert.equal(body.group_count, null);
 });
 

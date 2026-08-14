@@ -52,7 +52,9 @@ function tournamentApplication(overview) {
         </header>
         <p>${participant
             ? `Sizning joylashuvingiz: <strong>${assignment}</strong>. Admin qarori va jadval shu sahifada yangilanadi.`
-            : "Ariza yuboring. Admin tasdiqlagach seed yoki guruhingiz va raqibingiz ko‘rinadi."}</p>
+            : `Ariza yuboring. Admin tasdiqlagach seed yoki guruhingiz va raqibingiz ko‘rinadi.`}</p>
+        <div class="tournament-ticket-balance"><span>Sizdagi Tournament Ticket</span>
+            <strong>${overview.ticketBalance}/${overview.tournament.ticketCost}</strong></div>
         <button class="tournament-primary" data-tournament-apply
             ${action.enabled ? "" : "disabled"}>${divisionEscape(action.label)}</button>
     </section>`;

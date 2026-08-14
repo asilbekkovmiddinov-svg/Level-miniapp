@@ -61,7 +61,7 @@ function tournamentAdminCreateMarkup() {
             <label><span>Turnir tugaydi</span>
                 <input name="ends_at" type="datetime-local" required
                     value="${tournamentAdminInputDate(ends)}"></label>
-            <article><b>1 ticket</b><span>Har match uchun · penalti majburiy · durang yo‘q</span></article>
+            <article><b>10 ticket</b><span>Har match uchun · penalti majburiy · durang yo‘q</span></article>
             <button class="division-admin-primary" type="submit">Turnir yaratish</button>
         </form>
     </div>`;
@@ -135,7 +135,7 @@ function tournamentAdminDashboardMarkup() {
         <section class="division-admin-summary">
             <article><small>BOSHLANISH</small><strong>${tournamentAdminDate(item.starts_at)}</strong></article>
             <article><small>YAKUNLANISH</small><strong>${tournamentAdminDate(item.ends_at)}</strong></article>
-            <article><small>LIMIT</small><strong>${item.max_participants} ishtirokchi · 1 ticket</strong></article>
+            <article><small>LIMIT</small><strong>${item.max_participants} ishtirokchi · 10 ticket</strong></article>
         </section>
         ${item.status === "REGISTRATION"
             ? '<button class="division-admin-primary tournament-start" data-tournament-start>Turnirni boshlash</button>' : ""}
@@ -190,7 +190,7 @@ function bindTournamentAdmin() {
             tournamentAdminState.tournament = await tournamentAdminApi.create({
                 name: String(data.get("name")).trim(), format,
                 max_participants: Number(data.get("max_participants")),
-                ticket_cost: 1,
+                ticket_cost: 10,
                 group_count: format === "GROUP_PLAYOFF" ? Number(data.get("group_count")) : null,
                 qualifiers_per_group: format === "GROUP_PLAYOFF"
                     ? Number(data.get("qualifiers_per_group")) : null,

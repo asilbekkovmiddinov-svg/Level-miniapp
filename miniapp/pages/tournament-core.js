@@ -67,7 +67,7 @@ function normalizeTournamentOverview(value) {
             format: String(item.format || "SINGLE_ELIMINATION"),
             status: String(item.status || ""),
             maxParticipants: Number(item.max_participants) || 0,
-            ticketCost: Number(item.ticket_cost) || 1,
+            ticketCost: Number(item.ticket_cost) || 10,
             groupCount: item.group_count == null ? null : Number(item.group_count),
             qualifiersPerGroup: item.qualifiers_per_group == null
                 ? null : Number(item.qualifiers_per_group),
@@ -77,6 +77,7 @@ function normalizeTournamentOverview(value) {
             endsAt: item.ends_at || null,
         } : null,
         participant: normalizeTournamentParticipant(value?.participant),
+        ticketBalance: Math.max(0, Number(value?.tournament_tickets) || 0),
         participants: Array.isArray(value?.participants)
             ? value.participants.map(normalizeTournamentParticipant) : [],
         matches: Array.isArray(value?.matches)
@@ -110,6 +111,12 @@ function tournamentRegistrationState(overview, now = Date.now()) {
     }
     if (Number.isFinite(opens) && now < opens) {
         return { enabled: false, label: "Ro‘yxat hali ochilmagan" };
+    }
+    if ((Number(overview?.ticketBalance) || 0) < item.ticketCost) {
+        return {
+            enabled: false,
+            label: `Kamida ${item.ticketCost} ticket kerak`,
+        };
     }
     return { enabled: true, label: "Turnirga ariza yuborish" };
 }
