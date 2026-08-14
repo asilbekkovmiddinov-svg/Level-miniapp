@@ -30,14 +30,17 @@ test("normalizes public tournament participants and match schedule", () => {
             name: "LEVEL Cup",
             format: "GROUP_PLAYOFF",
             max_participants: 16,
-            ticket_cost: 1,
+            ticket_cost: 10,
             qualifiers_per_group: 2,
         },
+        tournament_tickets: 14,
         participant: { id: 7, telegram_id: 101, status: "APPROVED", group_name: "A" },
         participants: [{ id: 7, telegram_id: 101, username: "alpha", status: "APPROVED", group_name: "A" }],
         matches: [{ id: "m1", player_a_id: 101, player_b_id: 102, round_number: 1, status: "READY", arena_match_id: 44 }],
     });
     assert.equal(value.tournament.format, "GROUP_PLAYOFF");
+    assert.equal(value.tournament.ticketCost, 10);
+    assert.equal(value.ticketBalance, 14);
     assert.equal(value.participants[0].name, "alpha");
     assert.equal(value.matches[0].arenaMatchId, 44);
 });
@@ -46,16 +49,38 @@ test("registration action follows application and date state", () => {
     const overview = {
         tournament: {
             status: "REGISTRATION",
+            ticketCost: 10,
             registrationOpensAt: "2026-08-13T09:00:00Z",
             registrationClosesAt: "2026-08-13T12:00:00Z",
         },
         participant: null,
+        ticketBalance: 10,
     };
     assert.equal(context.tournamentRegistrationState(
         overview, Date.parse("2026-08-13T10:00:00Z"),
     ).enabled, true);
     overview.participant = { status: "PENDING" };
     assert.equal(context.tournamentRegistrationState(overview).label, "Ko‘rib chiqilmoqda");
+});
+
+test("registration requires the full ten-ticket match entry", () => {
+    const overview = {
+        tournament: {
+            status: "REGISTRATION",
+            ticketCost: 10,
+            registrationOpensAt: "2026-08-13T09:00:00Z",
+            registrationClosesAt: "2026-08-13T12:00:00Z",
+        },
+        participant: null,
+        ticketBalance: 9,
+    };
+    const now = Date.parse("2026-08-13T10:00:00Z");
+    const blocked = context.tournamentRegistrationState(overview, now);
+    assert.equal(blocked.enabled, false);
+    assert.equal(blocked.label, "Kamida 10 ticket kerak");
+
+    overview.ticketBalance = 10;
+    assert.equal(context.tournamentRegistrationState(overview, now).enabled, true);
 });
 
 test("group standings sort points then wins", () => {

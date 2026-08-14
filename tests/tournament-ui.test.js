@@ -17,6 +17,7 @@ test("Arena exposes Division and Tournament through one mobile switch", () => {
 
 test("user Tournament page covers application assignment match and tables", () => {
     assert.match(page, /data-tournament-apply/);
+    assert.match(page, /tournament-ticket-balance/);
     assert.match(page, /SIZNING MATCHINGIZ/);
     assert.match(page, /data-tournament-countdown/);
     assert.match(page, /data-tournament-arena/);
