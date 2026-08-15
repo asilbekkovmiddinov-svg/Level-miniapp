@@ -64,6 +64,19 @@ class TournamentApiClient {
             `/tournaments/${Number(tournamentId)}/apply`, { method: "POST" },
         ));
     }
+
+    async matches(tournamentId, { round = null, mine = false, limit = 100, offset = 0 } = {}) {
+        const query = new URLSearchParams({
+            limit: String(Math.min(100, Math.max(1, Number(limit) || 100))),
+            offset: String(Math.max(0, Number(offset) || 0)),
+        });
+        if (round) query.set("round_number", String(Number(round)));
+        if (mine) query.set("mine", "true");
+        const rows = await this.request(
+            `/tournaments/${Number(tournamentId)}/matches?${query}`,
+        );
+        return Array.isArray(rows) ? rows.map(normalizeTournamentMatch) : [];
+    }
 }
 
 const tournamentApiClient = new TournamentApiClient();
