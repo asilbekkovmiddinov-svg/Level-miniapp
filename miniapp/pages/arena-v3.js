@@ -167,7 +167,10 @@ class ArenaV3Client {
         }
         const payload = await this.request(`/arena/ranking?period=${normalized}`);
         const rows = payload?.players || payload?.ranking || [];
-        return Array.isArray(rows) ? rows.map(normalizeArenaV3RankingPlayer) : [];
+        return {
+            players: Array.isArray(rows) ? rows.map(normalizeArenaV3RankingPlayer) : [],
+            prizeText: typeof payload?.prize_text === "string" ? payload.prize_text.trim() : "",
+        };
     }
 
     uploadAppeal(matchId, file, reason, onProgress = () => {}) {
@@ -466,6 +469,7 @@ const arenaV3State = {
     historyOffset: 0,
     historyHasMore: true,
     ranking: [],
+    rankingPrize: "",
     rankingPeriod: "all",
     sectionLoading: false,
     sectionError: null,
@@ -901,10 +905,15 @@ function arenaV3HistoryView() {
 
 function arenaV3RankingView() {
     const filters = [["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["all", "All Time"]];
+    const prizeLabel = arenaV3State.rankingPeriod === "weekly" ? "HAFTALIK YUTUQ" : "OYLIK YUTUQ";
+    const prize = ["weekly", "monthly"].includes(arenaV3State.rankingPeriod) && arenaV3State.rankingPrize
+        ? `<article class="arena-v3x-ranking-prize"><span>🏆</span><div><small>${prizeLabel}</small><strong>${arenaV3Escape(arenaV3State.rankingPrize)}</strong></div></article>`
+        : "";
     return `<section class="arena-v3x-panel arena-v3x-ranking">${arenaV3PanelHeader("LEADERBOARD", "Top Players")}
         <div class="arena-v3x-rank-filters">${filters.map(([key, label]) =>
             `<button data-arena-v3-period="${key}" class="${arenaV3State.rankingPeriod === key ? "is-active" : ""}"
                 ${key === "daily" ? `disabled title="Backend daily periodni qo‘llamaydi"` : ""}>${label}</button>`).join("")}</div>
+        ${prize}
         ${arenaV3State.sectionLoading ? arenaV3Skeleton(3) : arenaV3State.sectionError
             ? `<div class="arena-v3x-error"><span>UNAVAILABLE</span><h3>Ranking hozircha ochilmagan</h3>
                 <p>${arenaV3Escape(arenaV3State.sectionError)}</p><button data-arena-v3-section-retry>Retry</button></div>`
@@ -1194,14 +1203,18 @@ async function arenaV3LoadHistory(reset = false) {
 
 async function arenaV3LoadRanking(period = arenaV3State.rankingPeriod) {
     arenaV3State.rankingPeriod = period;
+    arenaV3State.rankingPrize = "";
     arenaV3State.sectionLoading = true;
     arenaV3State.sectionError = null;
     arenaV3Render();
     arenaV3Track("arena_ranking_open", { period });
     try {
-        arenaV3State.ranking = await arenaV3Client.ranking(period);
+        const ranking = await arenaV3Client.ranking(period);
+        arenaV3State.ranking = ranking.players;
+        arenaV3State.rankingPrize = ranking.prizeText;
     } catch (error) {
         arenaV3State.ranking = [];
+        arenaV3State.rankingPrize = "";
         arenaV3State.sectionError = error.message;
     } finally {
         arenaV3State.sectionLoading = false;
