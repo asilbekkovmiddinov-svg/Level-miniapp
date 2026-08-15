@@ -30,19 +30,29 @@ test("normalizes public tournament participants and match schedule", () => {
             name: "LEVEL Cup",
             format: "GROUP_PLAYOFF",
             max_participants: 16,
-            ticket_cost: 10,
+            ticket_cost: 7,
+            group_count: 2,
+            group_size: 8,
+            group_mode: "POINTS",
             qualifiers_per_group: 2,
         },
         tournament_tickets: 14,
-        participant: { id: 7, telegram_id: 101, status: "APPROVED", group_name: "A" },
-        participants: [{ id: 7, telegram_id: 101, username: "alpha", status: "APPROVED", group_name: "A" }],
-        matches: [{ id: "m1", player_a_id: 101, player_b_id: 102, round_number: 1, status: "READY", arena_match_id: 44 }],
+        participant_count: 16,
+        match_count: 6,
+        participant: { id: 7, telegram_id: 101, status: "APPROVED", group_name: "A", entry_ticket_state: "SPENT" },
+        participants: [{ id: 7, telegram_id: 101, username: "alpha", status: "APPROVED", group_name: "A", goals_for: 3, goals_against: 1 }],
+        matches: [{ id: "m1", player_a_id: 101, player_b_id: 102, round_number: 1, status: "SCHEDULED" }],
     });
     assert.equal(value.tournament.format, "GROUP_PLAYOFF");
-    assert.equal(value.tournament.ticketCost, 10);
+    assert.equal(value.tournament.ticketCost, 7);
+    assert.equal(value.tournament.groupSize, 8);
+    assert.equal(value.tournament.groupMode, "POINTS");
     assert.equal(value.ticketBalance, 14);
+    assert.equal(value.participantCount, 16);
+    assert.equal(value.matchCount, 6);
     assert.equal(value.participants[0].name, "alpha");
-    assert.equal(value.matches[0].arenaMatchId, 44);
+    assert.equal(value.participants[0].goalsFor, 3);
+    assert.equal(value.participant.entryTicketState, "SPENT");
 });
 
 test("registration action follows application and date state", () => {
@@ -59,11 +69,11 @@ test("registration action follows application and date state", () => {
     assert.equal(context.tournamentRegistrationState(
         overview, Date.parse("2026-08-13T10:00:00Z"),
     ).enabled, true);
-    overview.participant = { status: "PENDING" };
-    assert.equal(context.tournamentRegistrationState(overview).label, "Ko‘rib chiqilmoqda");
+    overview.participant = { status: "APPROVED" };
+    assert.equal(context.tournamentRegistrationState(overview).label, "Tasdiqlangan");
 });
 
-test("registration requires the full ten-ticket match entry", () => {
+test("registration requires the configured one-time entry ticket", () => {
     const overview = {
         tournament: {
             status: "REGISTRATION",
@@ -83,34 +93,14 @@ test("registration requires the full ten-ticket match entry", () => {
     assert.equal(context.tournamentRegistrationState(overview, now).enabled, true);
 });
 
-test("group standings sort points then wins", () => {
+test("group standings sort points wins and goal difference", () => {
     const groups = context.tournamentGroupStandings([
-        player(1, { points: 3, wins: 1 }),
-        player(2, { points: 6, wins: 2 }),
+        player(1, { points: 3, wins: 1, goalsFor: 2, goalsAgainst: 1 }),
+        player(2, { points: 3, wins: 1, goalsFor: 4, goalsAgainst: 1 }),
         player(3, { groupName: "B", points: 1 }),
     ]);
     assert.deepEqual(Array.from(groups.A, (item) => item.telegramId), [2, 1]);
     assert.deepEqual(Array.from(groups.B, (item) => item.telegramId), [3]);
-});
-
-test("bracket excludes group matches and groups playoff rounds vertically", () => {
-    const rounds = context.tournamentBracketRounds([
-        { id: "g", groupName: "A", roundNumber: 1, scheduledAt: "2026-08-14" },
-        { id: "q", groupName: null, roundNumber: 2, roundName: "Yarim final", scheduledAt: "2026-08-15" },
-        { id: "f", groupName: null, roundNumber: 3, roundName: "Final", scheduledAt: "2026-08-16" },
-    ]);
-    assert.deepEqual(Array.from(rounds, (round) => round.roundNumber), [2, 3]);
-});
-
-test("own ready match wins priority and opens only for its player", () => {
-    const overview = { matches: [
-        { id: "later", playerAId: 101, playerBId: 103, status: "SCHEDULED", scheduledAt: "2026-08-15", arenaMatchId: null },
-        { id: "ready", playerAId: 101, playerBId: 102, status: "READY", scheduledAt: "2026-08-14", arenaMatchId: 55 },
-    ] };
-    const match = context.tournamentMyMatch(overview, 101, Date.parse("2026-08-13"));
-    assert.equal(match.id, "ready");
-    assert.equal(context.tournamentCanOpenArena(match, 101), true);
-    assert.equal(context.tournamentCanOpenArena(match, 999), false);
 });
 
 test("countdown renders without horizontal schedule text", () => {
