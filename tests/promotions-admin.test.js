@@ -96,6 +96,28 @@ test("Admin API maps create, edit, delete, restore and lifecycle routes", async 
     ]);
 });
 
+test("Admin API reads and writes weekly and monthly Arena ranking prizes", async () => {
+    const calls = [];
+    const api = new PromotionsAdminApi({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "admin-init",
+        fetchImpl: async (url, options) => {
+            calls.push([url, options.method, options.body]);
+            return response(200, {});
+        },
+    });
+    await api.arenaRankingPrizes();
+    await api.updateArenaRankingPrize("weekly", "  1-o‘rin: 100 000 so‘m  ");
+    assert.deepEqual(calls, [
+        ["https://backend.example/admin/arena/ranking-prizes", "GET", undefined],
+        [
+            "https://backend.example/admin/arena/ranking-prizes/weekly",
+            "PUT",
+            JSON.stringify({ prize_text: "1-o‘rin: 100 000 so‘m" }),
+        ],
+    ]);
+});
+
 test("Admin API exposes exact 401 and 403 UX errors", async () => {
     const missing = new PromotionsAdminApi({ baseUrl: "x", initDataProvider: () => "", fetchImpl: async () => response(200, {}) });
     await assert.rejects(() => missing.list(), (error) => error.status === 401 && error.message === "Admin login required.");
@@ -109,7 +131,7 @@ test("Admin page contains dashboard, preview, confirmations and resilient states
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/promotions-admin.js"), "utf8");
     const index = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
     const app = fs.readFileSync(path.join(__dirname, "../miniapp/app.js"), "utf8");
-    for (const expected of ["Marketing CMS", "promotionsAdminStats", "promotionsAdminSearch", "promotionAdminPreview", "promotionsAdminConfirm", "promotionsAdminToast", "pac-skeleton", "pac-empty", "Qayta urinish"]) {
+    for (const expected of ["Marketing CMS", "promotionsAdminStats", "promotionsAdminSearch", "promotionAdminPreview", "promotionsAdminConfirm", "promotionsAdminToast", "pac-skeleton", "pac-empty", "Qayta urinish", "Reyting yutuqlari", "arenaWeeklyPrize", "arenaMonthlyPrize"]) {
         assert.match(source, new RegExp(expected));
     }
     for (const action of ["edit", "activate", "pause", "deactivate", "delete", "restore"]) {

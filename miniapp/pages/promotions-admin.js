@@ -1,5 +1,5 @@
 const promotionsAdminState = {
-    items: [], filter: "ALL", search: "", sort: "PRIORITY", loading: false, analytics: null, userMetrics: null, period: "7D",
+    items: [], filter: "ALL", search: "", sort: "PRIORITY", loading: false, analytics: null, userMetrics: null, arenaRankingPrizes: null, period: "7D",
 };
 
 const promotionsAdminApi = new PromotionsAdminApi({
@@ -110,6 +110,21 @@ function promotionsAnalyticsDashboard() {
         <div class="pac-kpis"><span><small>📈 Views</small><b>${s.views}</b></span><span><small>👆 Clicks</small><b>${s.clicks}</b></span><span><small>🎯 CTR</small><b>${s.ctr}%</b></span><span><small>👥 Unique Users</small><b>${s.unique_users || 0}</b></span></div>
         <div class="pac-charts">${promotionsAnalyticsChart("Daily Views", "views", "#60a5fa")}${promotionsAnalyticsChart("Daily Clicks", "clicks", "#f87171")}${promotionsAnalyticsChart("CTR Trend", "ctr", "#34d399")}</div>
         <div class="pac-rankings">${promotionsAnalyticsRank("Top Performing", "top_performing")}${promotionsAnalyticsRank("Worst Performing", "worst_performing")}${promotionsAnalyticsRank("Most Clicked", "most_clicked")}${promotionsAnalyticsRank("Highest CTR", "highest_ctr")}</div>
+    </section>`;
+}
+
+function promotionsAdminRankingPrizes() {
+    if (!promotionsAdminState.arenaRankingPrizes) return "";
+    const e = PromotionsAdminCore.escapeHtml;
+    const weekly = e(promotionsAdminState.arenaRankingPrizes.weekly || "");
+    const monthly = e(promotionsAdminState.arenaRankingPrizes.monthly || "");
+    return `<section class="pac-arena-prizes">
+        <header><div><small>ARENA • LEADERBOARD</small><h3>Reyting yutuqlari</h3><p>Haftalik va oylik reyting tepasida ko‘rinadigan yutuq matnini yozing.</p></div><span>🏆</span></header>
+        <form id="arenaRankingPrizeForm">
+            <label><span>Haftalik yutuq</span><textarea id="arenaWeeklyPrize" maxlength="500" rows="3" placeholder="Masalan: 1-o‘rin — 100 000 so‘m">${weekly}</textarea></label>
+            <label><span>Oylik yutuq</span><textarea id="arenaMonthlyPrize" maxlength="500" rows="3" placeholder="Masalan: Top 3 uchun maxsus sovrin">${monthly}</textarea></label>
+            <footer><small>Bo‘sh qoldirilsa, shu davr uchun yutuq ko‘rsatilmaydi.</small><button id="arenaRankingPrizeSave" type="submit">Saqlash</button></footer>
+        </form>
     </section>`;
 }
 
@@ -226,6 +241,7 @@ function promotionsAdminShell() {
             <button id="promotionsAdminCreate" type="button"><span>＋</span> Yangi aksiya</button>
         </section>
         ${promotionsAdminUserMetrics()}
+        ${promotionsAdminRankingPrizes()}
         <section id="promotionsAdminStats" class="pac-stats">${promotionsAdminStats()}</section>
         ${promotionsAnalyticsDashboard()}
         <section class="pac-toolbar">
@@ -268,6 +284,7 @@ function bindPromotionsAdmin() {
         promotionsAdminState.sort = event.target.value; renderPromotionsAdminList();
     });
     document.getElementById("promotionsAnalyticsExport")?.addEventListener("click", exportPromotionsAnalytics);
+    document.getElementById("arenaRankingPrizeForm")?.addEventListener("submit", saveArenaRankingPrizes);
     if (page) page.onclick = (event) => {
         const filter = event.target.closest("[data-filter]");
         if (filter) {
@@ -288,22 +305,49 @@ async function loadPromotionsAdminPage(force = false) {
     showPage("promotionsAdminPage", "Marketing CMS");
     document.body.classList.add("promotions-admin-open");
     const page = document.getElementById("promotionsAdminPage");
-    if (!force && promotionsAdminState.items.length && promotionsAdminState.analytics && promotionsAdminState.userMetrics) {
+    if (!force && promotionsAdminState.items.length && promotionsAdminState.analytics && promotionsAdminState.userMetrics && promotionsAdminState.arenaRankingPrizes) {
         page.innerHTML = promotionsAdminShell(); bindPromotionsAdmin(); renderPromotionsAdminList(); return;
     }
     page.innerHTML = promotionsAdminSkeleton();
     try {
-        const [items, analytics, userMetrics] = await Promise.all([
+        const [items, analytics, userMetrics, rankingPrizes] = await Promise.all([
             promotionsAdminApi.list(),
             promotionsAdminApi.analytics(promotionsAdminState.period),
             promotionsAdminApi.userMetrics(),
+            promotionsAdminApi.arenaRankingPrizes(),
         ]);
         promotionsAdminState.items = PromotionsAdminCore.normalizeList(items);
         promotionsAdminState.analytics = PromotionsAnalyticsCore.normalize(analytics);
         promotionsAdminState.userMetrics = userMetrics;
+        promotionsAdminState.arenaRankingPrizes = Object.fromEntries(
+            (Array.isArray(rankingPrizes) ? rankingPrizes : []).map((item) => [item.period, item.prize_text || ""]),
+        );
         page.innerHTML = promotionsAdminShell(); bindPromotionsAdmin(); renderPromotionsAdminList();
     } catch (error) {
         page.innerHTML = promotionsAdminError(error);
+    }
+}
+
+async function saveArenaRankingPrizes(event) {
+    event.preventDefault();
+    const button = document.getElementById("arenaRankingPrizeSave");
+    const weekly = document.getElementById("arenaWeeklyPrize")?.value || "";
+    const monthly = document.getElementById("arenaMonthlyPrize")?.value || "";
+    if (button) { button.disabled = true; button.textContent = "Saqlanmoqda…"; }
+    try {
+        const [weeklyResult, monthlyResult] = await Promise.all([
+            promotionsAdminApi.updateArenaRankingPrize("weekly", weekly),
+            promotionsAdminApi.updateArenaRankingPrize("monthly", monthly),
+        ]);
+        promotionsAdminState.arenaRankingPrizes = {
+            weekly: weeklyResult.prize_text || "",
+            monthly: monthlyResult.prize_text || "",
+        };
+        promotionsAdminToast("Arena reyting yutuqlari saqlandi.");
+    } catch (error) {
+        promotionsAdminToast(error.message || "Yutuqlarni saqlab bo‘lmadi.", "error");
+    } finally {
+        if (button) { button.disabled = false; button.textContent = "Saqlash"; }
     }
 }
 

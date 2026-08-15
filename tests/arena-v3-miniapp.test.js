@@ -453,14 +453,16 @@ test("Sprint 4 ranking accepts backend periods and rejects unsupported daily", a
         initDataProvider: () => "auth",
         fetchImpl: async (url) => {
             calls.push(url);
-            return response({ players: [{
+            return response({ prize_text: "1-o‘rin: 100 000 so‘m", players: [{
                 player_id: 7, rank: 1, username: "Champion",
                 total_matches: 16, wins: 12, losses: 4,
                 goals_for: 38, total_efc_won: "1440.00", win_rate: "75",
             }] });
         },
     });
-    const rows = await client.ranking("weekly");
+    const ranking = await client.ranking("weekly");
+    const rows = ranking.players;
+    assert.equal(ranking.prizeText, "1-o‘rin: 100 000 so‘m");
     assert.equal(rows[0].username, "Champion");
     assert.equal(rows[0].totalMatches, 16);
     assert.equal(rows[0].wins, 12);
