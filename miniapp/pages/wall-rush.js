@@ -1,4 +1,5 @@
 const WALL_RUSH_AD_WATERFALL = globalThis.WallRushAdWaterfall;
+const WALL_RUSH_AD_COOLDOWN_MS = 30 * 60 * 1000;
 
 class WallRushClient {
     constructor(baseUrl = API_URL) {
@@ -401,7 +402,10 @@ const wallRushController = {
     adCooldownRemainingMs() {
         const last = this.wallet?.last_rewarded_ad_at;
         if (!last) return 0;
-        return Math.max(0, new Date(last).getTime() + 3600000 - Date.now());
+        return Math.max(
+            0,
+            new Date(last).getTime() + WALL_RUSH_AD_COOLDOWN_MS - Date.now(),
+        );
     },
 
     adAvailable() {
@@ -411,7 +415,7 @@ const wallRushController = {
     adStatusText() {
         if (this.adState) return this.adState;
         const remaining = this.adCooldownRemainingMs();
-        if (remaining === 0) return "Har 1 soatda bir marta";
+        if (remaining === 0) return "Har 30 daqiqada bir marta";
         const seconds = Math.ceil(remaining / 1000);
         const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
         const rest = String(seconds % 60).padStart(2, "0");

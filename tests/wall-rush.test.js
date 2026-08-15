@@ -83,6 +83,9 @@ test("Adsgram is primary and TADS fullscreen is the verified fallback", () => {
 });
 
 test("rewarded ad cooldown shows a live mm:ss countdown", () => {
+    assert.match(source, /WALL_RUSH_AD_COOLDOWN_MS = 30 \* 60 \* 1000/);
+    assert.match(source, /Har 30 daqiqada bir marta/);
+    assert.doesNotMatch(source, /Har 1 soatda bir marta/);
     assert.match(source, /adCooldownRemainingMs\(\)/);
     assert.match(source, /Keyingi reklamagacha \$\{minutes\}:\$\{rest\}/);
     assert.match(source, /setInterval\(\(\) => this\.updateAdCountdown\(\), 1000\)/);
