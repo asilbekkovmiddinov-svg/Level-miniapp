@@ -100,6 +100,10 @@ function divisionMatchAccess(season, wallet) {
 
 function competitionTabsMarkup(active) {
     return `<nav class="competition-switch" aria-label="Arena musobaqalari">
+        <button type="button" data-competition="arena"
+            class="${active === "arena" ? "active" : ""}">
+            <span>ARENA</span><b>2 ticket</b>
+        </button>
         <button type="button" data-competition="division"
             class="${active === "division" ? "active" : ""}">
             <span>DIVISION</span><b>Global liga</b>
@@ -112,6 +116,9 @@ function competitionTabsMarkup(active) {
 }
 
 function bindCompetitionTabs(root) {
+    root.querySelector('[data-competition="arena"]')?.addEventListener(
+        "click", () => loadArenaV3Page(),
+    );
     root.querySelector('[data-competition="division"]')?.addEventListener(
         "click", () => loadDivisionPage(),
     );

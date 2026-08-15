@@ -7,7 +7,8 @@ const core = fs.readFileSync("miniapp/pages/division-core.js", "utf8");
 const css = fs.readFileSync("miniapp/tournament.css", "utf8");
 const html = fs.readFileSync("miniapp/index.html", "utf8");
 
-test("Arena exposes Division and Tournament through one mobile switch", () => {
+test("Arena exposes Arena Division and Tournament through one mobile switch", () => {
+    assert.match(core, /data-competition="arena"/);
     assert.match(core, /data-competition="division"/);
     assert.match(core, /data-competition="tournament"/);
     assert.match(page, /competitionTabsMarkup\("tournament"\)/);
