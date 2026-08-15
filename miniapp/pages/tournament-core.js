@@ -2,6 +2,10 @@ function tournamentFormatLabel(value) {
     return value === "GROUP_PLAYOFF" ? "Guruh + pley-off" : "Olimpik";
 }
 
+function tournamentGroupModeLabel(value) {
+    return value === "POINTS" ? "Ochkolik" : "Yutqazgan chiqadi";
+}
+
 function tournamentStatusLabel(value) {
     return ({
         REGISTRATION: "Ro‘yxatdan o‘tish",
@@ -27,10 +31,13 @@ function normalizeTournamentParticipant(value) {
         status: String(value.status || ""),
         seed: value.seed == null ? null : Number(value.seed),
         groupName: value.group_name || null,
+        entryTicketState: value.entry_ticket_state || null,
         played: Number(value.played) || 0,
         wins: Number(value.wins) || 0,
         losses: Number(value.losses) || 0,
         points: Number(value.points) || 0,
+        goalsFor: Number(value.goals_for) || 0,
+        goalsAgainst: Number(value.goals_against) || 0,
         advancedRound: Number(value.advanced_round) || 0,
         username: value.username || null,
         name: [value.first_name, value.last_name].filter(Boolean).join(" ")
@@ -69,6 +76,8 @@ function normalizeTournamentOverview(value) {
             maxParticipants: Number(item.max_participants) || 0,
             ticketCost: Number(item.ticket_cost) || 10,
             groupCount: item.group_count == null ? null : Number(item.group_count),
+            groupSize: item.group_size == null ? null : Number(item.group_size),
+            groupMode: item.group_mode || null,
             qualifiersPerGroup: item.qualifiers_per_group == null
                 ? null : Number(item.qualifiers_per_group),
             registrationOpensAt: item.registration_opens_at || null,
@@ -78,6 +87,11 @@ function normalizeTournamentOverview(value) {
         } : null,
         participant: normalizeTournamentParticipant(value?.participant),
         ticketBalance: Math.max(0, Number(value?.tournament_tickets) || 0),
+        participantCount: Math.max(0, Number(value?.participant_count) || 0),
+        matchCount: Math.max(0, Number(value?.match_count) || 0),
+        currentRound: Math.max(0, Number(value?.current_round) || 0),
+        totalRounds: Math.max(0, Number(value?.total_rounds) || 0),
+        isTruncated: Boolean(value?.is_truncated),
         participants: Array.isArray(value?.participants)
             ? value.participants.map(normalizeTournamentParticipant) : [],
         matches: Array.isArray(value?.matches)
@@ -128,7 +142,9 @@ function tournamentGroupStandings(participants) {
         groups[item.groupName].push(item);
     });
     Object.values(groups).forEach((rows) => rows.sort((a, b) =>
-        b.points - a.points || b.wins - a.wins || a.losses - b.losses
+        b.points - a.points || b.wins - a.wins
+        || (b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst)
+        || b.goalsFor - a.goalsFor || a.losses - b.losses
         || a.played - b.played || a.name.localeCompare(b.name)));
     return groups;
 }

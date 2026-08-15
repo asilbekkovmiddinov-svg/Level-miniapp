@@ -62,10 +62,18 @@ class TournamentAdminClient {
         });
     }
 
-    applications(tournamentId, status = "PENDING") {
+    applications(tournamentId, status = "PENDING", {
+        limit = 50, offset = 0, search = "",
+    } = {}) {
+        const query = new URLSearchParams({
+            status,
+            limit: String(Math.min(100, Math.max(1, Number(limit) || 50))),
+            offset: String(Math.max(0, Number(offset) || 0)),
+        });
+        if (String(search).trim()) query.set("search", String(search).trim());
         return this.request(
             "/admin/tournaments/" + Number(tournamentId)
-                + "/applications?status=" + encodeURIComponent(status),
+                + "/applications?" + query,
         );
     }
 
@@ -92,10 +100,17 @@ class TournamentAdminClient {
         );
     }
 
-    openMatch(tournamentId, matchId) {
+    result(tournamentId, matchId, input) {
         return this.request(
             "/admin/tournaments/" + Number(tournamentId)
-                + "/matches/" + encodeURIComponent(matchId) + "/open",
+                + "/matches/" + encodeURIComponent(matchId) + "/result",
+            { method: "PUT", body: input },
+        );
+    }
+
+    finalizeGroups(tournamentId) {
+        return this.request(
+            "/admin/tournaments/" + Number(tournamentId) + "/groups/finalize",
             { method: "POST" },
         );
     }
@@ -106,6 +121,7 @@ class TournamentAdminClient {
             { method: "POST" },
         );
     }
+
 }
 
 const tournamentAdminApi = new TournamentAdminClient();

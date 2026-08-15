@@ -32,7 +32,7 @@ function response(payload, status = 200) {
     };
 }
 
-test("creates Olympic tournament with null group settings", async () => {
+test("creates configurable simple group tournament", async () => {
     let request;
     const client = loadClient(async (url, options) => {
         request = { url, options };
@@ -40,50 +40,72 @@ test("creates Olympic tournament with null group settings", async () => {
     });
     await client.create({
         name: "LEVEL Cup",
-        format: "SINGLE_ELIMINATION",
-        max_participants: 16,
-        ticket_cost: 10,
+        format: "GROUP_PLAYOFF",
+        max_participants: 64,
+        ticket_cost: 7,
         group_count: null,
-        qualifiers_per_group: null,
+        group_size: 8,
+        group_mode: "ELIMINATION",
+        qualifiers_per_group: 2,
         registration_opens_at: "2026-08-13T10:00:00Z",
         registration_closes_at: "2026-08-14T10:00:00Z",
         starts_at: "2026-08-15T10:00:00Z",
         ends_at: "2026-08-22T10:00:00Z",
     });
-    assert.equal(request.url, "https://api.example/admin/tournaments");
     const body = JSON.parse(request.options.body);
-    assert.equal(body.format, "SINGLE_ELIMINATION");
-    assert.equal(body.ticket_cost, 10);
-    assert.equal(body.group_count, null);
+    assert.equal(body.ticket_cost, 7);
+    assert.equal(body.group_size, 8);
+    assert.equal(body.group_mode, "ELIMINATION");
+    assert.equal(body.qualifiers_per_group, 2);
 });
 
-test("sends group assignment in approval decision", async () => {
+test("loads approved participants with bounded search pagination", async () => {
     let request;
     const client = loadClient(async (url, options) => {
         request = { url, options };
-        return response({ id: 8, status: "APPROVED" });
+        return response([]);
     });
-    await client.decide(4, 8, {
-        decision: "APPROVED",
-        group_name: "A",
+    await client.applications(4, "APPROVED", {
+        limit: 100, offset: 100, search: "alpha",
     });
-    assert.match(request.url, /\/admin\/tournaments\/4\/applications\/8\/decision/);
-    assert.deepEqual(JSON.parse(request.options.body), {
-        decision: "APPROVED",
-        group_name: "A",
-    });
+    assert.match(request.url, /status=APPROVED/);
+    assert.match(request.url, /limit=100/);
+    assert.match(request.url, /offset=100/);
+    assert.match(request.url, /search=alpha/);
 });
 
-test("opens scheduled match through admin endpoint", async () => {
+test("admin writes or edits match result directly", async () => {
     let request;
     const client = loadClient(async (url, options) => {
         request = { url, options };
-        return response({ id: "match-1", status: "READY" });
+        return response({ id: "match-1", status: "FINISHED" });
     });
-    await client.openMatch(5, "match-1");
+    await client.result(5, "match-1", {
+        player_a_score: 3,
+        player_b_score: 1,
+    });
     assert.equal(
         request.url,
-        "https://api.example/admin/tournaments/5/matches/match-1/open",
+        "https://api.example/admin/tournaments/5/matches/match-1/result",
+    );
+    assert.equal(request.options.method, "PUT");
+    assert.deepEqual(JSON.parse(request.options.body), {
+        player_a_score: 3,
+        player_b_score: 1,
+    });
+});
+
+test("admin finalizes group qualifiers", async () => {
+    let request;
+    const client = loadClient(async (url, options) => {
+        request = { url, options };
+        return response({ qualified_players: 16 });
+    });
+    const result = await client.finalizeGroups(5);
+    assert.equal(
+        request.url,
+        "https://api.example/admin/tournaments/5/groups/finalize",
     );
     assert.equal(request.options.method, "POST");
+    assert.equal(result.qualified_players, 16);
 });

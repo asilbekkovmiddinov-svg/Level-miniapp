@@ -28,12 +28,12 @@ function tournamentHero(overview) {
             <b class="status-${divisionEscape(item.status.toLowerCase())}">${tournamentStatusLabel(item.status)}</b>
         </header>
         <h2>${divisionEscape(item.name)}</h2>
-        <p>${tournamentFormatLabel(item.format)} formatida. Har matchda penalti majburiy, durang yo‘q.</p>
+        <p>${tournamentGroupModeLabel(item.groupMode)} · ${item.groupSize} kishilik guruhlar · natijani admin yozadi.</p>
         <div class="tournament-facts">
-            <article><small>FORMAT</small><strong>${tournamentFormatLabel(item.format)}</strong></article>
-            <article><small>ISHTIROKCHI</small><strong>${overview.participants.length}/${item.maxParticipants}</strong></article>
-            <article><small>MATCH</small><strong>${overview.matches.length}</strong></article>
-            <article><small>KIRISH</small><strong>${item.ticketCost} ticket</strong></article>
+            <article><small>QATNASHUVCHI</small><strong>${overview.participantCount}/${item.maxParticipants}</strong></article>
+            <article><small>GURUH</small><strong>${item.groupCount} × ${item.groupSize}</strong></article>
+            <article><small>CHIQADI</small><strong>${item.qualifiersPerGroup} o‘yinchi</strong></article>
+            <article><small>QATNASHISH</small><strong>${item.ticketCost} ticket</strong></article>
         </div>
         <footer><span>Ro‘yxat yopiladi</span><b>${tournamentDate(item.registrationClosesAt)}</b></footer>
     </section>`;
@@ -44,17 +44,17 @@ function tournamentApplication(overview) {
     const action = tournamentRegistrationState(overview);
     const assignment = participant?.groupName
         ? `Guruh ${divisionEscape(participant.groupName)}`
-        : participant?.seed ? `Seed #${participant.seed}` : "Taqsimot kutilmoqda";
+        : "Turnir boshlanganda guruh beriladi";
     return `<section class="tournament-card tournament-application">
-        <header><div><small>QATNASHISH</small><h3>Turnir arizasi</h3></div>
+        <header><div><small>QATNASHISH</small><h3>Turnir joyi</h3></div>
             ${participant ? `<b class="participant-${divisionEscape(participant.status.toLowerCase())}">
                 ${tournamentStatusLabel(participant.status)}</b>` : ""}
         </header>
         <p>${participant
-            ? `Sizning joylashuvingiz: <strong>${assignment}</strong>. Admin qarori va jadval shu sahifada yangilanadi.`
-            : `Ariza yuboring. Admin tasdiqlagach seed yoki guruhingiz va raqibingiz ko‘rinadi.`}</p>
+            ? `Joyingiz band qilindi. ${assignment}. Qatnashish ticketi bir marta olindi.`
+            : `Qatnashish uchun ${overview.tournament.ticketCost} ticket bir marta olinadi. Har matchda ticket olinmaydi.`}</p>
         <div class="tournament-ticket-balance"><span>Sizdagi Tournament Ticket</span>
-            <strong>${overview.ticketBalance}/${overview.tournament.ticketCost}</strong></div>
+            <strong>${overview.ticketBalance}</strong></div>
         <button class="tournament-primary" data-tournament-apply
             ${action.enabled ? "" : "disabled"}>${divisionEscape(action.label)}</button>
     </section>`;
@@ -79,26 +79,18 @@ function tournamentMyMatchCard(overview) {
     const match = tournamentMyMatch(overview, TELEGRAM_ID);
     if (!match) return `<section class="tournament-card tournament-my-match">
         <small>NAVBATDAGI MATCH</small><h3>Jadval kutilmoqda</h3>
-        <p>Admin raqib va vaqtni biriktirgach shu yerda ko‘rinadi.</p>
+        <p>Admin raqibingiz va match vaqtini belgilaydi.</p>
     </section>`;
-    const isMine = [match.playerAId, match.playerBId].includes(Number(TELEGRAM_ID));
-    const opponentId = match.playerAId === Number(TELEGRAM_ID)
-        ? match.playerBId : match.playerAId;
-    const opponent = tournamentPlayerName(overview.participants, opponentId);
-    const canEnter = isMine && match.arenaMatchId
-        && ["READY", "PLAYING"].includes(match.status);
     return `<section class="tournament-card tournament-my-match">
         <header><div><small>SIZNING MATCHINGIZ</small><h3>${divisionEscape(match.roundName)}</h3></div>
             <b class="match-${divisionEscape(match.status.toLowerCase())}">${tournamentStatusLabel(match.status)}</b></header>
-        <div class="tournament-opponent"><span>Raqib</span><strong>${divisionEscape(opponent)}</strong></div>
         ${tournamentMatchPlayers(match, overview.participants, TELEGRAM_ID)}
         <div class="tournament-match-time"><span>📅 ${tournamentDate(match.scheduledAt)}</span>
             <b data-tournament-countdown="${divisionEscape(match.scheduledAt)}">
                 ${tournamentCountdown(match.scheduledAt)}</b></div>
-        ${canEnter ? `<button class="tournament-primary arena-ready" data-tournament-arena>
-            ${match.status === "PLAYING" ? "Matchni davom ettirish" : "Arena matchini ochish"}</button>`
-            : `<button class="tournament-primary" disabled>${match.status === "SCHEDULED"
-                ? "Admin Arena’da ochishini kuting" : tournamentStatusLabel(match.status)}</button>`}
+        <p class="tournament-manual-note">${match.status === "FINISHED"
+            ? "Natija admin tomonidan kiritildi."
+            : "Belgilangan vaqtda eFootball’da o‘ynang. Natijani admin kiritadi."}</p>
     </section>`;
 }
 
@@ -107,50 +99,34 @@ function tournamentPersonal(overview) {
     if (!participant || !["APPROVED", "ELIMINATED", "WITHDRAWN"].includes(participant.status)) {
         return "";
     }
-    const assignment = participant.groupName
-        ? `<span>GURUH<strong>${divisionEscape(participant.groupName)}</strong></span>`
-        : `<span>SEED<strong>#${participant.seed || "—"}</strong></span>`;
     return `<section class="tournament-personal">
-        ${assignment}<span>O‘YIN<strong>${participant.played}</strong></span>
+        <span>GURUH<strong>${divisionEscape(participant.groupName || "—")}</strong></span>
+        <span>O‘YIN<strong>${participant.played}</strong></span>
         <span>G‘ALABA<strong>${participant.wins}</strong></span>
         <span>OCHKO<strong>${participant.points}</strong></span>
     </section>${tournamentMyMatchCard(overview)}`;
 }
 
 function tournamentGroupTables(overview) {
-    if (overview.tournament.format !== "GROUP_PLAYOFF") return "";
     const groups = tournamentGroupStandings(overview.participants);
     const names = Object.keys(groups).sort();
-    return `<section class="tournament-section"><header><div><small>GROUP STAGE</small><h3>Guruh reytingi</h3></div>
-        <b>${overview.tournament.qualifiersPerGroup} ta yo‘llanma</b></header>
+    const isPoints = overview.tournament.groupMode === "POINTS";
+    return `<section class="tournament-section"><header><div>
+        <small>GROUPS · ${divisionEscape(tournamentGroupModeLabel(overview.tournament.groupMode))}</small>
+        <h3>Guruhlar</h3></div>
+        <b>Top ${overview.tournament.qualifiersPerGroup} chiqadi</b></header>
         ${names.length ? `<div class="tournament-groups">${names.map((name) => `
             <article class="tournament-group"><h4>Guruh ${divisionEscape(name)}</h4>
-                <div class="tournament-standing-head"><span>#</span><span>O‘yinchi</span><span>O‘</span><span>G‘</span><span>Ochko</span></div>
+                <div class="tournament-standing-head"><span>#</span><span>O‘yinchi</span><span>O‘</span><span>G‘</span><span>${isPoints ? "Ochko" : "Holat"}</span></div>
                 ${groups[name].map((row, index) => `<div class="tournament-standing-row
                     ${row.telegramId === Number(TELEGRAM_ID) ? "is-me" : ""}
                     ${index < overview.tournament.qualifiersPerGroup ? "is-qualified" : ""}">
                     <span>${index + 1}</span><b>${divisionEscape(row.name)}</b>
-                    <span>${row.played}</span><span>${row.wins}</span><strong>${row.points}</strong>
+                    <span>${row.played}</span><span>${row.wins}</span>
+                    <strong>${isPoints ? row.points : row.status === "ELIMINATED" ? "OUT" : "IN"}</strong>
                 </div>`).join("")}
             </article>`).join("")}</div>`
-            : '<div class="tournament-empty">Guruhlar hali shakllanmagan.</div>'}
-    </section>`;
-}
-
-function tournamentBracket(overview) {
-    const rounds = tournamentBracketRounds(overview.matches);
-    const title = overview.tournament.format === "GROUP_PLAYOFF"
-        ? "Pley-off bracket" : "Olimpik bracket";
-    return `<section class="tournament-section tournament-bracket"><header><div>
-        <small>KNOCKOUT</small><h3>${title}</h3></div><b>Durang yo‘q</b></header>
-        ${rounds.length ? `<div class="tournament-rounds">${rounds.map((round) => `
-            <article class="tournament-round"><h4><span>${round.roundNumber}</span>${divisionEscape(round.name)}</h4>
-                ${round.matches.map((match) => `<div class="tournament-bracket-match">
-                    ${tournamentMatchPlayers(match, overview.participants, TELEGRAM_ID)}
-                    <footer><span>${tournamentDate(match.scheduledAt)}</span>
-                        <b>${tournamentStatusLabel(match.status)}</b></footer>
-                </div>`).join("")}</article>`).join("")}</div>`
-            : '<div class="tournament-empty">Bracket matchlari hali kiritilmagan.</div>'}
+            : '<div class="tournament-empty">Turnir boshlanganda guruhlar ko‘rinadi.</div>'}
     </section>`;
 }
 
@@ -158,7 +134,7 @@ function tournamentSchedule(overview) {
     const matches = [...overview.matches].sort((a, b) =>
         new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
     return `<section class="tournament-section tournament-schedule"><header><div>
-        <small>FULL SCHEDULE</small><h3>O‘yinlar va natijalar</h3></div><b>${matches.length} match</b></header>
+        <small>ADMIN SCHEDULE</small><h3>O‘yinlar va natijalar</h3></div><b>${overview.matchCount} match</b></header>
         ${matches.length ? `<div>${matches.map((match) => `<article>
             <header><span>${divisionEscape(match.roundName)}${match.groupName
                 ? ` · Guruh ${divisionEscape(match.groupName)}` : ""}</span>
@@ -166,7 +142,7 @@ function tournamentSchedule(overview) {
             ${tournamentMatchPlayers(match, overview.participants, TELEGRAM_ID)}
             <footer>${tournamentDate(match.scheduledAt)}</footer>
         </article>`).join("")}</div>`
-            : '<div class="tournament-empty">Match jadvali hali e’lon qilinmagan.</div>'}
+            : '<div class="tournament-empty">Admin hali match vaqtlarini belgilamagan.</div>'}
     </section>`;
 }
 
@@ -177,14 +153,13 @@ function tournamentRender() {
     if (!overview?.tournament) {
         root.innerHTML = tournamentPageMarkup(`<section class="tournament-card tournament-empty-state">
             <span>🏆</span><small>LEVEL_GROUP TURNIRLARI</small><h2>Yangi turnir tez orada</h2>
-            <p>Admin yangi kubok e’lon qilganda ariza shu sahifada ochiladi.</p>
+            <p>Admin turnir yaratganda qatnashish shu sahifada ochiladi.</p>
             <button class="tournament-secondary" data-tournament-retry>Yangilash</button>
         </section>`);
     } else {
         root.innerHTML = tournamentPageMarkup(`${tournamentHero(overview)}
             ${tournamentApplication(overview)}${tournamentPersonal(overview)}
-            ${tournamentGroupTables(overview)}${tournamentBracket(overview)}
-            ${tournamentSchedule(overview)}`);
+            ${tournamentGroupTables(overview)}${tournamentSchedule(overview)}`);
     }
     tournamentBind(root);
     tournamentStartCountdown();
@@ -194,10 +169,6 @@ function tournamentBind(root) {
     bindCompetitionTabs(root);
     root.querySelector("[data-tournament-retry]")?.addEventListener("click", loadTournamentPage);
     root.querySelector("[data-tournament-apply]")?.addEventListener("click", tournamentApply);
-    root.querySelector("[data-tournament-arena]")?.addEventListener("click", async () => {
-        tournamentStopTimers();
-        await loadArenaV3Page();
-    });
 }
 
 function tournamentStartCountdown() {
@@ -238,13 +209,12 @@ async function tournamentApply() {
     tournamentState.busy = true;
     Loader.show();
     try {
-        tournamentState.overview.participant = await tournamentApiClient.apply(
-            tournamentState.overview.tournament.id,
-        );
+        await tournamentApiClient.apply(tournamentState.overview.tournament.id);
+        tournamentState.overview = await tournamentApiClient.overview();
         tournamentRender();
-        Modal.alert("Turnir", "Arizangiz adminga yuborildi.");
+        Modal.alert("Turnir", "Joyingiz band qilindi. Qatnashish ticketi bir marta olindi.");
     } catch (error) {
-        Modal.error(error?.message || "Ariza yuborilmadi.");
+        Modal.error(error?.message || "Turnirga qo‘shilib bo‘lmadi.");
     } finally {
         tournamentState.busy = false;
         Loader.hide();
