@@ -53,8 +53,11 @@ class ArenaV3Client {
                 500: "Arena serverida vaqtinchalik xatolik.",
                 503: "Arena vaqtincha mavjud emas.",
             };
+            const ticketDetail = typeof payload?.detail === "string"
+                && payload.detail.includes("Tournament Ticket")
+                ? payload.detail : null;
             throw new ArenaV3ClientError(
-                safeMessages[response.status] || "Arena so‘rovi bajarilmadi.",
+                ticketDetail || safeMessages[response.status] || "Arena so‘rovi bajarilmadi.",
                 response.status,
             );
         }
@@ -83,7 +86,7 @@ class ArenaV3Client {
             idempotencyKey: arenaV3Key("create"),
             body: {
                 owner_efootball_username: input.username,
-                stake_efc: input.stake,
+                stake_efc: 0,
                 match_type: input.matchType,
                 match_time_minutes: input.matchTime,
                 extra_time_enabled: false,
@@ -377,6 +380,9 @@ function normalizeArenaV3Match(value) {
         totalPool: String(value.total_pool_efc ?? "0"),
         commission: String(value.commission_efc ?? "0"),
         winnerReward: String(value.winner_reward_efc ?? "0"),
+        ticketCost: Number(value.ticket_cost) || 0,
+        ownerTicketState: value.owner_ticket_state || null,
+        opponentTicketState: value.opponent_ticket_state || null,
         matchType: value.match_type || "STANDARD",
         matchTime: Number(value.match_time_minutes) || 10,
         status: value.status,
@@ -554,7 +560,7 @@ function arenaV3Hero() {
     return `<header class="arena-v3x-hero">
         <div class="arena-v3x-brand"><span>LEVEL</span><b>ARENA</b><i>V4</i></div>
         <section><small>WELCOME TO THE NEXT LEVEL</small><h2>Battle. Prove. Win.</h2>
-            <p>eFootball 1v1 — admin tomonidan tekshirilgan xavfsiz natija.</p></section>
+            <p>eFootball 1v1 · har bir o‘yinchi uchun 2 Tournament Ticket · EFC stavkasiz.</p></section>
         <footer><span class="arena-v3x-user-avatar">${arenaV3Initial(name)}</span>
             <div><small>PLAYER</small><strong>${arenaV3Escape(name)}</strong></div>
             <i class="arena-v3x-live-dot"></i><b>ONLINE</b></footer>
@@ -563,10 +569,18 @@ function arenaV3Hero() {
 
 function arenaV3Shell(content) {
     return `<div class="arena-v3x">
+        ${typeof competitionTabsMarkup === "function" ? competitionTabsMarkup("arena") : ""}
         ${arenaV3Hero()}
         <div class="arena-v3x-pull" aria-hidden="true"><span>↓</span><small>Yangilash uchun torting</small></div>
         ${content}
     </div>`;
+}
+
+function arenaV3EntryLabel(match) {
+    if (Number(match?.ticketCost) > 0) return `${Number(match.ticketCost)} TICKET`;
+    if (match?.matchType === "DIVISION") return "1 TICKET";
+    if (match?.matchType === "TOURNAMENT") return "10 TICKET";
+    return `${arenaV3Escape(match?.stake || "0")} EFC`;
 }
 
 function arenaV3MatchCard(match) {
@@ -574,7 +588,7 @@ function arenaV3MatchCard(match) {
         <header><span class="arena-v3x-avatar">${arenaV3Initial(match.ownerUsername)}</span>
             <section><small>CREATOR</small><strong>${arenaV3Escape(match.ownerUsername)}</strong>
                 <em>${arenaV3Escape(arenaV3Date(match.createdAt))}</em></section>
-            <b>${arenaV3Escape(match.stake)} <small>EFC</small></b></header>
+            <b>${arenaV3EntryLabel(match)}</b></header>
         <div><span><i>◆</i>${arenaV3Escape(match.matchType)}</span>
             <span><i>◷</i>${match.matchTime} min</span>
             <span><i>●</i>OPEN</span></div>
@@ -627,10 +641,8 @@ function arenaV3CreateView() {
             <label><span>eFootball username</span>
                 <input name="username" maxlength="64" required autocomplete="off"
                     value="${arenaV3Escape(arenaV3StoredUsername())}" placeholder="Masalan: ASILBEK_FC"></label>
-            <fieldset><legend>Stake</legend><div class="arena-v3x-choice" data-choice="stake">
-                ${[100, 500, 1000, 5000].map((value, index) =>
-                    `<button type="button" class="${index === 0 ? "is-selected" : ""}" data-value="${value}">${value}<small>EFC</small></button>`).join("")}
-            </div></fieldset>
+            <div class="arena-v3x-rules"><span>🎟</span><p><b>2 Tournament Ticket</b><br>
+                Har bir o‘yinchidan match boshlanganda 2 ta ticket olinadi.</p></div>
             <fieldset><legend>Match type</legend><div class="arena-v3x-choice" data-choice="type">
                 <button type="button" class="is-selected" data-value="STANDARD">Standard<small>1 VS 1</small></button>
             </div></fieldset>
@@ -664,7 +676,7 @@ function arenaV3MatchDetailView() {
         <article class="arena-v3x-detail-card">
             <span class="arena-v3x-avatar arena-v3x-avatar--large">${arenaV3Initial(match.ownerUsername)}</span>
             <small>CREATOR</small><h3>${arenaV3Escape(match.ownerUsername)}</h3>
-            <div><span>Stake<b>${arenaV3Escape(match.stake)} EFC</b></span>
+            <div><span>Kirish narxi<b>${arenaV3EntryLabel(match)}</b></span>
                 <span>Match Type<b>${arenaV3Escape(match.matchType)}</b></span>
                 <span>Match Time<b>${match.matchTime} MIN</b></span>
                 <span>Created<b>${arenaV3Escape(arenaV3Date(match.createdAt))}</b></span></div>
@@ -774,7 +786,8 @@ function arenaV3ResultPanel(match) {
         ? match.ownerResultConfirmedAt : match.opponentResultConfirmedAt;
     const bothConfirmed = match.ownerResultConfirmedAt && match.opponentResultConfirmedAt;
     const isDivision = match.matchType === "DIVISION";
-    const locked = !isDivision && match.rewardHoldStatus === "LOCKED";
+    const isTicketArena = match.matchType === "STANDARD" && Number(match.ticketCost) > 0;
+    const locked = !isDivision && !isTicketArena && match.rewardHoldStatus === "LOCKED";
     return `<section class="arena-v3x-stage-card arena-v3x-result">
         <div class="arena-v3x-result-crown">♛</div><small>YAKUNIY NATIJA</small>
         <h3>${arenaV3Escape(title)}</h3><p>${arenaV3Escape(winner || "—")}</p>
@@ -782,6 +795,8 @@ function arenaV3ResultPanel(match) {
         <div><span>Hisob<b>${arenaV3Escape(`${match.ownerScore ?? "—"} : ${match.opponentScore ?? "—"}`)}</b></span>
             ${isDivision ? `<span>Division ochko<b>${ownWon ? "+3" : "0"}</b></span>
             <span>Ticket<b>1 sarflandi</b></span><span>Status<b>ADMIN VERIFIED</b></span>`
+            : isTicketArena ? `<span>Ticket<b>${match.ticketCost} sarflandi</b></span>
+            <span>Reward<b>Reyting natijasi</b></span><span>Status<b>ADMIN VERIFIED</b></span>`
             : `<span>Reward<b>${arenaV3Escape(ownWon ? match.winnerReward : cancelled ? match.stake : "0")} EFC</b></span>
             <span>Platform fee<b>${arenaV3Escape(match.commission)} EFC</b></span>
             <span>Status<b>${arenaV3Escape(match.rewardHoldStatus)}</b></span>`}</div>
@@ -793,7 +808,7 @@ function arenaV3ResultPanel(match) {
             <button class="arena-v3x-primary" data-arena-v3-confirm-result>✅ Ha, natija to‘g‘ri</button>
             <button class="arena-v3x-secondary" data-arena-v3-reject-result>❌ Yo‘q, natija noto‘g‘ri</button></section>
             <p class="arena-v3x-confirm-warning">Ikkala o‘yinchi tasdiqlagach reward darhol ochiladi. Javob bo‘lmasa 30 daqiqada avtomatik ochiladi.</p>` : ""}
-        ${isDivision && arenaV3CanAppeal(match) && !match.hasAppeal ? `<button class="arena-v3x-secondary" data-arena-v3-reject-result>⚠ Natijaga e’tiroz bildirish</button>` : ""}
+        ${(isDivision || isTicketArena) && arenaV3CanAppeal(match) && !match.hasAppeal ? `<button class="arena-v3x-secondary" data-arena-v3-reject-result>⚠ Natijaga e’tiroz bildirish</button>` : ""}
         ${ownConfirmed && !bothConfirmed ? `<p class="arena-v3x-uploaded-note">✓ Siz tasdiqladingiz · Raqib kutilmoqda</p>` : ""}
         ${bothConfirmed ? `<p class="arena-v3x-uploaded-note">✓ Ikkala o‘yinchi tasdiqladi</p>` : ""}
         ${match.hasAppeal ? `<p class="arena-v3x-uploaded-note">⚠ Appeal admin ko‘rib chiqishida</p>` : arenaV3AppealForm(match)}
@@ -824,8 +839,7 @@ function arenaV3ProfileView() {
         ["Total Matches", profile.totalMatches], ["Wins", profile.wins], ["Losses", profile.losses],
         ["Win Rate", `${profile.winRate}%`], ["Goals For", profile.goalsFor],
         ["Goals Against", profile.goalsAgainst], ["Current Streak", profile.currentStreak],
-        ["Best Streak", profile.bestStreak], ["Total EFC Won", profile.totalEfcWon],
-        ["Total EFC Lost", profile.totalEfcLost],
+        ["Best Streak", profile.bestStreak],
     ];
     return `<section class="arena-v3x-panel arena-v3x-profile">${arenaV3PanelHeader("PLAYER", "Arena Profile")}
         <article class="arena-v3x-profile-identity">${arenaV3Avatar(name, user.photo_url)}
@@ -835,7 +849,7 @@ function arenaV3ProfileView() {
             <strong>${arenaV3Escape(arenaV3StoredUsername() || "Kiritilmagan")}</strong>
             <small>Backend tahrirlash endpointi mavjud bo‘lganda edit ochiladi.</small></article>
         <div class="arena-v3x-v4-summary">
-            <article><span>🔒</span><small>Locked Rewards</small><b>${arenaV3Escape(profile.lockedRewardsEfc)} EFC</b></article>
+            <article><span>🎟</span><small>Arena narxi</small><b>2 ticket</b></article>
             <article><span>⚠</span><small>Pending Appeal</small><b>${arenaV3Escape(profile.pendingAppeals)}</b></article>
         </div>
         <div class="arena-v3x-stats">${stats.map(([label, value]) =>
@@ -853,6 +867,7 @@ function arenaV3HistoryCard(match) {
         ? `${match.ownerScore} : ${match.opponentScore}` : "—";
     const ownWon = Number(match.winnerId) === ownId;
     const isDivision = match.matchType === "DIVISION";
+    const isTicketArena = match.matchType === "STANDARD" && Number(match.ticketCost) > 0;
     const reward = ownWon ? match.winnerReward
         : match.currentResultType === "CANCEL" ? match.stake : "0";
     return `<article class="arena-v3x-history-card">
@@ -862,6 +877,7 @@ function arenaV3HistoryCard(match) {
             <b>${arenaV3Escape(score)}</b></header>
         <div><span>Winner<b>${arenaV3Escape(winner || "—")}</b></span>
             ${isDivision ? `<span>Ochko<b>${ownWon ? "+3" : "0"}</b></span><span>Tur<b>DIVISION</b></span>`
+            : isTicketArena ? `<span>Ticket<b>${match.ticketCost} sarflandi</b></span><span>Tur<b>ARENA</b></span>`
             : `<span>Reward<b>${arenaV3Escape(reward)} EFC</b></span><span>Fee<b>${arenaV3Escape(match.commission)} EFC</b></span>`}
             <span>Appeal<b>${match.hasAppeal ? "Pending" : arenaV3CanAppeal(match) ? "Available" : "Closed"}</b></span></div>
         <footer><b>🛡 ADMIN VERIFIED</b><button data-arena-v3-history-result="${match.id}">Natijani ko‘rish</button></footer>
@@ -903,7 +919,7 @@ function arenaV3RankingView() {
                         <span><small>G‘alaba</small><b>${row.wins}</b></span>
                         <span><small>Mag‘lubiyat</small><b>${row.losses}</b></span>
                         <span><small>Gollar</small><b>${row.goalsFor}</b></span>
-                        <span class="is-efc"><small>Yutilgan EFC</small><b>${arenaV3Escape(row.totalEfcWon)} EFC</b></span>
+                        <span><small>Win rate</small><b>${row.winRate}%</b></span>
                     </div>
                 </article>`).join("")}</div>
               ${!arenaV3State.ranking.length ? `<div class="arena-v3x-empty"><span>♛</span><h4>Ranking bo‘sh</h4></div>` : ""}`}
@@ -976,7 +992,7 @@ function arenaV3ActiveView() {
         <article class="arena-v3x-versus">
             <section><span class="arena-v3x-avatar">${arenaV3Initial(match.ownerUsername)}</span>
                 <strong>${arenaV3Escape(match.ownerUsername)}</strong><small>OWNER</small></section>
-            <div><span>VS</span><b>${match.matchType === "DIVISION" ? "1 TICKET" : arenaV3Escape(match.stake) + " EFC"}</b></div>
+            <div><span>VS</span><b>${arenaV3EntryLabel(match)}</b></div>
             <section><span class="arena-v3x-avatar">${arenaV3Initial(match.opponentUsername || "?")}</span>
                 <strong>${arenaV3Escape(match.opponentUsername || "Raqib kutilmoqda")}</strong><small>OPPONENT</small></section>
         </article>
@@ -1462,7 +1478,7 @@ async function arenaV3CreateSubmit(form) {
     try {
         const match = await arenaV3Client.create({
             username,
-            stake: Number(selected("stake")),
+            stake: 0,
             matchType: selected("type"),
             matchTime: Number(selected("time")),
         });
@@ -1488,7 +1504,7 @@ function arenaV3JoinModal(matchId) {
     modal.innerHTML = `<section role="dialog" aria-modal="true" aria-labelledby="arenaV3JoinTitle">
         <button type="button" data-close aria-label="Yopish">×</button><span>⚔</span>
         <small>JOIN BATTLE</small><h3 id="arenaV3JoinTitle">${arenaV3Escape(match.ownerUsername)}</h3>
-        <p>${arenaV3Escape(match.stake)} EFC · ${match.matchTime} MIN</p>
+        <p>${arenaV3EntryLabel(match)} · ${match.matchTime} MIN</p>
         <label><span>Sizning eFootball username</span><input maxlength="64" value="${arenaV3Escape(arenaV3StoredUsername())}" placeholder="USERNAME"></label>
         <button class="arena-v3x-primary" type="button" data-confirm>Join Match <i>→</i></button>
     </section>`;
@@ -1528,6 +1544,7 @@ function arenaV3JoinModal(matchId) {
 }
 
 function arenaV3Bind(page) {
+    if (typeof bindCompetitionTabs === "function") bindCompetitionTabs(page);
     page.querySelectorAll("[data-arena-v3-view]").forEach((button) =>
         button.addEventListener("click", () => arenaV3Select(button.dataset.arenaV3View)));
     page.querySelectorAll("[data-arena-v3-back]").forEach((button) =>

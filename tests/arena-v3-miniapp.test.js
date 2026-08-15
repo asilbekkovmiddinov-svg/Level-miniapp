@@ -119,13 +119,13 @@ test("Arena V3 create sends validated architecture fields and idempotency", asyn
             return response(match);
         },
     });
-    await client.create({ username: "LEVEL_FC", stake: 500, matchType: "STANDARD", matchTime: 10 });
+    await client.create({ username: "LEVEL_FC", stake: 0, matchType: "STANDARD", matchTime: 10 });
     assert.equal(request.url, "/arena/create");
     assert.equal(request.options.method, "POST");
     assert.match(request.options.headers["Idempotency-Key"], /^arena-v3-create-/);
     assert.deepEqual(JSON.parse(request.options.body), {
         owner_efootball_username: "LEVEL_FC",
-        stake_efc: 500,
+        stake_efc: 0,
         match_type: "STANDARD",
         match_time_minutes: 10,
         extra_time_enabled: false,
@@ -548,7 +548,7 @@ test("Arena surfaces contain result confirmation, ranking rows, appeal and analy
     assert.match(source, /G‘alaba/);
     assert.match(source, /Mag‘lubiyat/);
     assert.match(source, /Gollar/);
-    assert.match(source, /Yutilgan EFC/);
+    assert.match(source, /2 Tournament Ticket/);
     assert.match(css, /arena-v3x-rank-table/);
     assert.match(css, /arena-v3x-history-card/);
     assert.match(css, /arena-v3x-stats/);

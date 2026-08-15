@@ -116,7 +116,7 @@ async function openPage(page, options = {}) {
         case "shop": await loadShopPage(options); break;
         case "p2p": await loadP2PPage(); break;
         case "wheel": await loadWheelPage(); break;
-        case "arena": if (divisionUiEnabled()) await loadDivisionPage(); else Modal.alert("Arena", "Tez orada"); break;
+        case "arena": await loadArenaV3Page(); break;
         case "wall-rush": await loadWallRushPage(); break;
         case "orders": await loadOrdersPage(); break;
         case "profile": await loadProfilePage(); break;
