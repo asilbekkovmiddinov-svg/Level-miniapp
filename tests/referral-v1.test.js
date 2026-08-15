@@ -32,6 +32,18 @@ test("referral summary normalizes the authenticated backend contract", () => {
     assert.throws(() => normalizeReferralSummary({ success: true, data: { referral_link: "javascript:alert(1)" } }));
 });
 
+test("disabled referral contract renders Tez orada without an invite link", () => {
+    assert.deepEqual(
+        normalizeReferralSummary({ success: true, data: { enabled: false, referral_link: null } }),
+        { enabled: false },
+    );
+    const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/referral.js"), "utf8");
+    assert.match(source, /renderReferralComingSoon/);
+    assert.match(source, /Tez orada/);
+    assert.match(source, /yangi referallar qo‘shilmaydi/);
+    assert.match(source, /if \(!referralData\.enabled\)/);
+});
+
 test("referral API uses walletRequest without telegram_id", () => {
     const api = fs.readFileSync(path.join(__dirname, "../miniapp/api.js"), "utf8");
     const referral = fs.readFileSync(path.join(__dirname, "../miniapp/pages/referral.js"), "utf8");
