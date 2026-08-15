@@ -7,7 +7,11 @@ function referralNumber(value) {
 
 function normalizeReferralSummary(payload) {
     const data = payload?.data;
-    if (!payload?.success || !data || typeof data.referral_link !== "string") {
+    if (!payload?.success || !data) {
+        throw new Error("Referral ma’lumotlari noto‘g‘ri formatda olindi.");
+    }
+    if (data.enabled === false) return { enabled: false };
+    if (typeof data.referral_link !== "string") {
         throw new Error("Referral ma’lumotlari noto‘g‘ri formatda olindi.");
     }
     const link = data.referral_link.trim();
@@ -28,6 +32,7 @@ function normalizeReferralSummary(payload) {
         throw new Error("Referral havolasi yaroqsiz.");
     }
     return {
+        enabled: true,
         referralLink: link,
         totalReferrals: referralNumber(data.total_referrals),
         coinShopBuyers: referralNumber(data.coin_shop_buyers),
@@ -137,6 +142,14 @@ function referralSkeleton() {
     </div>`;
 }
 
+function renderReferralComingSoon() {
+    document.getElementById("referralPage").innerHTML = `<div class="referral-state referral-coming-soon">
+        <span aria-hidden="true">⏳</span>
+        <h3>Tez orada</h3>
+        <p>Referral bo‘limi vaqtincha yopilgan. Hozircha yangi referallar qo‘shilmaydi. Qayta ochilganda xabar beramiz.</p>
+    </div>`;
+}
+
 function renderReferralPage(data) {
     const page = document.getElementById("referralPage");
     const empty = data.totalReferrals === 0
@@ -197,6 +210,10 @@ async function loadReferralPage() {
     document.getElementById("referralPage").innerHTML = referralSkeleton();
     try {
         referralData = normalizeReferralSummary(await getReferralSummary());
+        if (!referralData.enabled) {
+            renderReferralComingSoon();
+            return;
+        }
         renderReferralPage(referralData);
     } catch (error) {
         referralData = null;
