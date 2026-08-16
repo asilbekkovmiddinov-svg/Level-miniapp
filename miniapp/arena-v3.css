@@ -53,3 +53,8 @@
 
 /* Admin-managed weekly and monthly leaderboard prize. */
 .arena-v3x-ranking-prize{display:grid;grid-template-columns:46px minmax(0,1fr);align-items:center;gap:12px;margin:0 0 16px;padding:14px;border:1px solid rgba(255,211,107,.28);border-radius:17px;background:linear-gradient(135deg,rgba(255,211,107,.13),rgba(124,92,255,.12));box-shadow:0 12px 30px rgba(0,0,0,.16)}.arena-v3x-ranking-prize>span{display:grid;width:46px;height:46px;place-items:center;border-radius:14px;background:rgba(255,211,107,.13);font-size:23px}.arena-v3x-ranking-prize div{min-width:0}.arena-v3x-ranking-prize small,.arena-v3x-ranking-prize strong{display:block}.arena-v3x-ranking-prize small{margin-bottom:5px;color:#ffd36b;font-size:8px;font-weight:900;letter-spacing:.15em}.arena-v3x-ranking-prize strong{overflow-wrap:anywhere;white-space:pre-line;font-size:12px;line-height:1.45}
+
+
+/* Keep the authoritative Arena prize visible at the top of every Arena view. */
+.arena-v3x-featured-prize{position:relative;z-index:2;margin:0 0 14px;border-color:rgba(255,211,107,.4);background:linear-gradient(135deg,rgba(255,211,107,.17),rgba(124,92,255,.16));box-shadow:0 14px 34px rgba(0,0,0,.2),0 0 24px rgba(255,211,107,.08)}
+@media(max-width:380px){.arena-v3x-featured-prize{grid-template-columns:40px minmax(0,1fr);gap:10px;padding:12px}.arena-v3x-featured-prize>span{width:40px;height:40px;font-size:20px}.arena-v3x-featured-prize strong{font-size:11px}}

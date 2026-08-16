@@ -471,6 +471,8 @@ const arenaV3State = {
     ranking: [],
     rankingPrize: "",
     rankingPeriod: "all",
+    featuredPrize: "",
+    featuredPrizePeriod: "weekly",
     sectionLoading: false,
     sectionError: null,
     appealFile: null,
@@ -571,9 +573,24 @@ function arenaV3Hero() {
     </header>`;
 }
 
-function arenaV3Shell(content) {
+function arenaV3PrizeBanner(
+    prizeText = arenaV3State.featuredPrize,
+    period = arenaV3State.featuredPrizePeriod,
+) {
+    const text = String(prizeText || "").trim();
+    if (!text) return "";
+    const label = period === "monthly" ? "OYLIK YUTUQ" : "HAFTALIK YUTUQ";
+    return `<article class="arena-v3x-ranking-prize arena-v3x-featured-prize"
+        aria-label="${label}" aria-live="polite">
+        <span aria-hidden="true">🏆</span>
+        <div><small>${label}</small><strong>${arenaV3Escape(text)}</strong></div>
+    </article>`;
+}
+
+function arenaV3Shell(content, prizeBanner = arenaV3PrizeBanner()) {
     return `<div class="arena-v3x">
         ${typeof competitionTabsMarkup === "function" ? competitionTabsMarkup("arena") : ""}
+        ${prizeBanner}
         ${arenaV3Hero()}
         <div class="arena-v3x-pull" aria-hidden="true"><span>↓</span><small>Yangilash uchun torting</small></div>
         ${content}
@@ -905,15 +922,10 @@ function arenaV3HistoryView() {
 
 function arenaV3RankingView() {
     const filters = [["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["all", "All Time"]];
-    const prizeLabel = arenaV3State.rankingPeriod === "weekly" ? "HAFTALIK YUTUQ" : "OYLIK YUTUQ";
-    const prize = ["weekly", "monthly"].includes(arenaV3State.rankingPeriod) && arenaV3State.rankingPrize
-        ? `<article class="arena-v3x-ranking-prize"><span>🏆</span><div><small>${prizeLabel}</small><strong>${arenaV3Escape(arenaV3State.rankingPrize)}</strong></div></article>`
-        : "";
     return `<section class="arena-v3x-panel arena-v3x-ranking">${arenaV3PanelHeader("LEADERBOARD", "Top Players")}
         <div class="arena-v3x-rank-filters">${filters.map(([key, label]) =>
             `<button data-arena-v3-period="${key}" class="${arenaV3State.rankingPeriod === key ? "is-active" : ""}"
                 ${key === "daily" ? `disabled title="Backend daily periodni qo‘llamaydi"` : ""}>${label}</button>`).join("")}</div>
-        ${prize}
         ${arenaV3State.sectionLoading ? arenaV3Skeleton(3) : arenaV3State.sectionError
             ? `<div class="arena-v3x-error"><span>UNAVAILABLE</span><h3>Ranking hozircha ochilmagan</h3>
                 <p>${arenaV3Escape(arenaV3State.sectionError)}</p><button data-arena-v3-section-retry>Retry</button></div>`
@@ -1061,12 +1073,17 @@ async function arenaV3Load({ silent = false } = {}) {
     const page = document.getElementById("arenaPage");
     if (!silent && page) page.innerHTML = arenaV3Shell(arenaV3Skeleton());
     try {
-        const [openMatches, activeMatch] = await Promise.all([
+        const [openMatches, activeMatch, featuredRanking] = await Promise.all([
             arenaV3Client.open(),
             arenaV3Client.active(),
+            arenaV3Client.ranking("weekly").catch(() => null),
         ]);
         arenaV3State.openMatches = openMatches;
         arenaV3State.activeMatch = activeMatch;
+        if (featuredRanking) {
+            arenaV3State.featuredPrize = featuredRanking.prizeText;
+            arenaV3State.featuredPrizePeriod = "weekly";
+        }
         await arenaV3RefreshEvidence(activeMatch);
         arenaV3Render();
     } catch (error) {
@@ -1212,6 +1229,10 @@ async function arenaV3LoadRanking(period = arenaV3State.rankingPeriod) {
         const ranking = await arenaV3Client.ranking(period);
         arenaV3State.ranking = ranking.players;
         arenaV3State.rankingPrize = ranking.prizeText;
+        if (["weekly", "monthly"].includes(period) && ranking.prizeText) {
+            arenaV3State.featuredPrize = ranking.prizeText;
+            arenaV3State.featuredPrizePeriod = period;
+        }
     } catch (error) {
         arenaV3State.ranking = [];
         arenaV3State.rankingPrize = "";
@@ -1668,5 +1689,7 @@ if (typeof module !== "undefined") {
         arenaV3Track,
         arenaV3StoredUsername,
         arenaV3SaveUsername,
+        arenaV3PrizeBanner,
+        arenaV3Shell,
     };
 }
