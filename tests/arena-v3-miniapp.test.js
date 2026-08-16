@@ -694,7 +694,7 @@ test("admin-managed prize stays at the top of every Arena view", () => {
     assert.match(prize, /750 COIN/);
     assert.equal(arenaV3PrizeBanner("", "weekly"), "");
 
-    const shell = arenaV3Shell("<main>ARENA CONTENT</main>");
+    const shell = arenaV3Shell("<main>ARENA CONTENT</main>", prize);
     assert.ok(
         shell.indexOf("arena-v3x-featured-prize") < shell.indexOf("arena-v3x-hero"),
         "prize must render above the Arena hero",
