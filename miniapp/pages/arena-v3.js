@@ -444,6 +444,8 @@ const ARENA_V3_ACTIVE_STATUSES = new Set([
 ]);
 const ARENA_V3_ROOM_CODE_REFRESH_MS = 1000;
 const ARENA_V3_DEFAULT_REFRESH_MS = 5000;
+const ARENA_V3_SCREENSHOT_RECONCILE_ATTEMPTS = 10;
+const ARENA_V3_SCREENSHOT_RECONCILE_DELAY_MS = 750;
 
 function arenaV3IsActiveStatus(status) {
     return ARENA_V3_ACTIVE_STATUSES.has(String(status || ""));
@@ -501,6 +503,23 @@ function arenaV3ScreenshotAccepted(screenshots, playerId) {
     const id = Number(playerId);
     return id > 0 && Array.isArray(screenshots)
         && screenshots.some((item) => item.playerId === id);
+}
+
+async function arenaV3ReconcileScreenshotUpload(matchId, playerId, {
+    attempts = ARENA_V3_SCREENSHOT_RECONCILE_ATTEMPTS,
+    delayMs = ARENA_V3_SCREENSHOT_RECONCILE_DELAY_MS,
+    load = () => arenaV3Client.screenshots(matchId),
+    wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
+    const safeAttempts = Math.max(1, Number(attempts) || 1);
+    for (let attempt = 0; attempt < safeAttempts; attempt += 1) {
+        try {
+            const screenshots = await load();
+            if (arenaV3ScreenshotAccepted(screenshots, playerId)) return screenshots;
+        } catch (_) {}
+        if (attempt + 1 < safeAttempts) await wait(delayMs);
+    }
+    return null;
 }
 
 function arenaV3Initial(value) {
@@ -1452,19 +1471,19 @@ async function arenaV3UploadScreenshot() {
         arenaV3Toast("✅ Screenshot muvaffaqiyatli yuborildi");
     } catch (error) {
         if ([0, 408].includes(Number(error?.status))) {
-            try {
-                const screenshots = await arenaV3Client.screenshots(match.id);
-                const playerId = Number(arenaV3TelegramUser().id);
-                if (arenaV3ScreenshotAccepted(screenshots, playerId)) {
-                    arenaV3State.screenshots = screenshots;
-                    arenaV3State.screenshotFile = null;
-                    if (arenaV3State.screenshotPreview) URL.revokeObjectURL(arenaV3State.screenshotPreview);
-                    arenaV3State.screenshotPreview = null;
-                    arenaV3Render();
-                    arenaV3Toast("✅ Screenshot muvaffaqiyatli yuborildi");
-                    return;
-                }
-            } catch (_) {}
+            const screenshots = await arenaV3ReconcileScreenshotUpload(
+                match.id,
+                Number(arenaV3TelegramUser().id),
+            );
+            if (screenshots) {
+                arenaV3State.screenshots = screenshots;
+                arenaV3State.screenshotFile = null;
+                if (arenaV3State.screenshotPreview) URL.revokeObjectURL(arenaV3State.screenshotPreview);
+                arenaV3State.screenshotPreview = null;
+                arenaV3Render();
+                arenaV3Toast("✅ Screenshot muvaffaqiyatli yuborildi");
+                return;
+            }
         }
         arenaV3State.evidenceError = error.message;
         arenaV3Render();
@@ -1701,6 +1720,7 @@ if (typeof module !== "undefined") {
         arenaV3IsActiveStatus,
         arenaV3RefreshDelay,
         arenaV3ScreenshotAccepted,
+        arenaV3ReconcileScreenshotUpload,
         arenaV3PlayingClock,
         arenaV3IsOwner,
         arenaV3ScreenshotSeconds,
