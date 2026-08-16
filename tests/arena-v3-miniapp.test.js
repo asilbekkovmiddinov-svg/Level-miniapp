@@ -19,6 +19,8 @@ const {
     arenaV3Track,
     arenaV3StoredUsername,
     arenaV3SaveUsername,
+    arenaV3PrizeBanner,
+    arenaV3Shell,
 } = require("../miniapp/pages/arena-v3.js");
 
 function response(payload, status = 200) {
@@ -679,4 +681,29 @@ test("Sprint 7 UI includes screenshot admin result appeal and lock states", () =
     assert.match(css, /arena-v3x-result/);
     assert.match(css, /@media\(max-width:380px\)/);
     assert.match(css, /prefers-reduced-motion:reduce/);
+});
+
+
+test("admin-managed prize stays at the top of every Arena view", () => {
+    const prize = arenaV3PrizeBanner(
+        "🥇 1-o‘rin — 750 COIN\n🥈 2-o‘rin — 550 COIN",
+        "weekly",
+    );
+    assert.match(prize, /arena-v3x-featured-prize/);
+    assert.match(prize, /HAFTALIK YUTUQ/);
+    assert.match(prize, /750 COIN/);
+    assert.equal(arenaV3PrizeBanner("", "weekly"), "");
+
+    const shell = arenaV3Shell("<main>ARENA CONTENT</main>");
+    assert.ok(
+        shell.indexOf("arena-v3x-featured-prize") < shell.indexOf("arena-v3x-hero"),
+        "prize must render above the Arena hero",
+    );
+
+    const source = fs.readFileSync(
+        path.join(__dirname, "../miniapp/pages/arena-v3.js"),
+        "utf8",
+    );
+    assert.match(source, /arenaV3Client\.ranking\("weekly"\)\.catch\(\(\) => null\)/);
+    assert.doesNotMatch(source, /\$\{prize\}\s*\$\{arenaV3State\.sectionLoading/);
 });
