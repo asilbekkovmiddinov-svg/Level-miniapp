@@ -12,6 +12,7 @@ const {
     arenaV3IsActiveStatus,
     arenaV3RefreshDelay,
     arenaV3ScreenshotAccepted,
+    arenaV3ReconcileScreenshotUpload,
     arenaV3ScreenshotSeconds,
     normalizeArenaV3Screenshot,
     normalizeArenaV3Result,
@@ -396,8 +397,26 @@ test("ambiguous screenshot response is accepted only after participant reconcili
         path.join(__dirname, "../miniapp/pages/arena-v3.js"), "utf8",
     );
     assert.match(source, /\[0, 408\]\.includes\(Number\(error\?\.status\)\)/);
-    assert.match(source, /await arenaV3Client\.screenshots\(match\.id\)/);
+    assert.match(source, /await arenaV3ReconcileScreenshotUpload/);
     assert.match(source, /✅ Screenshot muvaffaqiyatli yuborildi/);
+});
+
+test("ambiguous screenshot response retries until backend persistence is visible", async () => {
+    let calls = 0;
+    let waits = 0;
+    const screenshots = await arenaV3ReconcileScreenshotUpload(17, 1001, {
+        attempts: 5,
+        delayMs: 1,
+        load: async () => {
+            calls += 1;
+            return calls < 3 ? [] : [{ id: 31, playerId: 1001 }];
+        },
+        wait: async () => { waits += 1; },
+    });
+
+    assert.equal(calls, 3);
+    assert.equal(waits, 2);
+    assert.equal(screenshots[0].playerId, 1001);
 });
 
 test("screenshot upload separates status zero, timeout and file limit errors", async () => {
