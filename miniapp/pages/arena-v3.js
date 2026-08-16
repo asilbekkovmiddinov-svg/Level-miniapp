@@ -442,9 +442,17 @@ const ARENA_V3_ACTIVE_STATUSES = new Set([
     "OPEN", "READY", "WAITING_ROOM_CODE", "PLAYING",
     "WAITING_SCREENSHOT", "WAITING_ADMIN",
 ]);
+const ARENA_V3_ROOM_CODE_REFRESH_MS = 1000;
+const ARENA_V3_DEFAULT_REFRESH_MS = 5000;
 
 function arenaV3IsActiveStatus(status) {
     return ARENA_V3_ACTIVE_STATUSES.has(String(status || ""));
+}
+
+function arenaV3RefreshDelay(match) {
+    return match?.status === "WAITING_ROOM_CODE" && !match.roomCode
+        ? ARENA_V3_ROOM_CODE_REFRESH_MS
+        : ARENA_V3_DEFAULT_REFRESH_MS;
 }
 
 const arenaV3State = {
@@ -461,6 +469,7 @@ const arenaV3State = {
     loading: false,
     actionLoading: null,
     refreshTimer: null,
+    refreshCycle: 0,
     clockTimer: null,
     touchStart: 0,
     profile: null,
@@ -1098,12 +1107,24 @@ async function loadArenaV3Page() {
     Navbar.setActive("arena");
     showPage("arenaPage", "Arena");
     arenaV3State.view = "home";
-    clearInterval(arenaV3State.refreshTimer);
+    clearTimeout(arenaV3State.refreshTimer);
+    arenaV3State.refreshCycle += 1;
     clearInterval(arenaV3State.clockTimer);
     await arenaV3Load();
-    arenaV3State.refreshTimer = setInterval(async () => {
+    arenaV3ScheduleRefresh(arenaV3State.refreshCycle);
+    arenaV3State.clockTimer = setInterval(arenaV3TickClocks, 1000);
+}
+
+function arenaV3ScheduleRefresh(cycle) {
+    if (cycle !== arenaV3State.refreshCycle) return;
+    clearTimeout(arenaV3State.refreshTimer);
+    arenaV3State.refreshTimer = setTimeout(async () => {
+        if (cycle !== arenaV3State.refreshCycle) return;
         const page = document.getElementById("arenaPage");
-        if (!page?.classList.contains("active") || arenaV3State.loading) return;
+        if (!page?.classList.contains("active") || arenaV3State.loading) {
+            arenaV3ScheduleRefresh(cycle);
+            return;
+        }
         try {
             const previousMatch = arenaV3State.activeMatch;
             const previous = previousMatch?.status;
@@ -1126,9 +1147,10 @@ async function loadArenaV3Page() {
             }
         } catch (error) {
             arenaV3Toast(error.message, "error");
+        } finally {
+            arenaV3ScheduleRefresh(cycle);
         }
-    }, 5000);
-    arenaV3State.clockTimer = setInterval(arenaV3TickClocks, 1000);
+    }, arenaV3RefreshDelay(arenaV3State.activeMatch));
 }
 
 async function arenaV3RefreshEvidence(match) {
@@ -1677,6 +1699,7 @@ if (typeof module !== "undefined") {
         arenaV3MatchCard,
         arenaV3StatusIndex,
         arenaV3IsActiveStatus,
+        arenaV3RefreshDelay,
         arenaV3ScreenshotAccepted,
         arenaV3PlayingClock,
         arenaV3IsOwner,
