@@ -10,6 +10,7 @@ const {
     ARENA_V3_TIMELINE,
     arenaV3StatusIndex,
     arenaV3IsActiveStatus,
+    arenaV3RefreshDelay,
     arenaV3ScreenshotAccepted,
     arenaV3ScreenshotSeconds,
     normalizeArenaV3Screenshot,
@@ -110,6 +111,16 @@ test("PLAYING remains visible as Active Match", async () => {
     });
     assert.equal((await client.active()).status, "PLAYING");
     assert.equal(arenaV3IsActiveStatus("PLAYING"), true);
+});
+
+test("room code wait polls quickly without increasing every Arena refresh", () => {
+    assert.equal(arenaV3RefreshDelay({
+        status: "WAITING_ROOM_CODE", roomCode: null,
+    }), 1000);
+    assert.equal(arenaV3RefreshDelay({
+        status: "WAITING_ROOM_CODE", roomCode: "AB12",
+    }), 5000);
+    assert.equal(arenaV3RefreshDelay({ status: "PLAYING" }), 5000);
 });
 
 test("Arena V3 create sends validated architecture fields and idempotency", async () => {
@@ -273,7 +284,8 @@ test("Sprint 2 UI contains detail, ready, room, playing and cancel states", () =
     assert.match(source, /arenaV3RoomCodeForm/);
     assert.match(source, /LIVE MATCH/);
     assert.match(source, /Matchni bekor qilasizmi/);
-    assert.match(source, /}, 5000\);/);
+    assert.match(source, /arenaV3ScheduleRefresh\(arenaV3State\.refreshCycle\)/);
+    assert.match(source, /ARENA_V3_DEFAULT_REFRESH_MS = 5000/);
 });
 
 test("Sprint 2 backend mutation contracts remain unchanged", () => {
