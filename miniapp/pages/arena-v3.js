@@ -587,10 +587,10 @@ function arenaV3PrizeBanner(
     </article>`;
 }
 
-function arenaV3Shell(content) {
+function arenaV3Shell(content, prizeBanner = arenaV3PrizeBanner()) {
     return `<div class="arena-v3x">
         ${typeof competitionTabsMarkup === "function" ? competitionTabsMarkup("arena") : ""}
-        ${arenaV3PrizeBanner()}
+        ${prizeBanner}
         ${arenaV3Hero()}
         <div class="arena-v3x-pull" aria-hidden="true"><span>↓</span><small>Yangilash uchun torting</small></div>
         ${content}
