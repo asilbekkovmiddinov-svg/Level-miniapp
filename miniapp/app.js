@@ -51,6 +51,22 @@ async function requireChannelSubscriptions() {
 }
 
 let pageReturnTarget = null;
+let penaltyDuelHotfixPromise = null;
+
+async function ensurePenaltyDuelHotfix() {
+    if (window.penaltyDuelController?.__singleChoiceHotfixApplied) return;
+    if (!penaltyDuelHotfixPromise) {
+        penaltyDuelHotfixPromise = new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = "pages/penalty-duel-hotfix.js?v=1.0.0";
+            script.async = true;
+            script.onload = resolve;
+            script.onerror = () => reject(new Error("Penalty Duel yangilanishini yuklab bo‘lmadi."));
+            document.head.appendChild(script);
+        });
+    }
+    await penaltyDuelHotfixPromise;
+}
 
 async function openCoinOrderDeepLink() {
     const params = new URLSearchParams(window.location.search);
@@ -120,7 +136,7 @@ async function openPage(page, options = {}) {
         case "wheel": await loadWheelPage(); break;
         case "arena": await loadArenaV3Page(); break;
         case "wall-rush": await loadWallRushPage(); break;
-        case "penalty-duel": await loadPenaltyDuelPage(); break;
+        case "penalty-duel": await ensurePenaltyDuelHotfix(); await loadPenaltyDuelPage(); break;
         case "orders": await loadOrdersPage(); break;
         case "profile": await loadProfilePage(); break;
         case "support": await loadSupportPage(); break;

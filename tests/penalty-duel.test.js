@@ -17,12 +17,10 @@ test("Penalty Duel exposes five clear shot directions", () => {
 
 test("score is calculated automatically after every shot", () => {
     const game = new PenaltyDuelEngine({ rng: () => 0 });
-
     const playerGoal = game.playerShot("top-right");
     assert.equal(playerGoal.goal, true);
     assert.equal(game.playerScore, 1);
     assert.equal(game.phase, "PLAYER_KEEPER");
-
     const opponentSave = game.defend("top-left");
     assert.equal(opponentSave.goal, false);
     assert.equal(game.opponentScore, 0);
@@ -54,7 +52,7 @@ test("Penalty Duel is mounted as the primary game navigation", () => {
     assert.match(html, /data-page="penalty-duel"/);
     assert.match(html, /penalty-duel\.css/);
     assert.match(html, /pages\/penalty-duel\.js/);
-    assert.match(app, /case "penalty-duel": await loadPenaltyDuelPage/);
+    assert.match(app, /case "penalty-duel": await ensurePenaltyDuelHotfix\(\); await loadPenaltyDuelPage/);
     assert.match(app, /penaltyDuelController\?\.leave/);
 });
 
