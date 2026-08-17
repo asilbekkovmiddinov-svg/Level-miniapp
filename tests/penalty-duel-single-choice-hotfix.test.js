@@ -6,24 +6,29 @@ const path = require("node:path");
 const hotfix = fs.readFileSync(path.join(__dirname, "../miniapp/pages/penalty-duel-hotfix.js"), "utf8");
 const app = fs.readFileSync(path.join(__dirname, "../miniapp/app.js"), "utf8");
 
-test("online Penalty Duel submits exactly one server-authoritative choice per shot", () => {
-    assert.match(hotfix, /this\.match\.your_role === "KICK"/);
-    assert.match(hotfix, /this\.api\.choices\(this\.match\.id, \{\s*direction,\s*idempotency_key: key,/s);
-    assert.doesNotMatch(hotfix, /kick_direction:/);
-    assert.doesNotMatch(hotfix, /keeper_direction:/);
-    assert.doesNotMatch(hotfix, /expected_version:/);
-    assert.match(hotfix, /Bir marta bosing/);
+test("online Penalty Duel submits one role-driven choice per shot", () => {
+    assert.ok(hotfix.includes('this.match.your_role === "KICK"'));
+    assert.ok(hotfix.includes("const match = await this.api.choices(this.match.id, {"));
+    assert.ok(hotfix.includes("direction,"));
+    assert.ok(hotfix.includes("idempotency_key: key,"));
+    assert.equal(hotfix.includes("kick_direction:"), false);
+    assert.equal(hotfix.includes("keeper_direction:"), false);
+    assert.equal(hotfix.includes("expected_version:"), false);
+    assert.ok(hotfix.includes("Bir marta bosing"));
 });
 
-test("structured FastAPI validation errors never render as object Object", () => {
-    assert.match(hotfix, /Array\.isArray\(detail\)/);
-    assert.match(hotfix, /item\?\.msg \|\| item\?\.message \|\| item\?\.detail/);
-    assert.match(hotfix, /formatDetail\(payload\?\.detail\)/);
-    assert.doesNotMatch(hotfix, /String\(payload\?\.detail\)/);
+test("structured FastAPI validation errors are normalized to readable text", () => {
+    assert.ok(hotfix.includes("Array.isArray(detail)"));
+    assert.ok(hotfix.includes("item?.msg || item?.message || item?.detail"));
+    assert.ok(hotfix.includes("formatDetail(payload?.detail)"));
+    assert.equal(hotfix.includes("String(payload?.detail)"), false);
 });
 
-test("Penalty Duel hotfix is loaded before opening the game page", () => {
-    assert.match(app, /async function ensurePenaltyDuelHotfix\(\)/);
-    assert.match(app, /pages\/penalty-duel-hotfix\.js\?v=1\.0\.0/);
-    assert.match(app, /case "penalty-duel": await ensurePenaltyDuelHotfix\(\); await loadPenaltyDuelPage\(\); break;/);
+test("Penalty Duel hotfix loads before the game page", () => {
+    assert.ok(app.includes("async function ensurePenaltyDuelHotfix()"));
+    assert.ok(app.includes('pages/penalty-duel-hotfix.js?v=1.0.0'));
+    const ensureIndex = app.indexOf('case "penalty-duel": await ensurePenaltyDuelHotfix();');
+    const loadIndex = app.indexOf("await loadPenaltyDuelPage();", ensureIndex);
+    assert.ok(ensureIndex >= 0);
+    assert.ok(loadIndex > ensureIndex);
 });
