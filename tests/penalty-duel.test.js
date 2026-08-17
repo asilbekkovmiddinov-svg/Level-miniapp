@@ -94,3 +94,14 @@ test("game UI communicates automatic scoring and animated football roles", () =>
     assert.match(css, /\.pd-ball\.to-top-left/);
     assert.match(css, /@media\(max-width:380px\)/);
 });
+
+test("saved shots visibly rebound while the keeper reaches every corner", () => {
+    assert.match(source, /if \(!result\.goal\) ball\.classList\.add\("is-saved"\)/);
+    assert.match(css, /\.pd-ball\.is-saved\.to-top-left/);
+    assert.match(css, /\.pd-ball\.is-saved\.to-top-right/);
+    assert.match(css, /@keyframes pd-ball-save/);
+    assert.match(css, /@keyframes pd-dive-top-left/);
+    assert.match(css, /@keyframes pd-dive-top-right/);
+    assert.match(css, /@keyframes pd-dive-bottom-left/);
+    assert.match(css, /@keyframes pd-dive-bottom-right/);
+});
