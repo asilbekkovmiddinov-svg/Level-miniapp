@@ -98,6 +98,7 @@ async function handlePageBack() {
         window.tournamentController?.stop?.();
     }
     if (document.getElementById("wallRushPage")?.classList.contains("active-page")) await window.wallRushController?.leave?.();
+    if (document.getElementById("penaltyDuelPage")?.classList.contains("active-page")) await window.penaltyDuelController?.leave?.();
     const target = pageReturnTarget;
     pageReturnTarget = null;
     if (target) await openPage(target);
@@ -108,6 +109,7 @@ async function openPage(page, options = {}) {
     if (page !== "arena") window.divisionController?.stop?.();
     if (page !== "arena") window.tournamentController?.stop?.();
     if (page !== "wall-rush" && window.wallRushController) window.wallRushController.stop();
+    if (page !== "penalty-duel" && window.penaltyDuelController) await window.penaltyDuelController.leave();
     pageReturnTarget = options.returnPage || null;
     if (page !== "wheel-orders-admin") document.body.classList.remove("wheel-order-admin-open");
     if (page !== "coin-promotions-admin") document.body.classList.remove("coin-promotion-admin-open");
@@ -118,6 +120,7 @@ async function openPage(page, options = {}) {
         case "wheel": await loadWheelPage(); break;
         case "arena": await loadArenaV3Page(); break;
         case "wall-rush": await loadWallRushPage(); break;
+        case "penalty-duel": await loadPenaltyDuelPage(); break;
         case "orders": await loadOrdersPage(); break;
         case "profile": await loadProfilePage(); break;
         case "support": await loadSupportPage(); break;

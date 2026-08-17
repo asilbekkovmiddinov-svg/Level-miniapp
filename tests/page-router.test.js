@@ -42,7 +42,7 @@ test("all module mounts remain isolated direct children of pageContent", () => {
     const pageIds = [...html.matchAll(/<section id="([^"]+Page)" class="page(?: active-page)?"/g)]
         .map((match) => match[1]);
     assert.deepEqual(pageIds, [
-        "homePage", "p2pPage", "wallRushPage", "arenaPage", "shopPage", "wheelPage",
+        "homePage", "p2pPage", "wallRushPage", "penaltyDuelPage", "arenaPage", "shopPage", "wheelPage",
         "ordersPage", "profilePage", "supportPage", "referralPage", "walletPage",
         "promotionsAdminPage", "promotionsPage", "divisionAdminPage",
         "tournamentAdminPage", "notificationsPage",
