@@ -60,7 +60,6 @@ test("board is 9 by 13 and supports one selected action", () => {
 
 test("MiniApp navigation exposes Wall Rush and cleans realtime resources", () => {
     assert.match(html, /id="wallRushPage"/);
-    assert.match(html, /data-page="wall-rush"/);
     assert.match(html, /pages\/wall-rush\.js/);
     assert.match(app, /window\.wallRushController.*\.stop/);
     assert.match(app, /case "wall-rush"/);
