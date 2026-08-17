@@ -105,3 +105,38 @@ test("saved shots visibly rebound while the keeper reaches every corner", () => 
     assert.match(css, /@keyframes pd-dive-bottom-left/);
     assert.match(css, /@keyframes pd-dive-bottom-right/);
 });
+
+test("a direction is accepted on the first pointer release without a duplicate click", () => {
+    assert.match(source, /onpointerup="penaltyDuelController\.targetPress/);
+    assert.match(source, /event\?\.type === "click" && Number\(event\.detail\) > 0/);
+    assert.match(source, /event\.currentTarget\.disabled = true/);
+    assert.match(source, /Zarba tanlandi ✓ Endi darvozabon uchun bir marta bosing/);
+});
+
+test("Penalty Duel lobby exposes separate ratings and the authoritative endpoint", () => {
+    assert.match(source, /\/penalty-duel\/leaderboard\?mode=/);
+    assert.match(source, /this\.api\.leaderboard\("FREE"\)/);
+    assert.match(source, /this\.api\.leaderboard\("TICKET"\)/);
+    assert.match(source, /row\.rating/);
+    assert.match(css, /\.pd-rating-row\{display:grid/);
+});
+
+test("Penalty Duel ticket ad uses 30 minute Adsgram then TADS waterfall", () => {
+    assert.match(source, /PENALTY_AD_COOLDOWN_MS = 30 \* 60 \* 1000/);
+    assert.match(source, /showAdsgram: \(\) => this\.runAdsgramPrimary\(\)/);
+    assert.match(source, /showTads: \(\) => this\.runTadsFallback\(\)/);
+    assert.match(source, /blockId: "39763"/);
+    assert.match(source, /widgetId: "11416"/);
+    assert.match(source, /last_rewarded_ad_at/);
+    assert.match(css, /\.pd-ad-card\{display:grid/);
+});
+
+test("players have natural body details and goals trigger a stadium effect", () => {
+    assert.match(source, /pd-goal-burst/);
+    assert.match(source, /pitch\.classList\.add\(result\.goal \? "has-goal" : "has-save"\)/);
+    assert.match(css, /\.pd-player-shirt::after/);
+    assert.match(css, /\.pd-arm::after/);
+    assert.match(css, /@keyframes pd-strike-leg/);
+    assert.match(css, /@keyframes pd-goal-burst/);
+    assert.match(css, /@keyframes pd-net-impact/);
+});
