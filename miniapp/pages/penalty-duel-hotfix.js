@@ -47,12 +47,16 @@
         if (!resolved) return this.renderOnline();
 
         const last = match.history.at(-1);
-        const playerOneAttacked = Number(last.round) % 2 === 1;
-        const youAttacked = (match.side === "PLAYER_ONE") === playerOneAttacked;
-        const result = youAttacked
-            ? { direction: last.your_kick, keeperDirection: last.opponent_keeper, goal: Boolean(last.you_goal) }
-            : { direction: last.opponent_kick, keeperDirection: last.your_keeper, goal: Boolean(last.opponent_goal) };
-        this.renderOnline({ result });
+        const youAttacked = match.side === "PLAYER_ONE"
+            ? Number(last.round) % 2 === 1
+            : Number(last.round) % 2 === 0;
+        const direction = youAttacked ? last.your_kick : last.opponent_kick;
+        const keeperDirection = youAttacked ? last.opponent_keeper : last.your_keeper;
+        const serverGoal = youAttacked ? last.you_goal : last.opponent_goal;
+        const goal = typeof serverGoal === "boolean"
+            ? serverGoal
+            : Boolean(direction && keeperDirection && direction !== keeperDirection);
+        this.renderOnline({ result: { direction, keeperDirection, goal } });
         clearTimeout(this.animationTimer);
         this.animationTimer = setTimeout(() => this.renderOnline(), 1450);
     };
