@@ -1,6 +1,8 @@
 const PENALTY_DIRECTIONS = ["top-left", "top-right", "center", "bottom-left", "bottom-right"];
 const PENALTY_FALLBACK_SYNC_MS = 500;
 const PENALTY_RECONNECT_MS = 750;
+const PENALTY_AD_COOLDOWN_MS = 30 * 60 * 1000;
+const PENALTY_AD_WATERFALL = globalThis.WallRushAdWaterfall;
 
 class PenaltyDuelEngine {
     constructor(options = {}) {
@@ -98,6 +100,9 @@ class PenaltyDuelClient {
     }
 
     wallet() { return this.request("/wall-rush/wallet"); }
+    leaderboard(mode) {
+        return this.request(`/penalty-duel/leaderboard?mode=${encodeURIComponent(mode)}&limit=20`);
+    }
     active() { return this.request("/penalty-duel/matches/active"); }
     join(mode) { return this.request("/penalty-duel/matchmaking/join", "POST", { mode }); }
     choices(matchId, body) {
@@ -108,6 +113,15 @@ class PenaltyDuelClient {
     }
     timeout(matchId) {
         return this.request(`/penalty-duel/matches/${matchId}/timeout`, "POST");
+    }
+    createAdsgramSession() {
+        return this.request("/wall-rush/rewards/adsgram/session", "POST");
+    }
+    claimAdsgramReward(token) {
+        return this.request("/wall-rush/rewards/adsgram/claim", "POST", { token });
+    }
+    cancelAdsgramSession(token) {
+        return this.request("/wall-rush/rewards/adsgram/cancel", "POST", { token });
     }
     socketUrl() {
         const protocol = this.baseUrl.startsWith("https:") ? "wss:" : "ws:";
@@ -124,6 +138,7 @@ const penaltyDuelController = {
     socket: null,
     syncTimer: null,
     countdownTimer: null,
+    adTimer: null,
     animationTimer: null,
     stopped: false,
     syncBusy: false,
@@ -132,6 +147,12 @@ const penaltyDuelController = {
     localStep: "KICK",
     localChoice: { kick: null, keeper: null },
     busy: false,
+    adPending: false,
+    adState: "",
+    adsgramController: null,
+    tadsController: null,
+    ratingMode: "FREE",
+    leaderboards: { FREE: [], TICKET: [] },
 
     async open() {
         this.stop();
@@ -140,9 +161,18 @@ const penaltyDuelController = {
         showPage("penaltyDuelPage", "Penalty Duel");
         this.renderLoading();
         try {
-            const [wallet, match] = await Promise.all([this.api.wallet(), this.api.active()]);
+            const [wallet, match, freeRating, ticketRating] = await Promise.all([
+                this.api.wallet(),
+                this.api.active(),
+                this.api.leaderboard("FREE").catch(() => ({ rows: [] })),
+                this.api.leaderboard("TICKET").catch(() => ({ rows: [] })),
+            ]);
             this.wallet = wallet;
             this.match = match;
+            this.leaderboards = {
+                FREE: freeRating?.rows || [],
+                TICKET: ticketRating?.rows || [],
+            };
             this.screenMode = "ONLINE";
             if (match) this.renderOnline();
             else this.renderIntro();
@@ -157,9 +187,11 @@ const penaltyDuelController = {
         clearTimeout(this.animationTimer);
         clearInterval(this.syncTimer);
         clearInterval(this.countdownTimer);
+        clearInterval(this.adTimer);
         this.animationTimer = null;
         this.syncTimer = null;
         this.countdownTimer = null;
+        this.adTimer = null;
         this.stopped = true;
         this.syncBusy = false;
         if (this.socket) {
@@ -310,6 +342,8 @@ const penaltyDuelController = {
     },
 
     renderIntro() {
+        clearInterval(this.adTimer);
+        this.adTimer = null;
         this.screenMode = "ONLINE";
         this.match = null;
         const gameTickets = Number(this.wallet?.game_tickets || 0);
@@ -335,6 +369,13 @@ const penaltyDuelController = {
                     <article><span>🏆</span><small>TOURNAMENT</small><strong>${tournamentTickets}</strong></article>
                 </section>
 
+                <section class="pd-ad-card">
+                    <span>🎬</span>
+                    <div><strong>Reklama ko‘rib ticket oling</strong><small id="pdAdStatus">${this.adStatusText()}</small></div>
+                    <button id="pdAdButton" type="button" onclick="penaltyDuelController.watchAd()" ${this.adAvailable() ? "" : "disabled"}>+1 🎫</button>
+                    <div id="tads-container-11416" hidden></div>
+                </section>
+
                 <button class="pd-primary" type="button" onclick="penaltyDuelController.join('TICKET')">
                     <span>Ticket Match</span><small>1 Game Ticket • G‘olib +1 🏆</small>
                 </button>
@@ -342,8 +383,276 @@ const penaltyDuelController = {
                     Bepul 1vs1 <small>Ticket sarflanmaydi, mukofot yo‘q</small>
                 </button>
                 <button class="pd-training-link" type="button" onclick="penaltyDuelController.startTraining()">🤖 Avval mashg‘ulot qilib ko‘rish</button>
+                ${this.ratingMarkup()}
                 <p class="pd-development-note">Tanlovlar raqibdan yashirin. Hisob va ticket server tomonidan avtomatik hisoblanadi.</p>
             </div>`;
+        this.startAdCountdown();
+    },
+
+    setRatingMode(mode) {
+        if (!Object.hasOwn(this.leaderboards, mode)) return;
+        this.ratingMode = mode;
+        this.renderIntro();
+    },
+
+    ratingMarkup() {
+        const rows = this.leaderboards[this.ratingMode] || [];
+        const list = rows.length
+            ? rows.map((row) => {
+                const username = row.username ? `@${this.escape(row.username)}` : "Telegram o‘yinchi";
+                return `
+                    <article class="pd-rating-row">
+                        <b class="pd-rating-rank">#${row.rank}</b>
+                        <div><strong>${this.escape(row.display_name)}</strong><small>${username}</small></div>
+                        <span><b>${row.rating}</b><small>Reyting</small></span>
+                        <span><b>${row.wins}</b><small>G‘alaba</small></span>
+                        <span><b>${row.losses}</b><small>Mag‘lubiyat</small></span>
+                    </article>`;
+            }).join("")
+            : '<p class="pd-rating-empty">Bu rejimda hali yakunlangan o‘yin yo‘q.</p>';
+        return `
+            <section class="pd-rating">
+                <header><div><small>PENALTY REYTINGI</small><h3>Eng yaxshi tepuvchilar</h3></div><span>🏅</span></header>
+                <nav role="tablist">
+                    <button class="${this.ratingMode === "FREE" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingMode('FREE')">Bepul 1vs1</button>
+                    <button class="${this.ratingMode === "TICKET" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingMode('TICKET')">Ticket Match</button>
+                </nav>
+                <div class="pd-rating-list">${list}</div>
+            </section>`;
+    },
+
+    adCooldownRemainingMs() {
+        const last = this.wallet?.last_rewarded_ad_at;
+        if (!last) return 0;
+        return Math.max(0, new Date(last).getTime() + PENALTY_AD_COOLDOWN_MS - Date.now());
+    },
+
+    adAvailable() {
+        return this.adCooldownRemainingMs() === 0 && !this.adPending;
+    },
+
+    adStatusText() {
+        if (this.adState) return this.adState;
+        const remaining = this.adCooldownRemainingMs();
+        if (remaining === 0) return "Har 30 daqiqada bir marta";
+        const seconds = Math.ceil(remaining / 1000);
+        const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+        const rest = String(seconds % 60).padStart(2, "0");
+        return `Keyingi reklamagacha ${minutes}:${rest}`;
+    },
+
+    startAdCountdown() {
+        this.updateAdCountdown();
+        if (!this.adAvailable()) {
+            this.adTimer = setInterval(() => this.updateAdCountdown(), 1000);
+        }
+    },
+
+    updateAdCountdown() {
+        const status = document.getElementById("pdAdStatus");
+        const button = document.getElementById("pdAdButton");
+        if (!status || !button) return;
+        status.textContent = this.adStatusText();
+        button.disabled = !this.adAvailable();
+        if (this.adAvailable() && this.adTimer) {
+            clearInterval(this.adTimer);
+            this.adTimer = null;
+        }
+    },
+
+    async waitForTads(timeout = 5000) {
+        if (window.tads?.init) return;
+        const started = performance.now();
+        while (!window.tads?.init && performance.now() - started < timeout) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        if (!window.tads?.init) throw new Error("TADS SDK yuklanmadi");
+    },
+
+    getAdsgramController() {
+        if (this.adsgramController) return this.adsgramController;
+        if (!globalThis.Adsgram?.init) {
+            const error = new Error("Adsgram SDK yuklanmadi.");
+            error.code = "ADSGRAM_SDK_UNAVAILABLE";
+            throw error;
+        }
+        this.adsgramController = globalThis.Adsgram.init({ blockId: "39763", debug: false });
+        return this.adsgramController;
+    },
+
+    showAdsgramAd(controller) {
+        if (!controller?.show) {
+            const error = new Error("Adsgram SDK yuklanmadi.");
+            error.code = "ADSGRAM_SDK_UNAVAILABLE";
+            return Promise.reject(error);
+        }
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (callback, value) => {
+                if (settled) return;
+                settled = true;
+                controller.removeEventListener?.("onBannerNotFound", onNoFill);
+                callback(value);
+            };
+            const onNoFill = () => {
+                const error = new Error("Adsgram reklamasi topilmadi.");
+                error.code = "ADSGRAM_NO_FILL";
+                finish(reject, error);
+            };
+            controller.addEventListener?.("onBannerNotFound", onNoFill);
+            Promise.resolve(controller.show()).then(
+                (result) => finish(resolve, result),
+                (error) => finish(reject, error),
+            );
+        });
+    },
+
+    async claimAdsgramReward(token, attempts = 10) {
+        let lastError;
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+            try {
+                return await this.api.claimAdsgramReward(token);
+            } catch (error) {
+                lastError = error;
+                if (Number(error?.status) !== 425 || attempt === attempts - 1) throw error;
+                await new Promise((resolve) => setTimeout(resolve, 700));
+            }
+        }
+        throw lastError;
+    },
+
+    async cancelAdsgramSession(token) {
+        if (!token) return;
+        try {
+            await this.api.cancelAdsgramSession(token);
+        } catch (error) {
+            console.warn("Penalty Adsgram session cleanup failed", error);
+        }
+    },
+
+    resetAdsgramController() {
+        this.adsgramController?.destroy?.();
+        this.adsgramController = null;
+    },
+
+    async runAdsgramPrimary() {
+        const session = await this.api.createAdsgramSession();
+        if (!session?.token) throw new Error("Adsgram reward sessiyasi yaratilmadi.");
+        let timeoutId;
+        let result;
+        try {
+            result = await Promise.race([
+                this.showAdsgramAd(this.getAdsgramController()),
+                new Promise((_, reject) => {
+                    timeoutId = setTimeout(() => {
+                        const error = new Error("Adsgram javobi kutilgan vaqtda kelmadi.");
+                        error.code = "ADSGRAM_TIMEOUT";
+                        reject(error);
+                    }, 90000);
+                }),
+            ]);
+        } catch (error) {
+            await this.cancelAdsgramSession(session.token);
+            this.resetAdsgramController();
+            if (!error.code) error.code = "ADSGRAM_SHOW_FAILED";
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+        if (result?.done !== true || result?.error === true) {
+            await this.cancelAdsgramSession(session.token);
+            const error = new Error("Ticket uchun reklamani oxirigacha ko‘ring.");
+            error.code = "ADSGRAM_NOT_REWARDED";
+            throw error;
+        }
+        try {
+            return await this.claimAdsgramReward(session.token);
+        } catch (error) {
+            error.code = "ADSGRAM_CLAIM_FAILED";
+            throw error;
+        }
+    },
+
+    finishAdUnavailable() {
+        this.adPending = false;
+        this.adState = "Hozir reklama topilmadi. Bepul o‘yin ochiq.";
+        this.renderIntro();
+    },
+
+    async runTadsFallback() {
+        this.adState = "TADS reklamasi tekshirilmoqda…";
+        this.renderIntro();
+        try {
+            await this.waitForTads();
+            if (!this.tadsController) {
+                this.tadsController = window.tads.controllers?.["11416"]
+                    || window.tads.init({
+                        widgetId: "11416",
+                        type: "fullscreen",
+                        debug: false,
+                        onShowReward: () => this.confirmTadsReward(),
+                        onAdsNotFound: () => this.finishAdUnavailable(),
+                    });
+            }
+            const controller = await Promise.resolve(this.tadsController);
+            if (typeof controller.loadAd === "function") await controller.loadAd();
+            await controller.showAd();
+        } catch (error) {
+            console.error("Penalty TADS fallback failed", error);
+            this.finishAdUnavailable();
+        }
+    },
+
+    async watchAd() {
+        if (!this.adAvailable()) return;
+        this.adPending = true;
+        this.adState = "Adsgram reklamasi ochilmoqda…";
+        this.renderIntro();
+        try {
+            const outcome = await PENALTY_AD_WATERFALL.run({
+                showAdsgram: () => this.runAdsgramPrimary(),
+                showTads: () => this.runTadsFallback(),
+            });
+            if (outcome.provider === "ADSGRAM" && outcome.reward?.wallet) {
+                this.wallet = outcome.reward.wallet;
+                this.adPending = false;
+                this.adState = "";
+                this.renderIntro();
+            }
+        } catch (error) {
+            this.adPending = false;
+            this.adState = error?.message || "Reward tasdiqlanmadi.";
+            try {
+                this.wallet = await this.api.wallet();
+            } catch (_walletError) {
+                // Keep the current wallet snapshot if refresh is unavailable.
+            }
+            this.renderIntro();
+        }
+    },
+
+    async confirmTadsReward() {
+        const before = Number(this.wallet?.game_tickets || 0);
+        this.adState = "Ticket tasdiqlanmoqda…";
+        this.renderIntro();
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            try {
+                const wallet = await this.api.wallet();
+                if (Number(wallet.game_tickets || 0) > before) {
+                    this.wallet = wallet;
+                    this.adPending = false;
+                    this.adState = "";
+                    this.renderIntro();
+                    return;
+                }
+            } catch (_error) {
+                // TADS webhook processing can be briefly delayed.
+            }
+        }
+        this.adPending = false;
+        this.adState = "Tasdiq kechikmoqda. Birozdan keyin yangilang.";
+        this.renderIntro();
     },
 
     renderOnline(context = {}) {
@@ -377,7 +686,7 @@ const penaltyDuelController = {
             : "Darvozabon sakrashini tanlang";
         const subtext = attacking
             ? "Bu tanlov raqibga ko‘rinmaydi"
-            : "Raqib zarbasini qayerdan kutasiz?";
+            : "Zarba tanlandi ✓ Endi darvozabon uchun bir marta bosing";
         this.root().innerHTML = `
             <div class="pd-shell pd-game pd-online">
                 ${this.onlineScoreboardMarkup(attacking ? "SIZ TEPASIZ" : "SIZ QAYTARASIZ")}
@@ -414,6 +723,7 @@ const penaltyDuelController = {
                     </div>
                 </div>
                 <div class="pd-callout" id="pdCallout" aria-live="assertive"></div>
+                <div class="pd-goal-burst" aria-hidden="true"></div>
                 <div class="pd-ball" id="pdBall" aria-hidden="true">⚽</div>
                 <div class="pd-kicker" id="pdKicker" aria-hidden="true">
                     <i class="pd-player-head"></i><i class="pd-player-shirt"></i>
@@ -427,7 +737,9 @@ const penaltyDuelController = {
     onlineTargetMarkup(direction, icon) {
         const selected = this.localChoice.kick === direction || this.localChoice.keeper === direction;
         return `<button class="pd-target ${direction} ${selected ? "selected" : ""}" type="button"
-            aria-label="${this.directionLabel(direction)}" onclick="penaltyDuelController.chooseOnline('${direction}')"
+            aria-label="${this.directionLabel(direction)}"
+            onpointerup="penaltyDuelController.targetPress(event, '${direction}', true)"
+            onclick="penaltyDuelController.targetPress(event, '${direction}', true)"
             ${this.busy ? "disabled" : ""}><span>${icon}</span></button>`;
     },
 
@@ -580,7 +892,20 @@ const penaltyDuelController = {
     },
 
     async backToLobby() {
-        try { this.wallet = await this.api.wallet(); } catch (error) { console.warn(error); }
+        try {
+            const [wallet, freeRating, ticketRating] = await Promise.all([
+                this.api.wallet(),
+                this.api.leaderboard("FREE").catch(() => ({ rows: this.leaderboards.FREE })),
+                this.api.leaderboard("TICKET").catch(() => ({ rows: this.leaderboards.TICKET })),
+            ]);
+            this.wallet = wallet;
+            this.leaderboards = {
+                FREE: freeRating?.rows || [],
+                TICKET: ticketRating?.rows || [],
+            };
+        } catch (error) {
+            console.warn(error);
+        }
         this.screenMode = "ONLINE";
         this.match = null;
         this.localStep = "KICK";
@@ -621,6 +946,7 @@ const penaltyDuelController = {
                         </div>
                     </div>
                     <div class="pd-callout" id="pdCallout" aria-live="assertive"></div>
+                    <div class="pd-goal-burst" aria-hidden="true"></div>
                     <div class="pd-ball" id="pdBall" aria-hidden="true">⚽</div>
                     <div class="pd-kicker" id="pdKicker" aria-hidden="true">
                         <i class="pd-player-head"></i><i class="pd-player-shirt"></i>
@@ -650,7 +976,17 @@ const penaltyDuelController = {
 
     targetMarkup(direction, icon) {
         return `<button class="pd-target ${direction}" type="button" aria-label="${this.directionLabel(direction)}"
-            onclick="penaltyDuelController.choose('${direction}')" ${this.busy ? "disabled" : ""}><span>${icon}</span></button>`;
+            onpointerup="penaltyDuelController.targetPress(event, '${direction}', false)"
+            onclick="penaltyDuelController.targetPress(event, '${direction}', false)"
+            ${this.busy ? "disabled" : ""}><span>${icon}</span></button>`;
+    },
+
+    targetPress(event, direction, online) {
+        if (event?.type === "click" && Number(event.detail) > 0) return;
+        event?.preventDefault?.();
+        if (event?.currentTarget) event.currentTarget.disabled = true;
+        if (online) this.chooseOnline(direction);
+        else this.choose(direction);
     },
 
     roundsMarkup() {
@@ -699,6 +1035,7 @@ const penaltyDuelController = {
         ball.classList.add(`to-${result.direction}`);
         if (!result.goal) ball.classList.add("is-saved");
         keeper.classList.add(`dive-${result.keeperDirection}`);
+        pitch.classList.add(result.goal ? "has-goal" : "has-save");
         callout.textContent = result.goal ? "GOL!" : "QAYTARDI!";
         callout.classList.add(result.goal ? "is-goal" : "is-save");
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.(result.goal ? "success" : "warning");
