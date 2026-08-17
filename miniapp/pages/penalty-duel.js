@@ -697,6 +697,7 @@ const penaltyDuelController = {
         pitch.classList.add("is-animating");
         kicker.classList.add("is-kicking");
         ball.classList.add(`to-${result.direction}`);
+        if (!result.goal) ball.classList.add("is-saved");
         keeper.classList.add(`dive-${result.keeperDirection}`);
         callout.textContent = result.goal ? "GOL!" : "QAYTARDI!";
         callout.classList.add(result.goal ? "is-goal" : "is-save");
