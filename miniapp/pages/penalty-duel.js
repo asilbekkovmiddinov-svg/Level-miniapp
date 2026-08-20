@@ -132,6 +132,12 @@ class PenaltyDuelClient {
     cancelAdsgramSession(token) {
         return this.request("/penalty-duel/rewards/adsgram/cancel", "POST", { token });
     }
+    createOnclickaSession() {
+        return this.request("/penalty-duel/rewards/onclicka/session", "POST");
+    }
+    cancelOnclickaSession(token) {
+        return this.request("/penalty-duel/rewards/onclicka/cancel", "POST", { token });
+    }
     socketUrl() {
         const protocol = this.baseUrl.startsWith("https:") ? "wss:" : "ws:";
         const host = this.baseUrl.replace(/^https?:/, "");
@@ -608,6 +614,15 @@ const penaltyDuelController = {
         }
     },
 
+    async cancelOnclickaSession(token) {
+        if (!token) return;
+        try {
+            await this.api.cancelOnclickaSession(token);
+        } catch (error) {
+            console.warn("Penalty OnClickA session cleanup failed", error);
+        }
+    },
+
     resetAdsgramController() {
         this.adsgramController?.destroy?.();
         this.adsgramController = null;
@@ -784,9 +799,16 @@ const penaltyDuelController = {
                 throw error;
             }
         }
+        const session = await this.api.createOnclickaSession();
+        if (!session?.token) {
+            const error = new Error("OnClickA reward sessiyasi yaratilmadi.");
+            error.code = "ONCLICKA_SESSION_FAILED";
+            throw error;
+        }
         try {
             await this.onclickaShow();
         } catch (error) {
+            await this.cancelOnclickaSession(session.token);
             const cancelled = /cancel|close|skip/i.test(String(error?.message || error || ""));
             error.code = cancelled ? "ONCLICKA_CANCELLED" : "ONCLICKA_SHOW_FAILED";
             error.fallback = !cancelled;

@@ -135,6 +135,10 @@ test("Penalty Duel ticket ad uses a global five minute four-provider rotation", 
     assert.match(source, /last_penalty_duel_rewarded_ad_at/);
     assert.match(source, /rewardedAt > previousRewardAt/);
     assert.match(source, /\/penalty-duel\/rewards\/adsgram\/session/);
+    assert.match(source, /\/penalty-duel\/rewards\/onclicka\/session/);
+    assert.match(source, /\/penalty-duel\/rewards\/onclicka\/cancel/);
+    assert.match(source, /const session = await this\.api\.createOnclickaSession\(\)/);
+    assert.match(source, /await this\.cancelOnclickaSession\(session\.token\)/);
     assert.match(html, /penalty-duel-ad-rotation\.js/);
     assert.match(source, /inapp\.telega\.io\/sdk\/v1\/sdk\.js/);
     assert.match(source, /js\.onclckvd\.com\/in-stream-ad-admanager\/tma\.js/);
