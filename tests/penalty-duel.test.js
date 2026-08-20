@@ -8,6 +8,7 @@ const {
     PENALTY_DIRECTIONS,
     penaltyDuelRoundLabel,
     penaltyDuelRoundSlots,
+    penaltyDuelRatingCountdown,
 } = require("../miniapp/pages/penalty-duel.js");
 const html = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
 const app = fs.readFileSync(path.join(__dirname, "../miniapp/app.js"), "utf8");
@@ -151,8 +152,30 @@ test("Penalty Duel lobby exposes separate ratings and the authoritative endpoint
     assert.match(source, /\/penalty-duel\/leaderboard\?mode=/);
     assert.match(source, /this\.api\.leaderboard\("FREE"\)/);
     assert.match(source, /this\.api\.leaderboard\("TICKET"\)/);
-    assert.match(source, /row\.rating/);
+    assert.match(source, /row\.weekly_rating/);
+    assert.match(source, /row\.overall_rating/);
+    assert.match(source, /freeRating\?\.week_end_at/);
+    assert.match(source, /ticketRating\?\.week_end_at/);
+    assert.match(source, /id="pdRatingCountdown"/);
+    assert.match(source, /this\.refreshRatings\(\)/);
     assert.match(css, /\.pd-rating-row\{display:grid/);
+    assert.match(css, /\.pd-rating-period\{display:flex/);
+});
+
+test("weekly rating countdown shows remaining days, hours, and minutes", () => {
+    const now = Date.parse("2026-08-20T12:00:00Z");
+    assert.equal(
+        penaltyDuelRatingCountdown("2026-08-23T19:00:00+00:00", now),
+        "3 kun 07 soat 00 daqiqa",
+    );
+    assert.equal(
+        penaltyDuelRatingCountdown("2026-08-20T12:00:01Z", now),
+        "0 kun 00 soat 01 daqiqa",
+    );
+    assert.equal(
+        penaltyDuelRatingCountdown("2026-08-20T11:59:59Z", now),
+        "Yangi hafta boshlanmoqda",
+    );
 });
 
 test("Penalty Duel ticket ad uses the server-enabled three-provider production rotation", () => {

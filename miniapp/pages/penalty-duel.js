@@ -50,6 +50,19 @@ function penaltyDuelRoundSlots(match) {
     });
 }
 
+function penaltyDuelRatingCountdown(endAt, now = Date.now()) {
+    if (!endAt) return "Vaqt aniqlanmoqda";
+    const deadline = new Date(endAt).getTime();
+    if (!Number.isFinite(deadline)) return "Vaqt aniqlanmoqda";
+    const remaining = deadline - Number(now);
+    if (remaining <= 0) return "Yangi hafta boshlanmoqda";
+    const totalMinutes = Math.ceil(remaining / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    return `${days} kun ${String(hours).padStart(2, "0")} soat ${String(minutes).padStart(2, "0")} daqiqa`;
+}
+
 class PenaltyDuelEngine {
     constructor(options = {}) {
         this.totalRounds = Number(options.totalRounds || 5);
@@ -195,6 +208,7 @@ const penaltyDuelController = {
     syncTimer: null,
     countdownTimer: null,
     adTimer: null,
+    ratingCountdownTimer: null,
     animationTimer: null,
     stopped: false,
     syncBusy: false,
@@ -214,6 +228,11 @@ const penaltyDuelController = {
     adSdkPromises: {},
     ratingMode: "FREE",
     leaderboards: { FREE: [], TICKET: [] },
+    leaderboardMeta: {
+        FREE: { weekStartAt: null, weekEndAt: null },
+        TICKET: { weekStartAt: null, weekEndAt: null },
+    },
+    ratingRefreshBusy: false,
 
     async open() {
         this.stop();
@@ -232,10 +251,7 @@ const penaltyDuelController = {
             this.wallet = wallet;
             this.adConfig = adConfig || {};
             this.match = match;
-            this.leaderboards = {
-                FREE: freeRating?.rows || [],
-                TICKET: ticketRating?.rows || [],
-            };
+            this.setLeaderboardPayloads(freeRating, ticketRating);
             this.screenMode = "ONLINE";
             if (match) this.renderOnline();
             else this.renderIntro();
@@ -251,10 +267,12 @@ const penaltyDuelController = {
         clearInterval(this.syncTimer);
         clearInterval(this.countdownTimer);
         clearInterval(this.adTimer);
+        clearInterval(this.ratingCountdownTimer);
         this.animationTimer = null;
         this.syncTimer = null;
         this.countdownTimer = null;
         this.adTimer = null;
+        this.ratingCountdownTimer = null;
         this.stopped = true;
         this.syncBusy = false;
         if (this.socket) {
@@ -454,6 +472,7 @@ const penaltyDuelController = {
                 <p class="pd-development-note">Tanlovlar raqibdan yashirin. Hisob va ticket server tomonidan avtomatik hisoblanadi.</p>
             </div>`;
         this.startAdCountdown();
+        this.startRatingCountdown();
     },
 
     setRatingMode(mode) {
@@ -464,16 +483,21 @@ const penaltyDuelController = {
 
     ratingMarkup() {
         const rows = this.leaderboards[this.ratingMode] || [];
+        const meta = this.leaderboardMeta[this.ratingMode] || {};
         const list = rows.length
             ? rows.map((row) => {
                 const username = row.username ? `@${this.escape(row.username)}` : "Telegram o‘yinchi";
+                const weeklyRating = row.weekly_rating ?? row.rating ?? 1000;
+                const overallRating = row.overall_rating ?? row.rating ?? 1000;
+                const weeklyWins = row.weekly_wins ?? row.wins ?? 0;
+                const weeklyLosses = row.weekly_losses ?? row.losses ?? 0;
                 return `
                     <article class="pd-rating-row">
                         <b class="pd-rating-rank">#${row.rank}</b>
                         <div><strong>${this.escape(row.display_name)}</strong><small>${username}</small></div>
-                        <span><b>${row.rating}</b><small>Reyting</small></span>
-                        <span><b>${row.wins}</b><small>G‘alaba</small></span>
-                        <span><b>${row.losses}</b><small>Mag‘lubiyat</small></span>
+                        <span class="pd-rating-weekly"><b>${weeklyRating}</b><small>Haftalik</small></span>
+                        <span><b>${overallRating}</b><small>Umumiy</small></span>
+                        <span><b>${weeklyWins}/${weeklyLosses}</b><small>G‘/M</small></span>
                     </article>`;
             }).join("")
             : '<p class="pd-rating-empty">Bu rejimda hali yakunlangan o‘yin yo‘q.</p>';
@@ -484,8 +508,65 @@ const penaltyDuelController = {
                     <button class="${this.ratingMode === "FREE" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingMode('FREE')">Bepul 1vs1</button>
                     <button class="${this.ratingMode === "TICKET" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingMode('TICKET')">Ticket Match</button>
                 </nav>
+                <div class="pd-rating-period"><span>⏱ HAFTA TUGASHIGA</span><strong id="pdRatingCountdown">${penaltyDuelRatingCountdown(meta.weekEndAt)}</strong></div>
                 <div class="pd-rating-list">${list}</div>
             </section>`;
+    },
+
+    setLeaderboardPayloads(freeRating, ticketRating) {
+        this.leaderboards = {
+            FREE: freeRating?.rows || [],
+            TICKET: ticketRating?.rows || [],
+        };
+        this.leaderboardMeta = {
+            FREE: {
+                weekStartAt: freeRating?.week_start_at || this.leaderboardMeta.FREE?.weekStartAt || null,
+                weekEndAt: freeRating?.week_end_at || this.leaderboardMeta.FREE?.weekEndAt || null,
+            },
+            TICKET: {
+                weekStartAt: ticketRating?.week_start_at || this.leaderboardMeta.TICKET?.weekStartAt || null,
+                weekEndAt: ticketRating?.week_end_at || this.leaderboardMeta.TICKET?.weekEndAt || null,
+            },
+        };
+    },
+
+    startRatingCountdown() {
+        clearInterval(this.ratingCountdownTimer);
+        this.ratingCountdownTimer = null;
+        this.updateRatingCountdown();
+        this.ratingCountdownTimer = setInterval(() => this.updateRatingCountdown(), 1000);
+    },
+
+    updateRatingCountdown() {
+        const node = document.getElementById("pdRatingCountdown");
+        if (!node) return;
+        const endAt = this.leaderboardMeta[this.ratingMode]?.weekEndAt;
+        node.textContent = penaltyDuelRatingCountdown(endAt);
+        if (!endAt) return;
+        const deadline = new Date(endAt).getTime();
+        if (Number.isFinite(deadline) && deadline <= Date.now() && !this.ratingRefreshBusy) {
+            clearInterval(this.ratingCountdownTimer);
+            this.ratingCountdownTimer = null;
+            this.refreshRatings();
+        }
+    },
+
+    async refreshRatings() {
+        if (this.ratingRefreshBusy) return;
+        this.ratingRefreshBusy = true;
+        try {
+            const [freeRating, ticketRating] = await Promise.all([
+                this.api.leaderboard("FREE"),
+                this.api.leaderboard("TICKET"),
+            ]);
+            this.setLeaderboardPayloads(freeRating, ticketRating);
+            if (!this.stopped && !this.match && this.screenMode === "ONLINE") this.renderIntro();
+        } catch (error) {
+            console.warn(error);
+            if (!this.stopped) this.ratingCountdownTimer = setInterval(() => this.updateRatingCountdown(), 60000);
+        } finally {
+            this.ratingRefreshBusy = false;
+        }
     },
 
     adCooldownRemainingMs() {
@@ -1153,10 +1234,7 @@ const penaltyDuelController = {
                 this.api.leaderboard("TICKET").catch(() => ({ rows: this.leaderboards.TICKET })),
             ]);
             this.wallet = wallet;
-            this.leaderboards = {
-                FREE: freeRating?.rows || [],
-                TICKET: ticketRating?.rows || [],
-            };
+            this.setLeaderboardPayloads(freeRating, ticketRating);
         } catch (error) {
             console.warn(error);
         }
@@ -1348,4 +1426,5 @@ if (typeof module !== "undefined") module.exports = {
     PENALTY_DIRECTIONS,
     penaltyDuelRoundLabel,
     penaltyDuelRoundSlots,
+    penaltyDuelRatingCountdown,
 };
