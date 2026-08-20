@@ -3,7 +3,7 @@ const PENALTY_REGULATION_SHOTS = 10;
 const PENALTY_REGULATION_ROUNDS = 5;
 const PENALTY_FALLBACK_SYNC_MS = 500;
 const PENALTY_RECONNECT_MS = 750;
-const PENALTY_AD_COOLDOWN_MS = 5 * 60 * 1000;
+const PENALTY_AD_COOLDOWN_MS = 30 * 60 * 1000;
 const PENALTY_AD_ROTATION = globalThis.PenaltyDuelAdRotation;
 const PENALTY_TELEGA_SDK_URL = "https://inapp.telega.io/sdk/v1/sdk.js";
 const PENALTY_ONCLICKA_SDK_URL = "https://js.onclckvd.com/in-stream-ad-admanager/tma.js";
@@ -614,7 +614,7 @@ const penaltyDuelController = {
     adStatusText() {
         if (this.adState) return this.adState;
         const remaining = this.adCooldownRemainingMs();
-        if (remaining === 0) return "Har 5 daqiqada bir marta";
+        if (remaining === 0) return "Har 30 daqiqada bir marta";
         const seconds = Math.ceil(remaining / 1000);
         const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
         const rest = String(seconds % 60).padStart(2, "0");

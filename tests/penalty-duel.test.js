@@ -189,7 +189,8 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /onclick="penaltyDuelController\.watchAd\(\)"/);
     assert.match(source, /id="pdAdStatus"/);
     assert.match(source, /id="pdAdButton"/);
-    assert.match(source, /PENALTY_AD_COOLDOWN_MS = 5 \* 60 \* 1000/);
+    assert.match(source, /PENALTY_AD_COOLDOWN_MS = 30 \* 60 \* 1000/);
+    assert.match(source, /Har 30 daqiqada bir marta/);
     assert.match(source, /ADSGRAM: \(\) => this\.runAdsgramPrimary\(\)/);
     assert.match(source, /TADS: \(\) => this\.runTadsProvider\(\)/);
     assert.match(source, /TELEGA: \(\) => this\.runTelegaProvider\(\)/);
