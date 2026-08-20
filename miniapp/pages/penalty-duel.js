@@ -1,4 +1,6 @@
 const PENALTY_DIRECTIONS = ["top-left", "top-right", "center", "bottom-left", "bottom-right"];
+const PENALTY_REGULATION_SHOTS = 10;
+const PENALTY_REGULATION_ROUNDS = 5;
 const PENALTY_FALLBACK_SYNC_MS = 500;
 const PENALTY_RECONNECT_MS = 750;
 const PENALTY_AD_COOLDOWN_MS = 5 * 60 * 1000;
@@ -11,6 +13,42 @@ const PENALTY_AD_PROVIDER_LABELS = Object.freeze({
     TELEGA: "Telega.io",
     ONCLICKA: "OnClickA",
 });
+
+function penaltyDuelShotNumber(match) {
+    return Math.max(1, Number(match?.shot_number || match?.round_number) || 1);
+}
+
+function penaltyDuelRoundLabel(match) {
+    const shot = penaltyDuelShotNumber(match);
+    if (shot > PENALTY_REGULATION_SHOTS) {
+        return `SD${Math.ceil((shot - PENALTY_REGULATION_SHOTS) / 2)}`;
+    }
+    return `${Math.ceil(shot / 2)}/${PENALTY_REGULATION_ROUNDS}`;
+}
+
+function penaltyDuelRoundSlots(match) {
+    const currentPair = Math.ceil(penaltyDuelShotNumber(match) / 2);
+    const pairNumbers = currentPair <= 7
+        ? Array.from({ length: Math.max(PENALTY_REGULATION_ROUNDS, currentPair) }, (_, index) => index + 1)
+        : [1, 2, 3, 4, 5, currentPair - 1, currentPair];
+    const history = Array.isArray(match?.history) ? match.history : [];
+    const playerOne = match?.side === "PLAYER_ONE";
+    return pairNumbers.map((pair) => {
+        const oddShot = pair * 2 - 1;
+        const evenShot = pair * 2;
+        const yourShot = playerOne ? oddShot : evenShot;
+        const opponentShot = playerOne ? evenShot : oddShot;
+        const yourResult = history.find((item) => Number(item.round) === yourShot);
+        const opponentResult = history.find((item) => Number(item.round) === opponentShot);
+        return {
+            pair,
+            label: pair <= PENALTY_REGULATION_ROUNDS ? String(pair) : `SD${pair - PENALTY_REGULATION_ROUNDS}`,
+            yourState: yourResult ? (yourResult.you_goal ? "goal" : "miss") : "empty",
+            opponentState: opponentResult ? (opponentResult.opponent_goal ? "goal" : "miss") : "empty",
+            active: match?.status === "ACTIVE" && pair === currentPair,
+        };
+    });
+}
 
 class PenaltyDuelEngine {
     constructor(options = {}) {
@@ -113,6 +151,7 @@ class PenaltyDuelClient {
         return this.request(`/penalty-duel/leaderboard?mode=${encodeURIComponent(mode)}&limit=20`);
     }
     active() { return this.request("/penalty-duel/matches/active"); }
+    matchById(matchId) { return this.request(`/penalty-duel/matches/${matchId}`); }
     join(mode) { return this.request("/penalty-duel/matchmaking/join", "POST", { mode }); }
     choices(matchId, body) {
         return this.request(`/penalty-duel/matches/${matchId}/choices`, "POST", body);
@@ -138,10 +177,11 @@ class PenaltyDuelClient {
     cancelOnclickaSession(token) {
         return this.request("/penalty-duel/rewards/onclicka/cancel", "POST", { token });
     }
-    socketUrl() {
+    socketUrl(matchId = null) {
         const protocol = this.baseUrl.startsWith("https:") ? "wss:" : "ws:";
         const host = this.baseUrl.replace(/^https?:/, "");
-        return `${protocol}${host}/penalty-duel/ws?init_data=${encodeURIComponent(telegramInitData())}`;
+        const trackedMatch = matchId ? `&match_id=${encodeURIComponent(matchId)}` : "";
+        return `${protocol}${host}/penalty-duel/ws?init_data=${encodeURIComponent(telegramInitData())}${trackedMatch}`;
     }
 }
 
@@ -316,7 +356,9 @@ const penaltyDuelController = {
         if (this.socket && this.socket.readyState === WebSocket.OPEN) return;
         this.syncBusy = true;
         try {
-            const match = await this.api.active();
+            const trackedMatchId = this.match?.id;
+            let match = await this.api.active();
+            if (!match && trackedMatchId) match = await this.api.matchById(trackedMatchId);
             if (match) this.applyMatchState(match);
         } catch (error) {
             console.warn("Penalty Duel state sync failed:", error);
@@ -336,7 +378,7 @@ const penaltyDuelController = {
             this.socket.onclose = null;
             this.socket.close();
         }
-        this.socket = new WebSocket(this.api.socketUrl());
+        this.socket = new WebSocket(this.api.socketUrl(this.match?.id));
         this.socket.onmessage = (event) => {
             try {
                 const message = JSON.parse(event.data);
@@ -956,7 +998,7 @@ const penaltyDuelController = {
 
     onlineScoreboardMarkup(phaseLabel) {
         const match = this.match;
-        const roundLabel = match.sudden_death ? "SD" : `${match.round_number}/5`;
+        const roundLabel = penaltyDuelRoundLabel(match);
         return `
             <section class="pd-scoreboard">
                 <article class="is-player"><small>${this.escape(match.you?.display_name || this.playerName())}</small><strong>${match.your_score}</strong></article>
@@ -967,24 +1009,25 @@ const penaltyDuelController = {
 
     onlineRoundsMarkup() {
         const match = this.match;
-        const visibleRounds = Math.max(5, Math.min(7, Number(match.round_number || 1)));
-        return Array.from({ length: visibleRounds }, (_, index) => {
-            const round = index + 1;
-            const result = match.history?.find((item) => item.round === round);
-            const active = round === match.round_number && match.status === "ACTIVE";
-            const yourState = result ? (result.you_goal ? "goal" : "miss") : "empty";
-            const opponentState = result ? (result.opponent_goal ? "goal" : "miss") : "empty";
-            return `<span class="${active ? "active" : ""}"><small>${round > 5 ? `SD${round - 5}` : round}</small><i class="${yourState}"></i><i class="${opponentState}"></i></span>`;
+        const slots = penaltyDuelRoundSlots(match);
+        return slots.map((slot) => {
+            return `<span class="${slot.active ? "active" : ""}"><small>${slot.label}</small><i class="${slot.yourState}"></i><i class="${slot.opponentState}"></i></span>`;
         }).join("");
     },
 
     recentRoundMarkup() {
         const last = this.match.history?.at(-1);
         if (!last) return "";
+        const pair = Math.ceil(Number(last.round) / 2);
+        const youAttacked = this.match.side === "PLAYER_ONE"
+            ? Number(last.round) % 2 === 1
+            : Number(last.round) % 2 === 0;
+        const goal = youAttacked ? last.you_goal : last.opponent_goal;
+        const attacker = youAttacked ? "Siz" : "Raqib";
         return `
             <section class="pd-round-summary">
-                <small>${last.round > 5 ? `SUDDEN DEATH ${last.round - 5}` : `${last.round}-RAUND`} NATIJASI</small>
-                <span><b>Siz: ${last.you_goal ? "GOL ⚽" : "SEYV 🧤"}</b><b>Raqib: ${last.opponent_goal ? "GOL ⚽" : "SEYV 🧤"}</b></span>
+                <small>${pair > 5 ? `SUDDEN DEATH ${pair - 5}` : `${pair}-RAUND`} • ${last.round}-ZARBA</small>
+                <span><b>Zarba: ${attacker}</b><b>${goal ? "GOL ⚽" : "SEYV 🧤"}</b></span>
             </section>`;
     },
 
@@ -1300,4 +1343,9 @@ const penaltyDuelController = {
 if (typeof window !== "undefined") window.penaltyDuelController = penaltyDuelController;
 async function loadPenaltyDuelPage() { await penaltyDuelController.open(); }
 
-if (typeof module !== "undefined") module.exports = { PenaltyDuelEngine, PENALTY_DIRECTIONS };
+if (typeof module !== "undefined") module.exports = {
+    PenaltyDuelEngine,
+    PENALTY_DIRECTIONS,
+    penaltyDuelRoundLabel,
+    penaltyDuelRoundSlots,
+};
