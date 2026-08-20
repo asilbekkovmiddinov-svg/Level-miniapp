@@ -196,7 +196,6 @@ const wallRushController = {
         const root = document.getElementById("wallRushPage");
         if (!this.match) {
             root.innerHTML = this.lobbyMarkup();
-            this.startAdCountdown();
             return;
         }
         if (this.match.status === "WAITING") {
@@ -223,12 +222,6 @@ const wallRushController = {
                     <article><span>🎟</span><small>GAME TICKET</small><b>${game}</b></article>
                     <article><span>🏆</span><small>TOURNAMENT</small><b>${tournament}</b></article>
                 </section>
-                <section class="wr-ad-card">
-                    <span>🎬</span>
-                    <div><strong>Reklama ko‘rib ticket oling</strong><small id="wrAdStatus">${this.adStatusText()}</small></div>
-                    <button id="wrTadsButton" onclick="wallRushController.watchAd()" ${this.adAvailable() ? "" : "disabled"}>+1 🎟</button>
-                    <div id="tads-container-11416" hidden></div>
-                </section>
                 <section class="wr-modes">
                     <button onclick="wallRushController.join('FREE')">
                         <span>∞</span><strong>Bepul o‘yin</strong><small>Cheksiz • yutuqsiz</small>
@@ -238,7 +231,6 @@ const wallRushController = {
                     </button>
                 </section>
                 ${this.ratingMarkup()}
-                <p class="wr-note">Reklama topilmasa ham bepul rejim doim ochiq qoladi.</p>
             </div>`;
     },
 
