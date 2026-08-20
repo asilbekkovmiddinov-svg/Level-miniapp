@@ -148,18 +148,25 @@ test("a direction is accepted on the first pointer release without a duplicate c
     assert.match(source, /Zarba tanlandi ✓ Endi darvozabon uchun bir marta bosing/);
 });
 
-test("Penalty Duel lobby exposes separate ratings and the authoritative endpoint", () => {
+test("Penalty Duel lobby exposes separate mode and period rankings", () => {
     assert.match(source, /\/penalty-duel\/leaderboard\?mode=/);
     assert.match(source, /this\.api\.leaderboard\("FREE"\)/);
     assert.match(source, /this\.api\.leaderboard\("TICKET"\)/);
-    assert.match(source, /row\.weekly_rating/);
-    assert.match(source, /row\.overall_rating/);
+    assert.match(source, /freeRating\?\.weekly_rows/);
+    assert.match(source, /freeRating\?\.overall_rows/);
+    assert.match(source, /ticketRating\?\.weekly_rows/);
+    assert.match(source, /ticketRating\?\.overall_rows/);
+    assert.match(source, /setRatingPeriod\('WEEKLY'\)/);
+    assert.match(source, /setRatingPeriod\('OVERALL'\)/);
+    assert.match(source, /this\.leaderboards\[this\.ratingMode\]\?\.\[this\.ratingPeriod\]/);
+    assert.doesNotMatch(source, /<small>Haftalik<\/small>[\s\S]*<small>Umumiy<\/small>/);
     assert.match(source, /freeRating\?\.week_end_at/);
     assert.match(source, /ticketRating\?\.week_end_at/);
     assert.match(source, /id="pdRatingCountdown"/);
     assert.match(source, /this\.refreshRatings\(\)/);
     assert.match(css, /\.pd-rating-row\{display:grid/);
     assert.match(css, /\.pd-rating-period\{display:flex/);
+    assert.match(css, /\.pd-rating-scope-tabs/);
 });
 
 test("weekly rating countdown shows remaining days, hours, and minutes", () => {

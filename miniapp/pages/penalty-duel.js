@@ -227,7 +227,11 @@ const penaltyDuelController = {
     onclickaShow: null,
     adSdkPromises: {},
     ratingMode: "FREE",
-    leaderboards: { FREE: [], TICKET: [] },
+    ratingPeriod: "WEEKLY",
+    leaderboards: {
+        FREE: { WEEKLY: [], OVERALL: [] },
+        TICKET: { WEEKLY: [], OVERALL: [] },
+    },
     leaderboardMeta: {
         FREE: { weekStartAt: null, weekEndAt: null },
         TICKET: { weekStartAt: null, weekEndAt: null },
@@ -481,42 +485,57 @@ const penaltyDuelController = {
         this.renderIntro();
     },
 
+    setRatingPeriod(period) {
+        if (!Object.hasOwn(this.leaderboards[this.ratingMode] || {}, period)) return;
+        this.ratingPeriod = period;
+        this.renderIntro();
+    },
+
     ratingMarkup() {
-        const rows = this.leaderboards[this.ratingMode] || [];
+        const rows = this.leaderboards[this.ratingMode]?.[this.ratingPeriod] || [];
         const meta = this.leaderboardMeta[this.ratingMode] || {};
         const list = rows.length
             ? rows.map((row) => {
                 const username = row.username ? `@${this.escape(row.username)}` : "Telegram o‘yinchi";
-                const weeklyRating = row.weekly_rating ?? row.rating ?? 1000;
-                const overallRating = row.overall_rating ?? row.rating ?? 1000;
-                const weeklyWins = row.weekly_wins ?? row.wins ?? 0;
-                const weeklyLosses = row.weekly_losses ?? row.losses ?? 0;
                 return `
                     <article class="pd-rating-row">
                         <b class="pd-rating-rank">#${row.rank}</b>
                         <div><strong>${this.escape(row.display_name)}</strong><small>${username}</small></div>
-                        <span class="pd-rating-weekly"><b>${weeklyRating}</b><small>Haftalik</small></span>
-                        <span><b>${overallRating}</b><small>Umumiy</small></span>
-                        <span><b>${weeklyWins}/${weeklyLosses}</b><small>G‘/M</small></span>
+                        <span><b>${row.rating ?? 1000}</b><small>Reyting</small></span>
+                        <span><b>${row.wins ?? 0}</b><small>G‘alaba</small></span>
+                        <span><b>${row.losses ?? 0}</b><small>Mag‘lubiyat</small></span>
                     </article>`;
             }).join("")
-            : '<p class="pd-rating-empty">Bu rejimda hali yakunlangan o‘yin yo‘q.</p>';
+            : `<p class="pd-rating-empty">${this.ratingPeriod === "WEEKLY" ? "Bu haftada" : "Umumiy hisobda"} hali yakunlangan o‘yin yo‘q.</p>`;
+        const periodInfo = this.ratingPeriod === "WEEKLY"
+            ? `<div class="pd-rating-period"><span>⏱ HAFTA TUGASHIGA</span><strong id="pdRatingCountdown">${penaltyDuelRatingCountdown(meta.weekEndAt)}</strong></div>`
+            : '<div class="pd-rating-period pd-rating-all-time"><span>♾ UMUMIY REYTING</span><strong>Barcha o‘yinlar</strong></div>';
         return `
             <section class="pd-rating">
-                <header><div><small>PENALTY REYTINGI</small><h3>Eng yaxshi tepuvchilar</h3></div><span>🏅</span></header>
-                <nav role="tablist">
+                <header><div><small>PENALTY REYTINGI</small><h3>${this.ratingPeriod === "WEEKLY" ? "Haftalik" : "Umumiy"} jadval</h3></div><span>🏅</span></header>
+                <nav class="pd-rating-mode-tabs" role="tablist">
                     <button class="${this.ratingMode === "FREE" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingMode('FREE')">Bepul 1vs1</button>
                     <button class="${this.ratingMode === "TICKET" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingMode('TICKET')">Ticket Match</button>
                 </nav>
-                <div class="pd-rating-period"><span>⏱ HAFTA TUGASHIGA</span><strong id="pdRatingCountdown">${penaltyDuelRatingCountdown(meta.weekEndAt)}</strong></div>
+                <nav class="pd-rating-scope-tabs" role="tablist">
+                    <button class="${this.ratingPeriod === "WEEKLY" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingPeriod('WEEKLY')">Haftalik reyting</button>
+                    <button class="${this.ratingPeriod === "OVERALL" ? "active" : ""}" type="button" onclick="penaltyDuelController.setRatingPeriod('OVERALL')">Umumiy reyting</button>
+                </nav>
+                ${periodInfo}
                 <div class="pd-rating-list">${list}</div>
             </section>`;
     },
 
     setLeaderboardPayloads(freeRating, ticketRating) {
         this.leaderboards = {
-            FREE: freeRating?.rows || [],
-            TICKET: ticketRating?.rows || [],
+            FREE: {
+                WEEKLY: freeRating?.weekly_rows || freeRating?.rows || [],
+                OVERALL: freeRating?.overall_rows || [],
+            },
+            TICKET: {
+                WEEKLY: ticketRating?.weekly_rows || ticketRating?.rows || [],
+                OVERALL: ticketRating?.overall_rows || [],
+            },
         };
         this.leaderboardMeta = {
             FREE: {
@@ -533,6 +552,7 @@ const penaltyDuelController = {
     startRatingCountdown() {
         clearInterval(this.ratingCountdownTimer);
         this.ratingCountdownTimer = null;
+        if (this.ratingPeriod !== "WEEKLY") return;
         this.updateRatingCountdown();
         this.ratingCountdownTimer = setInterval(() => this.updateRatingCountdown(), 1000);
     },
@@ -1230,8 +1250,14 @@ const penaltyDuelController = {
         try {
             const [wallet, freeRating, ticketRating] = await Promise.all([
                 this.api.wallet(),
-                this.api.leaderboard("FREE").catch(() => ({ rows: this.leaderboards.FREE })),
-                this.api.leaderboard("TICKET").catch(() => ({ rows: this.leaderboards.TICKET })),
+                this.api.leaderboard("FREE").catch(() => ({
+                    weekly_rows: this.leaderboards.FREE.WEEKLY,
+                    overall_rows: this.leaderboards.FREE.OVERALL,
+                })),
+                this.api.leaderboard("TICKET").catch(() => ({
+                    weekly_rows: this.leaderboards.TICKET.WEEKLY,
+                    overall_rows: this.leaderboards.TICKET.OVERALL,
+                })),
             ]);
             this.wallet = wallet;
             this.setLeaderboardPayloads(freeRating, ticketRating);
