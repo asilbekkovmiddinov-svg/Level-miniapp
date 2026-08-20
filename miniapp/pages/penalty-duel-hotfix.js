@@ -56,8 +56,19 @@
         const goal = typeof serverGoal === "boolean"
             ? serverGoal
             : Boolean(direction && keeperDirection && direction !== keeperDirection);
-        this.renderOnline({ result: { direction, keeperDirection, goal } });
         clearTimeout(this.animationTimer);
+        if (match.status === "FINISHED") {
+            this.match = {
+                ...match,
+                status: "ACTIVE",
+                you_submitted: false,
+                your_role: youAttacked ? "KICK" : "KEEPER",
+            };
+            this.renderOnline({ result: { direction, keeperDirection, goal } });
+            this.match = match;
+        } else {
+            this.renderOnline({ result: { direction, keeperDirection, goal } });
+        }
         this.animationTimer = setTimeout(() => this.renderOnline(), 1450);
     };
 

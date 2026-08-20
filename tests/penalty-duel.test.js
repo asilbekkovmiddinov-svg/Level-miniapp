@@ -3,7 +3,13 @@ const test = require("node:test");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { PenaltyDuelEngine, PENALTY_DIRECTIONS } = require("../miniapp/pages/penalty-duel.js");
+const {
+    PenaltyDuelEngine,
+    PENALTY_DIRECTIONS,
+    penaltyDuelRoundLabel,
+    penaltyDuelRoundSlots,
+    penaltyDuelRatingCountdown,
+} = require("../miniapp/pages/penalty-duel.js");
 const html = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
 const app = fs.readFileSync(path.join(__dirname, "../miniapp/app.js"), "utf8");
 const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/penalty-duel.js"), "utf8");
@@ -47,6 +53,34 @@ test("turn order and invalid directions are rejected", () => {
     assert.throws(() => game.playerShot("outside", "center"), /Noto‘g‘ri/);
 });
 
+test("ten alternating shots render as five paired penalty rounds", () => {
+    assert.equal(penaltyDuelRoundLabel({ round_number: 1 }), "1/5");
+    assert.equal(penaltyDuelRoundLabel({ round_number: 2 }), "1/5");
+    assert.equal(penaltyDuelRoundLabel({ round_number: 6 }), "3/5");
+    assert.equal(penaltyDuelRoundLabel({ round_number: 10 }), "5/5");
+    assert.equal(penaltyDuelRoundLabel({ round_number: 11 }), "SD1");
+    assert.equal(penaltyDuelRoundLabel({ round_number: 12 }), "SD1");
+
+    const slots = penaltyDuelRoundSlots({
+        side: "PLAYER_ONE",
+        status: "ACTIVE",
+        round_number: 3,
+        history: [
+            { round: 1, you_goal: true, opponent_goal: false },
+            { round: 2, you_goal: false, opponent_goal: true },
+        ],
+    });
+    assert.deepEqual(slots[0], {
+        pair: 1,
+        label: "1",
+        yourState: "goal",
+        opponentState: "goal",
+        active: false,
+    });
+    assert.equal(slots[1].active, true);
+    assert.equal(slots.length, 5);
+});
+
 test("Penalty Duel is mounted as the primary game navigation", () => {
     assert.match(html, /id="penaltyDuelPage"/);
     assert.match(html, /data-page="penalty-duel"/);
@@ -60,6 +94,9 @@ test("online Penalty Duel uses authenticated authoritative endpoints", () => {
     assert.match(source, /X-Telegram-Init-Data/);
     assert.match(source, /\/penalty-duel\/matchmaking\/join/);
     assert.match(source, /\/penalty-duel\/matches\/\$\{matchId\}\/choices/);
+    assert.match(source, /matchById\(matchId\)/);
+    assert.match(source, /if \(!match && trackedMatchId\) match = await this\.api\.matchById\(trackedMatchId\)/);
+    assert.match(source, /this\.api\.socketUrl\(this\.match\?\.id\)/);
     assert.match(source, /expected_version: this\.match\.version/);
     assert.match(source, /idempotency_key: key/);
     assert.match(source, /\/penalty-duel\/ws\?init_data=/);
@@ -115,8 +152,30 @@ test("Penalty Duel lobby exposes separate ratings and the authoritative endpoint
     assert.match(source, /\/penalty-duel\/leaderboard\?mode=/);
     assert.match(source, /this\.api\.leaderboard\("FREE"\)/);
     assert.match(source, /this\.api\.leaderboard\("TICKET"\)/);
-    assert.match(source, /row\.rating/);
+    assert.match(source, /row\.weekly_rating/);
+    assert.match(source, /row\.overall_rating/);
+    assert.match(source, /freeRating\?\.week_end_at/);
+    assert.match(source, /ticketRating\?\.week_end_at/);
+    assert.match(source, /id="pdRatingCountdown"/);
+    assert.match(source, /this\.refreshRatings\(\)/);
     assert.match(css, /\.pd-rating-row\{display:grid/);
+    assert.match(css, /\.pd-rating-period\{display:flex/);
+});
+
+test("weekly rating countdown shows remaining days, hours, and minutes", () => {
+    const now = Date.parse("2026-08-20T12:00:00Z");
+    assert.equal(
+        penaltyDuelRatingCountdown("2026-08-23T19:00:00+00:00", now),
+        "3 kun 07 soat 00 daqiqa",
+    );
+    assert.equal(
+        penaltyDuelRatingCountdown("2026-08-20T12:00:01Z", now),
+        "0 kun 00 soat 01 daqiqa",
+    );
+    assert.equal(
+        penaltyDuelRatingCountdown("2026-08-20T11:59:59Z", now),
+        "Yangi hafta boshlanmoqda",
+    );
 });
 
 test("Penalty Duel ticket ad uses the server-enabled three-provider production rotation", () => {
@@ -150,8 +209,16 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
 test("players have natural body details and goals trigger a stadium effect", () => {
     assert.match(source, /pd-goal-burst/);
     assert.match(source, /pitch\.classList\.add\(result\.goal \? "has-goal" : "has-save"\)/);
+    assert.match(source, /pd-stadium-rim/);
+    assert.match(source, /pd-player-neck/);
+    assert.match(source, /pd-player-shorts/);
+    assert.match(source, /pd-keeper-shorts/);
     assert.match(css, /\.pd-player-shirt::after/);
     assert.match(css, /\.pd-arm::after/);
+    assert.match(css, /\.pd-player-head::after/);
+    assert.match(css, /\.pd-player-leg::before/);
+    assert.match(css, /\.pd-stadium-rim/);
+    assert.match(css, /\.pd-field-depth/);
     assert.match(css, /@keyframes pd-strike-leg/);
     assert.match(css, /@keyframes pd-goal-burst/);
     assert.match(css, /@keyframes pd-net-impact/);

@@ -27,9 +27,16 @@ test("structured FastAPI validation errors are normalized to readable text", () 
 
 test("Penalty Duel hotfix loads before the game page", () => {
     assert.ok(app.includes("async function ensurePenaltyDuelHotfix()"));
-    assert.ok(app.includes('pages/penalty-duel-hotfix.js?v=1.0.0'));
+    assert.ok(app.includes('pages/penalty-duel-hotfix.js?v=1.1.0'));
     const ensureIndex = app.indexOf('case "penalty-duel": await ensurePenaltyDuelHotfix();');
     const loadIndex = app.indexOf("await loadPenaltyDuelPage();", ensureIndex);
     assert.ok(ensureIndex >= 0);
     assert.ok(loadIndex > ensureIndex);
+});
+
+test("the final resolved shot animates before the finished result screen", () => {
+    assert.ok(hotfix.includes('if (match.status === "FINISHED")'));
+    assert.ok(hotfix.includes('status: "ACTIVE"'));
+    assert.ok(hotfix.includes("this.match = match;"));
+    assert.ok(hotfix.includes("this.animationTimer = setTimeout(() => this.renderOnline(), 1450)"));
 });

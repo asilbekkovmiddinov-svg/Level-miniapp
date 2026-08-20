@@ -50,7 +50,7 @@ async function ensurePenaltyDuelHotfix() {
     if (!penaltyDuelHotfixPromise) {
         penaltyDuelHotfixPromise = new Promise((resolve, reject) => {
             const script = document.createElement("script");
-            script.src = "pages/penalty-duel-hotfix.js?v=1.0.0";
+            script.src = "pages/penalty-duel-hotfix.js?v=1.1.0";
             script.async = true;
             script.onload = resolve;
             script.onerror = () => reject(new Error("Penalty Duel yangilanishini yuklab bo‘lmadi."));
