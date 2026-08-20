@@ -12,6 +12,7 @@ const {
     registerWheelAdsgramNoFillDiagnostics,
     showWheelAdsgramAd,
     WHEEL_ADSGRAM_BLOCK_ID,
+    WHEEL_ADSGRAM_START_TIMEOUT_MS,
     WHEEL_REWARDED_ADS,
 } = require("../miniapp/pages/wheel.js");
 
@@ -76,6 +77,7 @@ test("Adsgram SDK and backend endpoints use the production rewarded contract", (
     const api = fs.readFileSync(path.join(__dirname, "../miniapp/api.js"), "utf8");
 
     assert.equal(WHEEL_ADSGRAM_BLOCK_ID, "39763");
+    assert.equal(WHEEL_ADSGRAM_START_TIMEOUT_MS, 15000);
     assert.match(html, /https:\/\/sad\.adsgram\.ai\/js\/sad\.min\.js/);
     assert.match(api, /"\/wheel\/adsgram\/session"/);
     assert.match(api, /"\/wheel\/adsgram\/claim"/);
@@ -345,6 +347,60 @@ test("Adsgram no-fill event rejects a hanging show and clears loading", async ()
             && /reklama mavjud emas/.test(error.message),
     );
     assert.equal(listeners.onBannerNotFound, undefined);
+});
+
+for (const [eventName, expectedCode] of [
+    ["onError", "ADSGRAM_SHOW_FAILED"],
+    ["onSkip", "ADSGRAM_SKIPPED"],
+    ["onNonStopShow", "ADSGRAM_BUSY"],
+    ["onTooLongSession", "ADSGRAM_SESSION_STALE"],
+]) {
+    test(`Adsgram ${eventName} releases a hanging show`, async () => {
+        const listeners = {};
+        const controller = {
+            addEventListener(name, callback) { listeners[name] = callback; },
+            removeEventListener(name, callback) {
+                if (listeners[name] === callback) delete listeners[name];
+            },
+            show: () => new Promise(() => {}),
+        };
+        const pending = showWheelAdsgramAd(controller);
+        await Promise.resolve();
+        listeners[eventName]({ description: eventName });
+        await assert.rejects(pending, (error) => error.code === expectedCode);
+        assert.deepEqual(listeners, {});
+    });
+}
+
+test("Adsgram startup watchdog releases a silent WebView", async () => {
+    const controller = {
+        addEventListener() {},
+        removeEventListener() {},
+        show: () => new Promise(() => {}),
+    };
+    await assert.rejects(
+        showWheelAdsgramAd(controller, { startTimeoutMs: 5 }),
+        (error) => error.code === "ADSGRAM_START_TIMEOUT"
+            && /Reklama yuklanmadi/.test(error.message),
+    );
+});
+
+test("Adsgram startup watchdog stops after the first ad frame", async () => {
+    const listeners = {};
+    const controller = {
+        addEventListener(name, callback) { listeners[name] = callback; },
+        removeEventListener(name, callback) {
+            if (listeners[name] === callback) delete listeners[name];
+        },
+        show: () => new Promise((resolve) => {
+            listeners.onStart();
+            setTimeout(() => resolve({ done: true, error: false }), 25);
+        }),
+    };
+    assert.deepEqual(
+        await showWheelAdsgramAd(controller, { startTimeoutMs: 5 }),
+        { done: true, error: false },
+    );
 });
 
 test("Adsgram video is not interrupted by the removed 20 second wrapper timeout", async () => {

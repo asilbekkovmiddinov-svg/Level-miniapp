@@ -30,6 +30,7 @@ let wheelAdsgramPending = false;
 let wheelAdsgramController = null;
 let wheelActiveAdSlot = null;
 const WHEEL_ADSGRAM_BLOCK_ID = "39763";
+const WHEEL_ADSGRAM_START_TIMEOUT_MS = 15000;
 const WHEEL_REWARDED_ADS = globalThis.WheelRewardedAds
     || (typeof module !== "undefined" && module.exports ? require("./wheel-ad-providers.js") : null);
 
@@ -571,26 +572,77 @@ function registerWheelAdsgramNoFillDiagnostics(controller) {
     return controller;
 }
 
-function showWheelAdsgramAd(controller) {
+function showWheelAdsgramAd(
+    controller,
+    {
+        startTimeoutMs = WHEEL_ADSGRAM_START_TIMEOUT_MS,
+        scheduleTimeout = setTimeout,
+        cancelTimeout = clearTimeout,
+    } = {},
+) {
     if (!controller?.show) {
         return Promise.reject(new Error("Adsgram SDK yuklanmadi."));
     }
     return new Promise((resolve, reject) => {
         let settled = false;
+        let started = false;
+        let startTimeoutId;
+        const handlers = new Map();
+        const cleanup = () => {
+            if (startTimeoutId !== undefined) cancelTimeout(startTimeoutId);
+            handlers.forEach((handler, eventName) => {
+                controller.removeEventListener?.(eventName, handler);
+            });
+        };
         const finish = (callback, value) => {
             if (settled) return;
             settled = true;
-            controller.removeEventListener?.("onBannerNotFound", onNoFill);
+            cleanup();
             callback(value);
         };
-        const onNoFill = () => {
-            const error = new Error(
-                "Hozir reklama mavjud emas. Birozdan keyin qayta urinib ko‘ring."
-            );
-            error.code = "ADSGRAM_NO_FILL";
+        const fail = (code, message) => {
+            const error = new Error(message);
+            error.code = code;
             finish(reject, error);
         };
-        controller.addEventListener?.("onBannerNotFound", onNoFill);
+        handlers.set("onStart", () => {
+            started = true;
+            if (startTimeoutId !== undefined) {
+                cancelTimeout(startTimeoutId);
+                startTimeoutId = undefined;
+            }
+        });
+        handlers.set("onBannerNotFound", () => fail(
+            "ADSGRAM_NO_FILL",
+            "Hozir reklama mavjud emas. Birozdan keyin qayta urinib ko‘ring.",
+        ));
+        handlers.set("onError", () => fail(
+            "ADSGRAM_SHOW_FAILED",
+            "Reklamani ko‘rsatishda xatolik yuz berdi. Qayta urinib ko‘ring.",
+        ));
+        handlers.set("onSkip", () => fail(
+            "ADSGRAM_SKIPPED",
+            "Reward uchun reklamani oxirigacha ko‘ring.",
+        ));
+        handlers.set("onNonStopShow", () => fail(
+            "ADSGRAM_BUSY",
+            "Reklama oynasi band. Birozdan keyin qayta urinib ko‘ring.",
+        ));
+        handlers.set("onTooLongSession", () => fail(
+            "ADSGRAM_SESSION_STALE",
+            "Telegram Mini Appni qayta ochib, yana urinib ko‘ring.",
+        ));
+        handlers.forEach((handler, eventName) => {
+            controller.addEventListener?.(eventName, handler);
+        });
+        startTimeoutId = scheduleTimeout(() => {
+            if (!started) {
+                fail(
+                    "ADSGRAM_START_TIMEOUT",
+                    "Reklama yuklanmadi. Internetni tekshirib, qayta urinib ko‘ring.",
+                );
+            }
+        }, startTimeoutMs);
         Promise.resolve()
             .then(() => controller.show())
             .then(
@@ -740,7 +792,13 @@ async function watchWheelRewardedAdSlot(slotId) {
         if (hint) hint.textContent = "1 ta Ad Spin qo‘shildi";
         await refreshWheelState();
     } catch (error) {
-        if (error?.code === "ADSGRAM_NO_FILL") {
+        if ([
+            "ADSGRAM_NO_FILL",
+            "ADSGRAM_SHOW_FAILED",
+            "ADSGRAM_BUSY",
+            "ADSGRAM_SESSION_STALE",
+            "ADSGRAM_START_TIMEOUT",
+        ].includes(error?.code)) {
             wheelAdsgramController?.destroy?.();
             wheelAdsgramController = null;
         }
@@ -1153,6 +1211,7 @@ if (typeof module !== "undefined") {
         watchWheelRewardedAdSlot,
         watchAdsgramRewardedAd,
         WHEEL_ADSGRAM_BLOCK_ID,
+        WHEEL_ADSGRAM_START_TIMEOUT_MS,
         WHEEL_REWARDED_ADS,
     };
 }
