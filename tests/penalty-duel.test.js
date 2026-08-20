@@ -206,6 +206,10 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /Server tasdig‘i kutilmoqda… Oynani yopmang/);
     assert.match(source, /Server tasdig‘i kelmadi\. Ticket berilmadi/);
     assert.match(source, /\/penalty-duel\/rewards\/adsgram\/session/);
+    assert.match(source, /\/penalty-duel\/rewards\/tads\/session/);
+    assert.match(source, /\/penalty-duel\/rewards\/tads\/cancel/);
+    assert.match(source, /const session = await this\.api\.createTadsSession\(\)/);
+    assert.match(source, /if \(!sdkRewarded\) await this\.cancelTadsSession\(session\.token\)/);
     assert.match(source, /\/penalty-duel\/rewards\/onclicka\/session/);
     assert.match(source, /\/penalty-duel\/rewards\/onclicka\/cancel/);
     assert.match(source, /const session = await this\.api\.createOnclickaSession\(\)/);
