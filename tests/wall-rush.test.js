@@ -31,7 +31,6 @@ test("free and ticket modes preserve the agreed economy", () => {
     assert.match(source, /join\('FREE'\)/);
     assert.match(source, /join\('TICKET'\)/);
     assert.match(source, /Ticket raqib topilmaguncha sarflanmaydi/);
-    assert.match(source, /Reklama topilmasa ham bepul rejim doim ochiq qoladi/);
     assert.match(source, /\+1 Tournament Ticket/);
 });
 
@@ -66,38 +65,12 @@ test("MiniApp navigation exposes Wall Rush and cleans realtime resources", () =>
 });
 
 
-test("Adsgram is primary and TADS fullscreen is the verified fallback", () => {
-    assert.match(html, /https:\/\/sad\.adsgram\.ai\/js\/sad\.min\.js/);
-    assert.match(html, /https:\/\/w\.tads\.me\/widget\.js/);
-    assert.match(html, /wall-rush-ad-waterfall\.js/);
-    assert.match(source, /blockId: "39763"/);
-    assert.match(source, /showAdsgram: \(\) => this\.runAdsgramPrimary\(\)/);
-    assert.match(source, /showTads: \(\) => this\.runTadsFallback\(\)/);
-    assert.match(source, /widgetId: "11416"/);
-    assert.match(source, /type: "fullscreen"/);
-    assert.match(source, /debug: false/);
-    assert.match(source, /onShowReward: \(\) => this\.confirmTadsReward\(\)/);
-    assert.match(source, /this\.api\.wallet\(\)/);
-    assert.doesNotMatch(source, /game_tickets\s*\+=|game_tickets\+\+/);
-});
-
-test("rewarded ad cooldown shows a live mm:ss countdown", () => {
-    assert.match(source, /WALL_RUSH_AD_COOLDOWN_MS = 30 \* 60 \* 1000/);
-    assert.match(source, /Har 30 daqiqada bir marta/);
-    assert.doesNotMatch(source, /Har 1 soatda bir marta/);
-    assert.match(source, /adCooldownRemainingMs\(\)/);
-    assert.match(source, /Keyingi reklamagacha \$\{minutes\}:\$\{rest\}/);
-    assert.match(source, /setInterval\(\(\) => this\.updateAdCountdown\(\), 1000\)/);
-    assert.match(source, /button\.disabled = !this\.adAvailable\(\)/);
-    assert.match(source, /this\.adState = ""/);
-});
-
-test("Adsgram and TADS no-fill keep Free Play available", () => {
-    assert.match(source, /onBannerNotFound/);
-    assert.match(source, /onAdsNotFound/);
-    assert.match(source, /Hozir reklama topilmadi\. Bepul o‘yin ochiq\./);
+test("Wall Rush lobby no longer exposes rewarded ads", () => {
+    assert.doesNotMatch(source, /onclick="wallRushController\.watchAd\(\)"/);
+    assert.doesNotMatch(source, /id="wrAdStatus"/);
+    assert.doesNotMatch(source, /id="wrTadsButton"/);
+    assert.doesNotMatch(source, /id="tads-container-11416"/);
     assert.match(source, /join\('FREE'\)/);
-    assert.match(css, /\.wr-ad-card/);
 });
 
 

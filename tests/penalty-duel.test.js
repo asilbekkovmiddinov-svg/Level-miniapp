@@ -186,6 +186,9 @@ test("weekly rating countdown shows remaining days, hours, and minutes", () => {
 });
 
 test("Penalty Duel ticket ad uses the server-enabled three-provider production rotation", () => {
+    assert.match(source, /onclick="penaltyDuelController\.watchAd\(\)"/);
+    assert.match(source, /id="pdAdStatus"/);
+    assert.match(source, /id="pdAdButton"/);
     assert.match(source, /PENALTY_AD_COOLDOWN_MS = 5 \* 60 \* 1000/);
     assert.match(source, /ADSGRAM: \(\) => this\.runAdsgramPrimary\(\)/);
     assert.match(source, /TADS: \(\) => this\.runTadsProvider\(\)/);
