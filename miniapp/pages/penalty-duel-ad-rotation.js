@@ -3,25 +3,40 @@
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     if (root) root.PenaltyDuelAdRotation = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
-    const PROVIDERS = Object.freeze(["ADSGRAM", "TADS", "TELEGA", "ONCLICKA"]);
+    const PROVIDERS = Object.freeze(["ADSGRAM", "TADS", "TELEGA"]);
+    const SUPPORTED_PROVIDERS = Object.freeze([...PROVIDERS, "ONCLICKA"]);
 
-    function normalizeProvider(provider) {
-        const normalized = String(provider || "").trim().toUpperCase();
-        return PROVIDERS.includes(normalized) ? normalized : PROVIDERS[0];
+    function normalizeProviders(providers) {
+        if (!Array.isArray(providers)) return PROVIDERS;
+        const normalized = providers
+            .map((provider) => String(provider || "").trim().toUpperCase())
+            .filter((provider, index, values) => (
+                SUPPORTED_PROVIDERS.includes(provider) && values.indexOf(provider) === index
+            ));
+        return normalized.length ? normalized : PROVIDERS;
     }
 
-    function orderedProviders(startProvider) {
-        const start = PROVIDERS.indexOf(normalizeProvider(startProvider));
-        return PROVIDERS.map((_, offset) => PROVIDERS[(start + offset) % PROVIDERS.length]);
+    function normalizeProvider(provider, providers) {
+        const activeProviders = normalizeProviders(providers);
+        const normalized = String(provider || "").trim().toUpperCase();
+        return activeProviders.includes(normalized) ? normalized : activeProviders[0];
+    }
+
+    function orderedProviders(startProvider, providers) {
+        const activeProviders = normalizeProviders(providers);
+        const start = activeProviders.indexOf(normalizeProvider(startProvider, activeProviders));
+        return activeProviders.map((_, offset) => (
+            activeProviders[(start + offset) % activeProviders.length]
+        ));
     }
 
     function stopsRotation(error) {
-        return error?.fallback === false || String(error?.code || "").endsWith("_CANCELLED");
+        return error?.fallback === false;
     }
 
-    async function run({ startProvider, adapters, onAttempt }) {
+    async function run({ startProvider, providers, adapters, onAttempt }) {
         let lastError;
-        for (const provider of orderedProviders(startProvider)) {
+        for (const provider of orderedProviders(startProvider, providers)) {
             try {
                 onAttempt?.(provider);
                 const adapter = adapters?.[provider];
@@ -42,5 +57,13 @@
         throw exhausted;
     }
 
-    return Object.freeze({ PROVIDERS, normalizeProvider, orderedProviders, run, stopsRotation });
+    return Object.freeze({
+        PROVIDERS,
+        SUPPORTED_PROVIDERS,
+        normalizeProviders,
+        normalizeProvider,
+        orderedProviders,
+        run,
+        stopsRotation,
+    });
 });

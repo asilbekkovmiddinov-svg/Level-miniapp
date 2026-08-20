@@ -656,7 +656,7 @@ const penaltyDuelController = {
             await this.cancelAdsgramSession(session.token);
             const error = new Error("Ticket uchun reklamani oxirigacha ko‘ring.");
             error.code = "ADSGRAM_NOT_REWARDED";
-            error.fallback = false;
+            error.fallback = true;
             throw error;
         }
         try {
@@ -730,7 +730,7 @@ const penaltyDuelController = {
                 new Promise((_, reject) => setTimeout(() => {
                     const error = new Error("TADS reklamasi yakunlanmadi.");
                     error.code = "TADS_CANCELLED";
-                    error.fallback = false;
+                    error.fallback = true;
                     reject(error);
                 }, 90000)),
             ]);
@@ -774,13 +774,18 @@ const penaltyDuelController = {
         if (result?.done !== true) {
             const error = new Error("Telega.io reklamasi oxirigacha ko‘rilmadi.");
             error.code = "TELEGA_CANCELLED";
-            error.fallback = false;
+            error.fallback = true;
             throw error;
         }
         return await this.waitForServerTicket(previousRewardAt, "TELEGA");
     },
 
     async runOnclickaProvider() {
+        if (this.adConfig?.onclicka_enabled !== true) {
+            const error = new Error("OnClickA productionda o‘chirilgan.");
+            error.code = "ONCLICKA_DISABLED";
+            throw error;
+        }
         const spotId = String(this.adConfig?.onclicka_spot_id || "");
         if (!spotId) {
             const error = new Error("OnClickA konfiguratsiyasi topilmadi.");
@@ -811,7 +816,7 @@ const penaltyDuelController = {
             await this.cancelOnclickaSession(session.token);
             const cancelled = /cancel|close|skip/i.test(String(error?.message || error || ""));
             error.code = cancelled ? "ONCLICKA_CANCELLED" : "ONCLICKA_SHOW_FAILED";
-            error.fallback = !cancelled;
+            error.fallback = true;
             throw error;
         }
         return await this.waitForServerTicket(previousRewardAt, "ONCLICKA");
@@ -825,6 +830,7 @@ const penaltyDuelController = {
         try {
             const outcome = await PENALTY_AD_ROTATION.run({
                 startProvider: this.wallet?.next_penalty_duel_rewarded_ad_provider,
+                providers: this.adConfig?.providers,
                 adapters: {
                     ADSGRAM: () => this.runAdsgramPrimary(),
                     TADS: () => this.runTadsProvider(),
