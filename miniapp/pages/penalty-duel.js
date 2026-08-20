@@ -190,6 +190,12 @@ class PenaltyDuelClient {
     cancelTadsSession(token) {
         return this.request("/penalty-duel/rewards/tads/cancel", "POST", { token });
     }
+    createTelegaSession() {
+        return this.request("/penalty-duel/rewards/telega/session", "POST");
+    }
+    cancelTelegaSession(token) {
+        return this.request("/penalty-duel/rewards/telega/cancel", "POST", { token });
+    }
     createOnclickaSession() {
         return this.request("/penalty-duel/rewards/onclicka/session", "POST");
     }
@@ -781,6 +787,15 @@ const penaltyDuelController = {
         }
     },
 
+    async cancelTelegaSession(token) {
+        if (!token) return;
+        try {
+            await this.api.cancelTelegaSession(token);
+        } catch (error) {
+            console.warn("Penalty Telega.io session cleanup failed", error);
+        }
+    },
+
     resetAdsgramController() {
         this.adsgramController?.destroy?.();
         this.adsgramController = null;
@@ -927,6 +942,12 @@ const penaltyDuelController = {
             this.wallet?.last_penalty_duel_rewarded_ad_at || 0,
         ).getTime();
         await this.waitForTelega();
+        const session = await this.api.createTelegaSession();
+        if (!session?.token) {
+            const error = new Error("Telega.io reward sessiyasi yaratilmadi.");
+            error.code = "TELEGA_SESSION_FAILED";
+            throw error;
+        }
         if (!this.telegaController) {
             this.telegaController = window.TelegaIn.AdsController.create_miniapp({
                 token,
@@ -939,10 +960,12 @@ const penaltyDuelController = {
                 meta: { placement: "penalty-duel-ticket" },
             });
         } catch (error) {
+            await this.cancelTelegaSession(session.token);
             error.code = "TELEGA_SHOW_FAILED";
             throw error;
         }
         if (result?.done !== true) {
+            await this.cancelTelegaSession(session.token);
             const error = new Error("Telega.io reklamasi oxirigacha ko‘rilmadi.");
             error.code = "TELEGA_CANCELLED";
             error.fallback = true;
