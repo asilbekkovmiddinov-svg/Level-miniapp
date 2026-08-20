@@ -119,13 +119,25 @@ test("Penalty Duel lobby exposes separate ratings and the authoritative endpoint
     assert.match(css, /\.pd-rating-row\{display:grid/);
 });
 
-test("Penalty Duel ticket ad uses 30 minute Adsgram then TADS waterfall", () => {
-    assert.match(source, /PENALTY_AD_COOLDOWN_MS = 30 \* 60 \* 1000/);
-    assert.match(source, /showAdsgram: \(\) => this\.runAdsgramPrimary\(\)/);
-    assert.match(source, /showTads: \(\) => this\.runTadsFallback\(\)/);
+test("Penalty Duel ticket ad uses a global five minute four-provider rotation", () => {
+    assert.match(source, /PENALTY_AD_COOLDOWN_MS = 5 \* 60 \* 1000/);
+    assert.match(source, /ADSGRAM: \(\) => this\.runAdsgramPrimary\(\)/);
+    assert.match(source, /TADS: \(\) => this\.runTadsProvider\(\)/);
+    assert.match(source, /TELEGA: \(\) => this\.runTelegaProvider\(\)/);
+    assert.match(source, /ONCLICKA: \(\) => this\.runOnclickaProvider\(\)/);
     assert.match(source, /blockId: "39763"/);
-    assert.match(source, /widgetId: "11416"/);
-    assert.match(source, /last_rewarded_ad_at/);
+    assert.match(source, /widgetId,/);
+    assert.match(source, /adBlockUuid,/);
+    assert.match(source, /initCdTma\(\{ id: spotId \}\)/);
+    assert.match(source, /\/penalty-duel\/rewards\/config/);
+    assert.doesNotMatch(source, /PENALTY_TELEGA_TOKEN/);
+    assert.match(source, /next_penalty_duel_rewarded_ad_provider/);
+    assert.match(source, /last_penalty_duel_rewarded_ad_at/);
+    assert.match(source, /rewardedAt > previousRewardAt/);
+    assert.match(source, /\/penalty-duel\/rewards\/adsgram\/session/);
+    assert.match(html, /penalty-duel-ad-rotation\.js/);
+    assert.match(source, /inapp\.telega\.io\/sdk\/v1\/sdk\.js/);
+    assert.match(source, /js\.onclckvd\.com\/in-stream-ad-admanager\/tma\.js/);
     assert.match(css, /\.pd-ad-card\{display:grid/);
 });
 

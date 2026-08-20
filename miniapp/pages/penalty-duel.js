@@ -1,8 +1,16 @@
 const PENALTY_DIRECTIONS = ["top-left", "top-right", "center", "bottom-left", "bottom-right"];
 const PENALTY_FALLBACK_SYNC_MS = 500;
 const PENALTY_RECONNECT_MS = 750;
-const PENALTY_AD_COOLDOWN_MS = 30 * 60 * 1000;
-const PENALTY_AD_WATERFALL = globalThis.WallRushAdWaterfall;
+const PENALTY_AD_COOLDOWN_MS = 5 * 60 * 1000;
+const PENALTY_AD_ROTATION = globalThis.PenaltyDuelAdRotation;
+const PENALTY_TELEGA_SDK_URL = "https://inapp.telega.io/sdk/v1/sdk.js";
+const PENALTY_ONCLICKA_SDK_URL = "https://js.onclckvd.com/in-stream-ad-admanager/tma.js";
+const PENALTY_AD_PROVIDER_LABELS = Object.freeze({
+    ADSGRAM: "AdsGram",
+    TADS: "TADS",
+    TELEGA: "Telega.io",
+    ONCLICKA: "OnClickA",
+});
 
 class PenaltyDuelEngine {
     constructor(options = {}) {
@@ -100,6 +108,7 @@ class PenaltyDuelClient {
     }
 
     wallet() { return this.request("/wall-rush/wallet"); }
+    adConfig() { return this.request("/penalty-duel/rewards/config"); }
     leaderboard(mode) {
         return this.request(`/penalty-duel/leaderboard?mode=${encodeURIComponent(mode)}&limit=20`);
     }
@@ -115,13 +124,13 @@ class PenaltyDuelClient {
         return this.request(`/penalty-duel/matches/${matchId}/timeout`, "POST");
     }
     createAdsgramSession() {
-        return this.request("/wall-rush/rewards/adsgram/session", "POST");
+        return this.request("/penalty-duel/rewards/adsgram/session", "POST");
     }
     claimAdsgramReward(token) {
-        return this.request("/wall-rush/rewards/adsgram/claim", "POST", { token });
+        return this.request("/penalty-duel/rewards/adsgram/claim", "POST", { token });
     }
     cancelAdsgramSession(token) {
-        return this.request("/wall-rush/rewards/adsgram/cancel", "POST", { token });
+        return this.request("/penalty-duel/rewards/adsgram/cancel", "POST", { token });
     }
     socketUrl() {
         const protocol = this.baseUrl.startsWith("https:") ? "wss:" : "ws:";
@@ -135,6 +144,7 @@ const penaltyDuelController = {
     engine: new PenaltyDuelEngine(),
     match: null,
     wallet: null,
+    adConfig: {},
     socket: null,
     syncTimer: null,
     countdownTimer: null,
@@ -151,6 +161,11 @@ const penaltyDuelController = {
     adState: "",
     adsgramController: null,
     tadsController: null,
+    tadsRewardResolve: null,
+    tadsRewardReject: null,
+    telegaController: null,
+    onclickaShow: null,
+    adSdkPromises: {},
     ratingMode: "FREE",
     leaderboards: { FREE: [], TICKET: [] },
 
@@ -161,13 +176,15 @@ const penaltyDuelController = {
         showPage("penaltyDuelPage", "Penalty Duel");
         this.renderLoading();
         try {
-            const [wallet, match, freeRating, ticketRating] = await Promise.all([
+            const [wallet, adConfig, match, freeRating, ticketRating] = await Promise.all([
                 this.api.wallet(),
+                this.api.adConfig(),
                 this.api.active(),
                 this.api.leaderboard("FREE").catch(() => ({ rows: [] })),
                 this.api.leaderboard("TICKET").catch(() => ({ rows: [] })),
             ]);
             this.wallet = wallet;
+            this.adConfig = adConfig || {};
             this.match = match;
             this.leaderboards = {
                 FREE: freeRating?.rows || [],
@@ -200,6 +217,8 @@ const penaltyDuelController = {
         }
         this.socket = null;
         this.busy = false;
+        this.adPending = false;
+        this.adState = "";
     },
 
     startTraining() {
@@ -422,7 +441,7 @@ const penaltyDuelController = {
     },
 
     adCooldownRemainingMs() {
-        const last = this.wallet?.last_rewarded_ad_at;
+        const last = this.wallet?.last_penalty_duel_rewarded_ad_at;
         if (!last) return 0;
         return Math.max(0, new Date(last).getTime() + PENALTY_AD_COOLDOWN_MS - Date.now());
     },
@@ -434,7 +453,7 @@ const penaltyDuelController = {
     adStatusText() {
         if (this.adState) return this.adState;
         const remaining = this.adCooldownRemainingMs();
-        if (remaining === 0) return "Har 30 daqiqada bir marta";
+        if (remaining === 0) return "Har 5 daqiqada bir marta";
         const seconds = Math.ceil(remaining / 1000);
         const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
         const rest = String(seconds % 60).padStart(2, "0");
@@ -466,7 +485,66 @@ const penaltyDuelController = {
         while (!window.tads?.init && performance.now() - started < timeout) {
             await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        if (!window.tads?.init) throw new Error("TADS SDK yuklanmadi");
+        if (!window.tads?.init) {
+            const error = new Error("TADS SDK yuklanmadi.");
+            error.code = "TADS_SDK_UNAVAILABLE";
+            throw error;
+        }
+    },
+
+    async loadAdSdk(name, url, ready, timeout = 8000) {
+        if (ready()) return;
+        if (!this.adSdkPromises[name]) {
+            this.adSdkPromises[name] = new Promise((resolve, reject) => {
+                const selector = `script[data-penalty-ad-sdk="${name}"]`;
+                const existing = document.querySelector(selector);
+                const script = existing || document.createElement("script");
+                script.dataset.penaltyAdSdk = name;
+                script.src = url;
+                script.async = true;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`${name} SDK yuklanmadi.`));
+                if (!existing) document.head.appendChild(script);
+            }).catch((error) => {
+                document.querySelector(`script[data-penalty-ad-sdk="${name}"]`)?.remove();
+                delete this.adSdkPromises[name];
+                throw error;
+            });
+        }
+        await Promise.race([
+            this.adSdkPromises[name],
+            new Promise((_, reject) => setTimeout(
+                () => reject(new Error(`${name} SDK vaqti tugadi.`)), timeout,
+            )),
+        ]);
+    },
+
+    async waitForTelega() {
+        try {
+            await this.loadAdSdk(
+                "Telega.io",
+                PENALTY_TELEGA_SDK_URL,
+                () => Boolean(window.TelegaIn?.AdsController),
+            );
+        } catch (cause) {
+            const error = new Error(cause?.message || "Telega.io SDK yuklanmadi.");
+            error.code = "TELEGA_SDK_UNAVAILABLE";
+            throw error;
+        }
+    },
+
+    async waitForOnclicka() {
+        try {
+            await this.loadAdSdk(
+                "OnClickA",
+                PENALTY_ONCLICKA_SDK_URL,
+                () => typeof window.initCdTma === "function",
+            );
+        } catch (cause) {
+            const error = new Error(cause?.message || "OnClickA SDK yuklanmadi.");
+            error.code = "ONCLICKA_SDK_UNAVAILABLE";
+            throw error;
+        }
     },
 
     getAdsgramController() {
@@ -563,57 +641,181 @@ const penaltyDuelController = {
             await this.cancelAdsgramSession(session.token);
             const error = new Error("Ticket uchun reklamani oxirigacha ko‘ring.");
             error.code = "ADSGRAM_NOT_REWARDED";
+            error.fallback = false;
             throw error;
         }
         try {
             return await this.claimAdsgramReward(session.token);
         } catch (error) {
             error.code = "ADSGRAM_CLAIM_FAILED";
+            error.fallback = false;
             throw error;
         }
     },
 
-    finishAdUnavailable() {
-        this.adPending = false;
-        this.adState = "Hozir reklama topilmadi. Bepul o‘yin ochiq.";
+    async waitForServerTicket(previousRewardAt, provider, attempts = 12) {
+        this.adState = "Ticket serverda tasdiqlanmoqda…";
         this.renderIntro();
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            try {
+                const wallet = await this.api.wallet();
+                const rewardedAt = new Date(
+                    wallet.last_penalty_duel_rewarded_ad_at || 0,
+                ).getTime();
+                if (rewardedAt > previousRewardAt) return { wallet };
+            } catch (_error) {
+                // Provider callbacks can arrive shortly after the video completes.
+            }
+        }
+        const error = new Error("Reklama tugadi, lekin server tasdig‘i kechikmoqda.");
+        error.code = `${provider}_REWARD_PENDING`;
+        error.fallback = false;
+        throw error;
     },
 
-    async runTadsFallback() {
-        this.adState = "TADS reklamasi tekshirilmoqda…";
-        this.renderIntro();
+    async runTadsProvider() {
+        const widgetId = String(this.adConfig?.tads_widget_id || "");
+        if (!widgetId) {
+            const error = new Error("TADS konfiguratsiyasi topilmadi.");
+            error.code = "TADS_CONFIG_UNAVAILABLE";
+            throw error;
+        }
+        const previousRewardAt = new Date(
+            this.wallet?.last_penalty_duel_rewarded_ad_at || 0,
+        ).getTime();
+        await this.waitForTads();
+        const completion = new Promise((resolve, reject) => {
+            this.tadsRewardResolve = resolve;
+            this.tadsRewardReject = reject;
+        });
         try {
-            await this.waitForTads();
             if (!this.tadsController) {
-                this.tadsController = window.tads.controllers?.["11416"]
-                    || window.tads.init({
-                        widgetId: "11416",
-                        type: "fullscreen",
-                        debug: false,
-                        onShowReward: () => this.confirmTadsReward(),
-                        onAdsNotFound: () => this.finishAdUnavailable(),
-                    });
+                this.tadsController = window.tads.init({
+                    widgetId,
+                    type: "fullscreen",
+                    debug: false,
+                    onShowReward: () => this.tadsRewardResolve?.(),
+                    onAdsNotFound: () => {
+                        const error = new Error("TADS reklamasi topilmadi.");
+                        error.code = "TADS_NO_FILL";
+                        this.tadsRewardReject?.(error);
+                    },
+                });
             }
             const controller = await Promise.resolve(this.tadsController);
             if (typeof controller.loadAd === "function") await controller.loadAd();
-            await controller.showAd();
+            Promise.resolve(controller.showAd()).catch((cause) => {
+                const error = new Error(cause?.message || "TADS reklamasi ochilmadi.");
+                error.code = "TADS_SHOW_FAILED";
+                this.tadsRewardReject?.(error);
+            });
+            await Promise.race([
+                completion,
+                new Promise((_, reject) => setTimeout(() => {
+                    const error = new Error("TADS reklamasi yakunlanmadi.");
+                    error.code = "TADS_CANCELLED";
+                    error.fallback = false;
+                    reject(error);
+                }, 90000)),
+            ]);
+            return await this.waitForServerTicket(previousRewardAt, "TADS");
         } catch (error) {
-            console.error("Penalty TADS fallback failed", error);
-            this.finishAdUnavailable();
+            if (!error.code) error.code = "TADS_SHOW_FAILED";
+            throw error;
+        } finally {
+            this.tadsRewardResolve = null;
+            this.tadsRewardReject = null;
         }
+    },
+
+    async runTelegaProvider() {
+        const token = String(this.adConfig?.telega_token || "");
+        const adBlockUuid = String(this.adConfig?.telega_ad_block_uuid || "");
+        if (!token || !adBlockUuid) {
+            const error = new Error("Telega.io konfiguratsiyasi topilmadi.");
+            error.code = "TELEGA_CONFIG_UNAVAILABLE";
+            throw error;
+        }
+        const previousRewardAt = new Date(
+            this.wallet?.last_penalty_duel_rewarded_ad_at || 0,
+        ).getTime();
+        await this.waitForTelega();
+        if (!this.telegaController) {
+            this.telegaController = window.TelegaIn.AdsController.create_miniapp({
+                token,
+            });
+        }
+        let result;
+        try {
+            result = await this.telegaController.ad_show({
+                adBlockUuid,
+                meta: { placement: "penalty-duel-ticket" },
+            });
+        } catch (error) {
+            error.code = "TELEGA_SHOW_FAILED";
+            throw error;
+        }
+        if (result?.done !== true) {
+            const error = new Error("Telega.io reklamasi oxirigacha ko‘rilmadi.");
+            error.code = "TELEGA_CANCELLED";
+            error.fallback = false;
+            throw error;
+        }
+        return await this.waitForServerTicket(previousRewardAt, "TELEGA");
+    },
+
+    async runOnclickaProvider() {
+        const spotId = String(this.adConfig?.onclicka_spot_id || "");
+        if (!spotId) {
+            const error = new Error("OnClickA konfiguratsiyasi topilmadi.");
+            error.code = "ONCLICKA_CONFIG_UNAVAILABLE";
+            throw error;
+        }
+        const previousRewardAt = new Date(
+            this.wallet?.last_penalty_duel_rewarded_ad_at || 0,
+        ).getTime();
+        await this.waitForOnclicka();
+        if (!this.onclickaShow) {
+            try {
+                this.onclickaShow = await window.initCdTma({ id: spotId });
+            } catch (error) {
+                error.code = "ONCLICKA_INIT_FAILED";
+                throw error;
+            }
+        }
+        try {
+            await this.onclickaShow();
+        } catch (error) {
+            const cancelled = /cancel|close|skip/i.test(String(error?.message || error || ""));
+            error.code = cancelled ? "ONCLICKA_CANCELLED" : "ONCLICKA_SHOW_FAILED";
+            error.fallback = !cancelled;
+            throw error;
+        }
+        return await this.waitForServerTicket(previousRewardAt, "ONCLICKA");
     },
 
     async watchAd() {
         if (!this.adAvailable()) return;
         this.adPending = true;
-        this.adState = "Adsgram reklamasi ochilmoqda…";
+        this.adState = "Reklama tarmog‘i tekshirilmoqda…";
         this.renderIntro();
         try {
-            const outcome = await PENALTY_AD_WATERFALL.run({
-                showAdsgram: () => this.runAdsgramPrimary(),
-                showTads: () => this.runTadsFallback(),
+            const outcome = await PENALTY_AD_ROTATION.run({
+                startProvider: this.wallet?.next_penalty_duel_rewarded_ad_provider,
+                adapters: {
+                    ADSGRAM: () => this.runAdsgramPrimary(),
+                    TADS: () => this.runTadsProvider(),
+                    TELEGA: () => this.runTelegaProvider(),
+                    ONCLICKA: () => this.runOnclickaProvider(),
+                },
+                onAttempt: (provider) => {
+                    const label = PENALTY_AD_PROVIDER_LABELS[provider] || provider;
+                    this.adState = `${label} reklamasi tekshirilmoqda…`;
+                    this.updateAdCountdown();
+                },
             });
-            if (outcome.provider === "ADSGRAM" && outcome.reward?.wallet) {
+            if (outcome.reward?.wallet) {
                 this.wallet = outcome.reward.wallet;
                 this.adPending = false;
                 this.adState = "";
@@ -629,30 +831,6 @@ const penaltyDuelController = {
             }
             this.renderIntro();
         }
-    },
-
-    async confirmTadsReward() {
-        const before = Number(this.wallet?.game_tickets || 0);
-        this.adState = "Ticket tasdiqlanmoqda…";
-        this.renderIntro();
-        for (let attempt = 0; attempt < 10; attempt += 1) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            try {
-                const wallet = await this.api.wallet();
-                if (Number(wallet.game_tickets || 0) > before) {
-                    this.wallet = wallet;
-                    this.adPending = false;
-                    this.adState = "";
-                    this.renderIntro();
-                    return;
-                }
-            } catch (_error) {
-                // TADS webhook processing can be briefly delayed.
-            }
-        }
-        this.adPending = false;
-        this.adState = "Tasdiq kechikmoqda. Birozdan keyin yangilang.";
-        this.renderIntro();
     },
 
     renderOnline(context = {}) {
