@@ -184,6 +184,12 @@ class PenaltyDuelClient {
     cancelAdsgramSession(token) {
         return this.request("/penalty-duel/rewards/adsgram/cancel", "POST", { token });
     }
+    createTadsSession() {
+        return this.request("/penalty-duel/rewards/tads/session", "POST");
+    }
+    cancelTadsSession(token) {
+        return this.request("/penalty-duel/rewards/tads/cancel", "POST", { token });
+    }
     createOnclickaSession() {
         return this.request("/penalty-duel/rewards/onclicka/session", "POST");
     }
@@ -766,6 +772,15 @@ const penaltyDuelController = {
         }
     },
 
+    async cancelTadsSession(token) {
+        if (!token) return;
+        try {
+            await this.api.cancelTadsSession(token);
+        } catch (error) {
+            console.warn("Penalty TADS session cleanup failed", error);
+        }
+    },
+
     resetAdsgramController() {
         this.adsgramController?.destroy?.();
         this.adsgramController = null;
@@ -847,6 +862,13 @@ const penaltyDuelController = {
             this.wallet?.last_penalty_duel_rewarded_ad_at || 0,
         ).getTime();
         await this.waitForTads();
+        const session = await this.api.createTadsSession();
+        if (!session?.token) {
+            const error = new Error("TADS reward sessiyasi yaratilmadi.");
+            error.code = "TADS_SESSION_FAILED";
+            throw error;
+        }
+        let sdkRewarded = false;
         const completion = new Promise((resolve, reject) => {
             this.tadsRewardResolve = resolve;
             this.tadsRewardReject = reject;
@@ -881,8 +903,10 @@ const penaltyDuelController = {
                     reject(error);
                 }, 90000)),
             ]);
+            sdkRewarded = true;
             return await this.waitForServerTicket(previousRewardAt, "TADS");
         } catch (error) {
+            if (!sdkRewarded) await this.cancelTadsSession(session.token);
             if (!error.code) error.code = "TADS_SHOW_FAILED";
             throw error;
         } finally {
