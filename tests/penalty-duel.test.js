@@ -202,6 +202,9 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /next_penalty_duel_rewarded_ad_provider/);
     assert.match(source, /last_penalty_duel_rewarded_ad_at/);
     assert.match(source, /rewardedAt > previousRewardAt/);
+    assert.match(source, /waitForServerTicket\(previousRewardAt, provider, attempts = 60\)/);
+    assert.match(source, /Server tasdig‘i kutilmoqda… Oynani yopmang/);
+    assert.match(source, /Server tasdig‘i kelmadi\. Ticket berilmadi/);
     assert.match(source, /\/penalty-duel\/rewards\/adsgram\/session/);
     assert.match(source, /\/penalty-duel\/rewards\/onclicka\/session/);
     assert.match(source, /\/penalty-duel\/rewards\/onclicka\/cancel/);

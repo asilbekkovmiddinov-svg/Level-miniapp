@@ -811,7 +811,7 @@ const penaltyDuelController = {
         }
     },
 
-    async waitForServerTicket(previousRewardAt, provider, attempts = 12) {
+    async waitForServerTicket(previousRewardAt, provider, attempts = 60) {
         this.adState = "Ticket serverda tasdiqlanmoqda…";
         this.renderIntro();
         for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -825,8 +825,12 @@ const penaltyDuelController = {
             } catch (_error) {
                 // Provider callbacks can arrive shortly after the video completes.
             }
+            if (attempt === 11) {
+                this.adState = "Server tasdig‘i kutilmoqda… Oynani yopmang.";
+                this.updateAdCountdown();
+            }
         }
-        const error = new Error("Reklama tugadi, lekin server tasdig‘i kechikmoqda.");
+        const error = new Error("Server tasdig‘i kelmadi. Ticket berilmadi.");
         error.code = `${provider}_REWARD_PENDING`;
         error.fallback = false;
         throw error;
