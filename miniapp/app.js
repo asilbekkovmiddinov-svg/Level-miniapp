@@ -7,7 +7,11 @@ window.addEventListener("load", async () => {
 
         await registerUser();
         await updateUserSeen();
-        await requireChannelSubscriptions();
+
+        // Subscription enforcement is temporarily disabled. Do not call the
+        // backend subscription endpoint during startup: an unavailable
+        // Telegram membership check must never prevent the MiniApp from
+        // loading wallet/home data.
 
         Navbar.init();
         bindMenuButtons();
@@ -33,21 +37,9 @@ window.addEventListener("load", async () => {
 });
 
 async function requireChannelSubscriptions() {
-    while (true) {
-        const status = await walletRequest("/subscription/status");
-        if (status.subscribed) return;
-
-        const channels = status.missing_channels || [];
-        const names = channels.map((channel) => `• ${channel.title}`).join("\n");
-        const choice = window.confirm(`LEVEL_GROUP’dan foydalanish uchun kanallarga obuna bo‘ling:\n\n${names}\n\nOK — kanallarni ochish, Cancel — qayta tekshirish.`);
-        if (choice) {
-            channels.forEach((channel) => {
-                if (window.Telegram?.WebApp?.openTelegramLink) window.Telegram.WebApp.openTelegramLink(channel.url);
-                else window.open(channel.url, "_blank");
-            });
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+    // Kept as a no-op so existing callers remain backward compatible while
+    // mandatory subscriptions are paused.
+    return true;
 }
 
 let pageReturnTarget = null;
