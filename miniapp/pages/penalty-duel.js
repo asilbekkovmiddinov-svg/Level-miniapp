@@ -914,11 +914,15 @@ const penaltyDuelController = {
             <section class="pd-pitch ${attacking ? "is-attacking" : "is-defending"}" id="pdPitch">
                 <div class="pd-crowd" aria-hidden="true"></div>
                 <div class="pd-floodlights" aria-hidden="true"></div>
+                <div class="pd-stadium-rim" aria-hidden="true"><span>LEVEL GROUP</span><span>PENALTY DUEL</span><span>LEVEL GROUP</span></div>
+                <div class="pd-field-depth" aria-hidden="true"></div>
                 <div class="pd-goal" aria-label="Penalti yo‘nalishini tanlash">
                     <div class="pd-net" aria-hidden="true"></div>
                     <div class="pd-keeper" id="pdKeeper" aria-hidden="true">
-                        <i class="pd-head"></i><i class="pd-body"></i><i class="pd-arm left"></i>
-                        <i class="pd-arm right"></i><i class="pd-leg left"></i><i class="pd-leg right"></i>
+                        <i class="pd-person-shadow"></i><i class="pd-neck"></i><i class="pd-head"></i>
+                        <i class="pd-body"></i><i class="pd-keeper-shorts"></i>
+                        <i class="pd-arm left"></i><i class="pd-arm right"></i>
+                        <i class="pd-leg left"></i><i class="pd-leg right"></i>
                     </div>
                     <div class="pd-targets">
                         ${this.onlineTargetMarkup("top-left", "↖")}
@@ -932,7 +936,8 @@ const penaltyDuelController = {
                 <div class="pd-goal-burst" aria-hidden="true"></div>
                 <div class="pd-ball" id="pdBall" aria-hidden="true">⚽</div>
                 <div class="pd-kicker" id="pdKicker" aria-hidden="true">
-                    <i class="pd-player-head"></i><i class="pd-player-shirt"></i>
+                    <i class="pd-person-shadow"></i><i class="pd-player-neck"></i>
+                    <i class="pd-player-head"></i><i class="pd-player-shirt"></i><i class="pd-player-shorts"></i>
                     <i class="pd-player-arm left"></i><i class="pd-player-arm right"></i>
                     <i class="pd-player-leg left"></i><i class="pd-player-leg right"></i>
                 </div>
@@ -1137,11 +1142,15 @@ const penaltyDuelController = {
                 <section class="pd-pitch ${attacking ? "is-attacking" : "is-defending"}" id="pdPitch">
                     <div class="pd-crowd" aria-hidden="true"></div>
                     <div class="pd-floodlights" aria-hidden="true"></div>
+                    <div class="pd-stadium-rim" aria-hidden="true"><span>LEVEL GROUP</span><span>PENALTY DUEL</span><span>LEVEL GROUP</span></div>
+                    <div class="pd-field-depth" aria-hidden="true"></div>
                     <div class="pd-goal" aria-label="Penalti yo‘nalishini tanlash">
                         <div class="pd-net" aria-hidden="true"></div>
                         <div class="pd-keeper" id="pdKeeper" aria-hidden="true">
-                            <i class="pd-head"></i><i class="pd-body"></i><i class="pd-arm left"></i>
-                            <i class="pd-arm right"></i><i class="pd-leg left"></i><i class="pd-leg right"></i>
+                            <i class="pd-person-shadow"></i><i class="pd-neck"></i><i class="pd-head"></i>
+                            <i class="pd-body"></i><i class="pd-keeper-shorts"></i>
+                            <i class="pd-arm left"></i><i class="pd-arm right"></i>
+                            <i class="pd-leg left"></i><i class="pd-leg right"></i>
                         </div>
                         <div class="pd-targets">
                             ${this.targetMarkup("top-left", "↖")}
@@ -1155,7 +1164,8 @@ const penaltyDuelController = {
                     <div class="pd-goal-burst" aria-hidden="true"></div>
                     <div class="pd-ball" id="pdBall" aria-hidden="true">⚽</div>
                     <div class="pd-kicker" id="pdKicker" aria-hidden="true">
-                        <i class="pd-player-head"></i><i class="pd-player-shirt"></i>
+                        <i class="pd-person-shadow"></i><i class="pd-player-neck"></i>
+                        <i class="pd-player-head"></i><i class="pd-player-shirt"></i><i class="pd-player-shorts"></i>
                         <i class="pd-player-arm left"></i><i class="pd-player-arm right"></i>
                         <i class="pd-player-leg left"></i><i class="pd-player-leg right"></i>
                     </div>

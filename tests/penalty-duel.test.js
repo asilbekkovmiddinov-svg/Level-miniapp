@@ -150,8 +150,16 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
 test("players have natural body details and goals trigger a stadium effect", () => {
     assert.match(source, /pd-goal-burst/);
     assert.match(source, /pitch\.classList\.add\(result\.goal \? "has-goal" : "has-save"\)/);
+    assert.match(source, /pd-stadium-rim/);
+    assert.match(source, /pd-player-neck/);
+    assert.match(source, /pd-player-shorts/);
+    assert.match(source, /pd-keeper-shorts/);
     assert.match(css, /\.pd-player-shirt::after/);
     assert.match(css, /\.pd-arm::after/);
+    assert.match(css, /\.pd-player-head::after/);
+    assert.match(css, /\.pd-player-leg::before/);
+    assert.match(css, /\.pd-stadium-rim/);
+    assert.match(css, /\.pd-field-depth/);
     assert.match(css, /@keyframes pd-strike-leg/);
     assert.match(css, /@keyframes pd-goal-burst/);
     assert.match(css, /@keyframes pd-net-impact/);
