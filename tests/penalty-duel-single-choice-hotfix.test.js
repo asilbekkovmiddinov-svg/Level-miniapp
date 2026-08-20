@@ -8,9 +8,10 @@ const app = fs.readFileSync(path.join(__dirname, "../miniapp/app.js"), "utf8");
 
 test("online Penalty Duel submits one role-driven choice per shot", () => {
     assert.ok(hotfix.includes('this.match.your_role === "KICK"'));
-    assert.ok(hotfix.includes("const match = await this.api.choices(this.match.id, {"));
-    assert.ok(hotfix.includes("direction,"));
-    assert.ok(hotfix.includes("idempotency_key: key,"));
+    assert.ok(hotfix.includes("const matchId = this.match.id;"));
+    assert.ok(hotfix.includes("const match = await this.api.choices(matchId, { direction, idempotency_key: key });"));
+    assert.ok(hotfix.includes("direction"));
+    assert.ok(hotfix.includes("idempotency_key: key"));
     assert.equal(hotfix.includes("kick_direction:"), false);
     assert.equal(hotfix.includes("keeper_direction:"), false);
     assert.equal(hotfix.includes("expected_version:"), false);
