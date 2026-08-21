@@ -4,6 +4,7 @@ const PENALTY_REGULATION_ROUNDS = 5;
 const PENALTY_FALLBACK_SYNC_MS = 500;
 const PENALTY_RECONNECT_MS = 750;
 const PENALTY_AD_COOLDOWN_MS = 30 * 60 * 1000;
+const PENALTY_TELEGA_SDK_TIMEOUT_MS = 20 * 1000;
 const PENALTY_AD_ROTATION = globalThis.PenaltyDuelAdRotation;
 const PENALTY_TELEGA_SDK_URL = "https://inapp.telega.io/sdk/v1/sdk.js";
 const PENALTY_ONCLICKA_SDK_URL = "https://js.onclckvd.com/in-stream-ad-admanager/tma.js";
@@ -266,6 +267,7 @@ const penaltyDuelController = {
             ]);
             this.wallet = wallet;
             this.adConfig = adConfig || {};
+            this.preloadTelegaSdk();
             this.match = match;
             this.setLeaderboardPayloads(freeRating, ticketRating);
             this.screenMode = "ONLINE";
@@ -672,12 +674,33 @@ const penaltyDuelController = {
                 throw error;
             });
         }
-        await Promise.race([
-            this.adSdkPromises[name],
-            new Promise((_, reject) => setTimeout(
-                () => reject(new Error(`${name} SDK vaqti tugadi.`)), timeout,
-            )),
-        ]);
+        let timeoutId;
+        try {
+            await Promise.race([
+                this.adSdkPromises[name],
+                new Promise((_, reject) => {
+                    timeoutId = setTimeout(
+                        () => reject(new Error(`${name} SDK vaqti tugadi.`)), timeout,
+                    );
+                }),
+            ]);
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    },
+
+    preloadTelegaSdk() {
+        const providers = Array.isArray(this.adConfig?.providers)
+            ? this.adConfig.providers.map((provider) => String(provider).toUpperCase())
+            : [];
+        if (!providers.includes("TELEGA") || !this.adConfig?.telega_token) return;
+        this.waitForTelega().then(
+            () => console.info("[PenaltyAds] Telega.io SDK ready"),
+            (error) => console.warn("[PenaltyAds] Telega.io SDK preload failed", {
+                code: error?.code || "TELEGA_SDK_UNAVAILABLE",
+                message: error?.message || String(error),
+            }),
+        );
     },
 
     async waitForTelega() {
@@ -686,6 +709,7 @@ const penaltyDuelController = {
                 "Telega.io",
                 PENALTY_TELEGA_SDK_URL,
                 () => Boolean(window.TelegaIn?.AdsController),
+                PENALTY_TELEGA_SDK_TIMEOUT_MS,
             );
         } catch (cause) {
             const error = new Error(cause?.message || "Telega.io SDK yuklanmadi.");
@@ -961,7 +985,14 @@ const penaltyDuelController = {
             });
         } catch (error) {
             await this.cancelTelegaSession(session.token);
-            error.code = "TELEGA_SHOW_FAILED";
+            const message = String(error?.message || error || "");
+            if (/no ad available/i.test(message)) error.code = "TELEGA_NO_FILL";
+            else if (/401|403|auth/i.test(message)) error.code = "TELEGA_AUTH_FAILED";
+            else error.code = "TELEGA_SHOW_FAILED";
+            console.warn("[PenaltyAds] Telega.io ad failed", {
+                code: error.code,
+                message,
+            });
             throw error;
         }
         if (result?.done !== true) {
