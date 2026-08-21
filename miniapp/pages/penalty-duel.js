@@ -5,6 +5,7 @@ const PENALTY_FALLBACK_SYNC_MS = 500;
 const PENALTY_RECONNECT_MS = 750;
 const PENALTY_AD_COOLDOWN_MS = 30 * 60 * 1000;
 const PENALTY_TELEGA_SDK_TIMEOUT_MS = 20 * 1000;
+const PENALTY_TADS_STALL_TIMEOUT_MS = 45 * 1000;
 const PENALTY_AD_ROTATION = globalThis.PenaltyDuelAdRotation;
 const PENALTY_TELEGA_SDK_URL = "https://inapp.telega.io/sdk/v1/sdk.js";
 const PENALTY_ONCLICKA_SDK_URL = "https://js.onclckvd.com/in-stream-ad-admanager/tma.js";
@@ -820,6 +821,48 @@ const penaltyDuelController = {
         }
     },
 
+    snapshotTadsBodyChildren() {
+        return new Set(Array.from(document.body?.children || []));
+    },
+
+    removeTadsFullscreenOverlays(previousChildren) {
+        const children = Array.from(document.body?.children || []);
+        const overlays = children.filter((element) => (
+            !previousChildren.has(element)
+            && element?.style?.position === "fixed"
+            && element?.style?.zIndex === "2147483647"
+            && element?.style?.width === "100vw"
+            && element?.style?.height === "100vh"
+        ));
+        overlays.forEach((element) => element.remove());
+        return overlays.length;
+    },
+
+    createTadsStallGuard(previousChildren) {
+        let timeoutId;
+        const promise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+                const removed = this.removeTadsFullscreenOverlays(previousChildren);
+                if (!removed) return;
+                this.tadsController = null;
+                const error = new Error(
+                    "TADS reklamasi qotib qoldi. Keyingi tarmoq tekshirilmoqda.",
+                );
+                error.code = "TADS_STALLED";
+                error.fallback = true;
+                reject(error);
+            }, PENALTY_TADS_STALL_TIMEOUT_MS);
+        });
+        return {
+            promise,
+            cancel: () => clearTimeout(timeoutId),
+            cleanup: () => {
+                clearTimeout(timeoutId);
+                return this.removeTadsFullscreenOverlays(previousChildren);
+            },
+        };
+    },
+
     resetAdsgramController() {
         this.adsgramController?.destroy?.();
         this.adsgramController = null;
@@ -907,6 +950,8 @@ const penaltyDuelController = {
             error.code = "TADS_SESSION_FAILED";
             throw error;
         }
+        const previousBodyChildren = this.snapshotTadsBodyChildren();
+        const stallGuard = this.createTadsStallGuard(previousBodyChildren);
         let sdkRewarded = false;
         const completion = new Promise((resolve, reject) => {
             this.tadsRewardResolve = resolve;
@@ -935,6 +980,7 @@ const penaltyDuelController = {
             });
             await Promise.race([
                 completion,
+                stallGuard.promise,
                 new Promise((_, reject) => setTimeout(() => {
                     const error = new Error("TADS reklamasi yakunlanmadi.");
                     error.code = "TADS_CANCELLED";
@@ -943,14 +989,20 @@ const penaltyDuelController = {
                 }, 90000)),
             ]);
             sdkRewarded = true;
-            return await this.waitForServerTicket(previousRewardAt, "TADS");
+            return await Promise.race([
+                this.waitForServerTicket(previousRewardAt, "TADS"),
+                stallGuard.promise,
+            ]);
         } catch (error) {
-            if (!sdkRewarded) await this.cancelTadsSession(session.token);
+            const stalled = error?.code === "TADS_STALLED";
+            if (!sdkRewarded || stalled) await this.cancelTadsSession(session.token);
+            if (stallGuard.cleanup()) this.tadsController = null;
             if (!error.code) error.code = "TADS_SHOW_FAILED";
             throw error;
         } finally {
             this.tadsRewardResolve = null;
             this.tadsRewardReject = null;
+            if (!sdkRewarded) stallGuard.cancel();
         }
     },
 

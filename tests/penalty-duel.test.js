@@ -191,6 +191,7 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /id="pdAdButton"/);
     assert.match(source, /PENALTY_AD_COOLDOWN_MS = 30 \* 60 \* 1000/);
     assert.match(source, /PENALTY_TELEGA_SDK_TIMEOUT_MS = 20 \* 1000/);
+    assert.match(source, /PENALTY_TADS_STALL_TIMEOUT_MS = 45 \* 1000/);
     assert.match(source, /Har 30 daqiqada bir marta/);
     assert.match(source, /ADSGRAM: \(\) => this\.runAdsgramPrimary\(\)/);
     assert.match(source, /TADS: \(\) => this\.runTadsProvider\(\)/);
@@ -214,7 +215,10 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /\/penalty-duel\/rewards\/tads\/session/);
     assert.match(source, /\/penalty-duel\/rewards\/tads\/cancel/);
     assert.match(source, /const session = await this\.api\.createTadsSession\(\)/);
-    assert.match(source, /if \(!sdkRewarded\) await this\.cancelTadsSession\(session\.token\)/);
+    assert.match(source, /error\?\.code === "TADS_STALLED"/);
+    assert.match(source, /!sdkRewarded \|\| stalled/);
+    assert.match(source, /removeTadsFullscreenOverlays\(previousChildren\)/);
+    assert.match(source, /element\?\.style\?\.zIndex === "2147483647"/);
     assert.match(source, /\/penalty-duel\/rewards\/telega\/session/);
     assert.match(source, /\/penalty-duel\/rewards\/telega\/cancel/);
     assert.match(source, /const session = await this\.api\.createTelegaSession\(\)/);
@@ -227,7 +231,7 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /const session = await this\.api\.createOnclickaSession\(\)/);
     assert.match(source, /await this\.cancelOnclickaSession\(session\.token\)/);
     assert.match(html, /penalty-duel-ad-rotation\.js/);
-    assert.match(html, /pages\/penalty-duel\.js\?v=1\.8\.0/);
+    assert.match(html, /pages\/penalty-duel\.js\?v=1\.8\.1/);
     assert.match(source, /inapp\.telega\.io\/sdk\/v1\/sdk\.js/);
     assert.match(source, /js\.onclckvd\.com\/in-stream-ad-admanager\/tma\.js/);
     assert.match(css, /\.pd-ad-card\{display:grid/);
