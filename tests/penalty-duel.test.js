@@ -190,6 +190,7 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /id="pdAdStatus"/);
     assert.match(source, /id="pdAdButton"/);
     assert.match(source, /PENALTY_AD_COOLDOWN_MS = 30 \* 60 \* 1000/);
+    assert.match(source, /PENALTY_TELEGA_SDK_TIMEOUT_MS = 20 \* 1000/);
     assert.match(source, /Har 30 daqiqada bir marta/);
     assert.match(source, /ADSGRAM: \(\) => this\.runAdsgramPrimary\(\)/);
     assert.match(source, /TADS: \(\) => this\.runTadsProvider\(\)/);
@@ -218,11 +219,15 @@ test("Penalty Duel ticket ad uses the server-enabled three-provider production r
     assert.match(source, /\/penalty-duel\/rewards\/telega\/cancel/);
     assert.match(source, /const session = await this\.api\.createTelegaSession\(\)/);
     assert.match(source, /await this\.cancelTelegaSession\(session\.token\)/);
+    assert.match(source, /this\.preloadTelegaSdk\(\)/);
+    assert.match(source, /error\.code = "TELEGA_NO_FILL"/);
+    assert.match(source, /error\.code = "TELEGA_AUTH_FAILED"/);
     assert.match(source, /\/penalty-duel\/rewards\/onclicka\/session/);
     assert.match(source, /\/penalty-duel\/rewards\/onclicka\/cancel/);
     assert.match(source, /const session = await this\.api\.createOnclickaSession\(\)/);
     assert.match(source, /await this\.cancelOnclickaSession\(session\.token\)/);
     assert.match(html, /penalty-duel-ad-rotation\.js/);
+    assert.match(html, /pages\/penalty-duel\.js\?v=1\.8\.0/);
     assert.match(source, /inapp\.telega\.io\/sdk\/v1\/sdk\.js/);
     assert.match(source, /js\.onclckvd\.com\/in-stream-ad-admanager\/tma\.js/);
     assert.match(css, /\.pd-ad-card\{display:grid/);
