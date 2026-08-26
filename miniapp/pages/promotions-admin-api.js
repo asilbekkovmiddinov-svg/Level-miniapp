@@ -45,3 +45,10 @@
     }
     return { PromotionsAdminApi, PromotionsAdminError };
 });
+
+if (typeof document !== "undefined" && !document.querySelector('script[data-admin-arena-cancel]')) {
+    const script = document.createElement("script");
+    script.src = "pages/admin-arena-match-cancel.js?v=1.0.0";
+    script.dataset.adminArenaCancel = "1";
+    document.head.appendChild(script);
+}
