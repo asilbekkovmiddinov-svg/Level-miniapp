@@ -17,3 +17,4 @@ jobs:
       - run: node --test tests/*.test.js
       - run: node --check miniapp/api.js
       - run: node --check miniapp/pages/wallet.js
+      - run: node --check miniapp/pages/arena-v5.js
