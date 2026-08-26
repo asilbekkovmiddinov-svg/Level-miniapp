@@ -25,6 +25,7 @@
         userMetrics() { return this.request("/admin/metrics/users"); }
         userList({ q = "", status = "ALL", page = 1, perPage = 20 } = {}) { const params = new URLSearchParams({ q, status, page: String(page), per_page: String(perPage) }); return this.request(`/admin/metrics/users/list?${params.toString()}`); }
         userWalletAudit(q, limit = 100) { const params = new URLSearchParams({ q: String(q || "").trim(), limit: String(limit) }); return this.request(`/admin/metrics/users/audit?${params.toString()}`); }
+        cancelArenaMatch(matchId) { return this.request(`/admin/metrics/arena/matches/${Number(matchId)}/cancel`, { method: "POST" }); }
         arenaRankingPrizes() { return this.request("/admin/arena/ranking-prizes"); }
         updateArenaRankingPrize(period, prizeText) { return this.request(`/admin/arena/ranking-prizes/${encodeURIComponent(period)}`, { method: "PUT", body: { prize_text: String(prizeText || "").trim() } }); }
         create(data) { return this.request("/admin/promotions", { method: "POST", body: data }); }
