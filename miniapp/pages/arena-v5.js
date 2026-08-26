@@ -281,12 +281,18 @@ function arenaV5Bind(page) {
         arenaV5State.matchmaking = await arenaV5Client.cancelQueue();
         clearTimeout(arenaV5State.searchTimer);
     }));
-    page.querySelector("[data-arena-v5-save]")?.addEventListener("click", () => arenaV5Action(async () => {
+    page.querySelector("[data-arena-v5-save]")?.addEventListener("click", () => {
         const username = page.querySelector("#arenaV5Username")?.value?.trim();
-        if (!username) throw new ArenaV5Error("eFootball username kiriting.");
-        arenaV5State.profile = await arenaV5Client.updateProfile(username);
-        arenaV5Toast("eFootball username saqlandi.");
-    }));
+        if (!username) {
+            arenaV5State.error = "eFootball username kiriting.";
+            arenaV5Render();
+            return;
+        }
+        arenaV5Action(async () => {
+            arenaV5State.profile = await arenaV5Client.updateProfile(username);
+            arenaV5Toast("eFootball username saqlandi.");
+        });
+    });
     page.querySelector("[data-arena-v5-bot]")?.addEventListener("click", (event) => arenaV5OpenBot(event.currentTarget.dataset.arenaV5Bot));
 }
 
