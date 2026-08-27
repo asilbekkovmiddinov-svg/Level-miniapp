@@ -36,6 +36,36 @@ test("Arena V5 client uses authenticated matchmaking contracts", async () => {
 });
 
 
+test("Arena V5 promocode claim sends only the code with Telegram auth", async () => {
+    const calls = [];
+    const client = new ArenaV5Client({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        fetchImpl: async (url, options) => {
+            calls.push({ url, options });
+            return response({ code: "ARENA10", ticket_amount: 10, ticket_balance: 12 });
+        },
+    });
+
+    const reward = await client.claimPromocode("ARENA10");
+
+    assert.equal(new URL(calls[0].url).pathname, "/arena/v5/promocode/claim");
+    assert.equal(calls[0].options.method, "POST");
+    assert.equal(calls[0].options.headers["X-Telegram-Init-Data"], "verified-init-data");
+    assert.deepEqual(JSON.parse(calls[0].options.body), { code: "ARENA10" });
+    assert.equal(reward.ticket_balance, 12);
+});
+
+
+test("Arena find view contains the promocode input without changing polling", () => {
+    const fs = require("node:fs");
+    const source = fs.readFileSync("miniapp/pages/arena-v5.js", "utf8");
+    assert.match(source, /id="arenaV5Promocode"/);
+    assert.match(source, /data-arena-v5-promocode/);
+    assert.match(source, /Har bir promokodni faqat bir marta ishlatish mumkin/);
+});
+
+
 test("matched card exposes bot deep-link without rendering untrusted HTML", () => {
     const html = arenaV5MatchCard({
         id: 152,

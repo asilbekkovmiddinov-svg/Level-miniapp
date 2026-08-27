@@ -46,6 +46,6 @@ test("all module mounts remain isolated direct children of pageContent", () => {
         "ordersPage", "profilePage", "supportPage", "referralPage", "walletPage",
         "promotionsAdminPage", "promotionsPage", "divisionAdminPage",
         "tournamentAdminPage", "notificationsPage",
-        "coinPromotionAdminPage", "wheelOrderAdminPage",
+        "coinPromotionAdminPage", "wheelOrderAdminPage", "arenaPromocodeAdminPage",
     ]);
 });

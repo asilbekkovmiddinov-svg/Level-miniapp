@@ -56,6 +56,12 @@ class ArenaV5Client {
     profile() { return this.request("/arena/v5/profile"); }
     ranking() { return this.request("/arena/v5/ranking?limit=100&offset=0"); }
     history(offset = 0) { return this.request(`/arena/v5/history?limit=20&offset=${offset}`); }
+    claimPromocode(code) {
+        return this.request("/arena/v5/promocode/claim", {
+            method: "POST",
+            body: { code },
+        });
+    }
     joinQueue() {
         return this.request("/arena/v5/queue", {
             method: "POST",
@@ -108,6 +114,7 @@ const arenaV5State = {
     loading: false,
     action: false,
     error: null,
+    promocode: "",
     searchTimer: null,
 };
 
@@ -174,6 +181,15 @@ function arenaV5FindView() {
         <p>Bot raqibingiz bilan xavfsiz yozishish va natijani yuborish uchun match chatini ochadi.</p>
         <button type="button" class="arena-v5-primary" data-arena-v5-find ${arenaV5State.action ? "disabled" : ""}>🔍 RAQIB TOPISH</button>
         <small>Kamida 1 Ticket va eFootball username kerak.</small>
+    </section>
+    <section class="arena-v5-promocode">
+        <div><span>🎁</span><strong>Promokod orqali Ticket oling</strong></div>
+        <div class="arena-v5-name-form">
+            <input id="arenaV5Promocode" maxlength="32" autocomplete="off" autocapitalize="characters"
+                value="${arenaV5Escape(arenaV5State.promocode)}" placeholder="Masalan: ARENA10">
+            <button type="button" data-arena-v5-promocode ${arenaV5State.action ? "disabled" : ""}>Olish</button>
+        </div>
+        <small>Har bir promokodni faqat bir marta ishlatish mumkin.</small>
     </section>`;
 }
 
@@ -281,6 +297,36 @@ function arenaV5Bind(page) {
         arenaV5State.matchmaking = await arenaV5Client.cancelQueue();
         clearTimeout(arenaV5State.searchTimer);
     }));
+    page.querySelector("#arenaV5Promocode")?.addEventListener("input", (event) => {
+        arenaV5State.promocode = event.currentTarget.value;
+    });
+    page.querySelector("[data-arena-v5-promocode]")?.addEventListener("click", () => {
+        const code = page.querySelector("#arenaV5Promocode")?.value?.trim();
+        if (!code) {
+            arenaV5State.error = "Promokodni kiriting.";
+            arenaV5Render();
+            return;
+        }
+        arenaV5State.promocode = code;
+        arenaV5Action(async () => {
+            const reward = await arenaV5Client.claimPromocode(code);
+            arenaV5State.config = {
+                ...arenaV5State.config,
+                ticket_balance: reward.ticket_balance,
+            };
+            arenaV5State.matchmaking = {
+                ...arenaV5State.matchmaking,
+                ticket_balance: reward.ticket_balance,
+            };
+            arenaV5State.promocode = "";
+            arenaV5Toast(`🎟 ${reward.ticket_amount} Ticket olindi! Balans: ${reward.ticket_balance}`);
+            const [config, matchmaking] = await Promise.allSettled([
+                arenaV5Client.config(), arenaV5Client.state(),
+            ]);
+            if (config.status === "fulfilled") arenaV5State.config = config.value;
+            if (matchmaking.status === "fulfilled") arenaV5State.matchmaking = matchmaking.value;
+        });
+    });
     page.querySelector("[data-arena-v5-save]")?.addEventListener("click", () => {
         const username = page.querySelector("#arenaV5Username")?.value?.trim();
         if (!username) {
