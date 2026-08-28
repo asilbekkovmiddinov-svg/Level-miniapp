@@ -24,6 +24,7 @@ window.addEventListener("load", async () => {
         else if (query.get("admin") === "division") await loadDivisionAdminPage();
         else if (query.get("admin") === "tournament") await loadTournamentAdminPage();
         else if (query.get("admin") === "arena-promocodes") await loadArenaPromocodeAdminPage();
+        else if (query.get("admin") === "wallet-shop") await loadWalletShopAdminPage();
         else {
             await loadHome();
             await openCoinOrderDeepLink();
@@ -135,12 +136,14 @@ async function openPage(page, options = {}) {
         case "support": await loadSupportPage(); break;
         case "referral": await loadReferralPage(); break;
         case "wallet": await loadDedicatedWalletPage(); break;
+        case "wallet-shop": await loadWalletShopPage(); break;
         case "promotions-admin": await loadPromotionsAdminPage(); break;
         case "division-admin": await loadDivisionAdminPage(); break;
         case "tournament-admin": await loadTournamentAdminPage(); break;
         case "coin-promotions-admin": await loadCoinPromotionAdminPage(); break;
         case "wheel-orders-admin": await loadWheelOrderAdminPage(); break;
         case "arena-promocodes-admin": await loadArenaPromocodeAdminPage(); break;
+        case "wallet-shop-admin": await loadWalletShopAdminPage(); break;
         case "promotions": await loadPromotionsPage(); break;
         case "notifications": await loadNotificationsPage(); break;
         default: await loadHome();
