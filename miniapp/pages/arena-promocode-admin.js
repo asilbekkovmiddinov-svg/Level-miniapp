@@ -89,6 +89,7 @@ function arenaPromocodeAdminMenu() {
     return `<nav class="cpa-admin-menu" aria-label="Admin bo‘limlari">
         <button onclick="openPage('promotions-admin')">Promotions</button>
         <button class="active">Arena Promokod</button>
+        <button onclick="openPage('wallet-shop-admin')">EFC & Ticket</button>
         <button onclick="openPage('coin-promotions-admin')">Coin Promotions</button>
         <button onclick="openPage('wheel-orders-admin')">Wheel Coin Orders</button>
         <button onclick="openPage('division-admin')">Division</button>

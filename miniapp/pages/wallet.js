@@ -102,7 +102,7 @@ async function loadDedicatedWalletPage(offset = 0) {
             <div class="wallet-v2-balances">
                 <article><small>EFC balans</small><strong>${Number(walletData.efc_balance).toLocaleString("uz-UZ")}</strong><span>🔒 ${Number(walletData.locked_efc).toLocaleString("uz-UZ")} locked</span></article>
                 <article><small>UZS balans</small><strong>${Number(walletData.uzs_balance).toLocaleString("uz-UZ")}</strong><span>🔒 ${Number(walletData.locked_uzs).toLocaleString("uz-UZ")} locked</span></article>
-            </div><div class="wallet-v2-actions"><button onclick="openDeposit()">＋ Deposit</button><button onclick="openWithdraw()">↗ Withdraw</button></div>
+            </div><div class="wallet-v2-actions"><button onclick="openDeposit()">＋ Deposit</button><button onclick="openWithdraw()">↗ Withdraw</button><button onclick="openPage('wallet-shop',{returnPage:'wallet'})">🛍 EFC & Ticket</button></div>
             <div class="wallet-v2-title"><h3>Transaction History</h3><button onclick="loadDedicatedWalletPage(${offset})">↻</button></div>
             <div class="wallet-history">${items.length ? items.map(walletTransactionRow).join("") : `<div class="wallet-empty"><b>Tranzaksiyalar yo‘q</b><span>Deposit va withdraw tarixi shu yerda chiqadi.</span></div>`}</div>
             <nav class="wallet-pagination"><button ${offset <= 0 ? "disabled" : ""} onclick="loadDedicatedWalletPage(${Math.max(0, offset - WALLET_HISTORY_LIMIT)})">← Oldingi</button><span>${Math.floor(offset / WALLET_HISTORY_LIMIT) + 1}</span><button ${history?.has_more ? "" : "disabled"} onclick="loadDedicatedWalletPage(${offset + WALLET_HISTORY_LIMIT})">Keyingi →</button></nav>
