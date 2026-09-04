@@ -62,3 +62,25 @@ test("loads scheduled group matches with bounded pagination", async () => {
     assert.match(request.url, /limit=100/);
     assert.equal(matches[0].id, "m1");
 });
+
+test("lists simultaneous active and finished tournaments and opens one archive", async () => {
+    const requests = [];
+    const client = loadClient(async (url, options) => {
+        requests.push({ url, options });
+        if (url.includes("/tournaments?")) return response([
+            { id: 12, name: "Live Cup", status: "ACTIVE", duration_days: 7 },
+            { id: 8, name: "Old Cup", status: "FINISHED", duration_days: 14 },
+        ]);
+        return response({
+            tournament: { id: 8, name: "Old Cup", status: "FINISHED" },
+            participants: [], matches: [],
+        });
+    });
+    const tournaments = await client.list({ statuses: ["ACTIVE", "FINISHED"] });
+    const archive = await client.overview(8);
+    assert.match(requests[0].url, /status=ACTIVE/);
+    assert.match(requests[0].url, /status=FINISHED/);
+    assert.equal(requests[1].url, "https://api.example/tournaments/8");
+    assert.equal(tournaments[1].durationDays, 14);
+    assert.equal(archive.tournament.status, "FINISHED");
+});

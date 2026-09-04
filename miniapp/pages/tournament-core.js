@@ -75,6 +75,11 @@ function normalizeTournamentOverview(value) {
             status: String(item.status || ""),
             maxParticipants: Number(item.max_participants) || 0,
             ticketCost: Number(item.ticket_cost) || 10,
+            entryMode: String(item.entry_mode || "TICKET"),
+            minimumCoinPurchase: Math.max(300, Number(item.minimum_coin_purchase) || 300),
+            durationDays: Math.max(1, Number(item.duration_days) || 7),
+            autoStartWhenFull: Boolean(item.auto_start_when_full),
+            announcementChannelId: item.announcement_channel_id || null,
             groupCount: item.group_count == null ? null : Number(item.group_count),
             groupSize: item.group_size == null ? null : Number(item.group_size),
             groupMode: item.group_mode || null,
@@ -118,6 +123,12 @@ function tournamentRegistrationState(overview, now = Date.now()) {
             label: tournamentStatusLabel(participant.status),
         };
     }
+    if (item.entryMode === "COIN_PURCHASE") {
+        return {
+            enabled: false,
+            label: `Bitta xaridda ${item.minimumCoinPurchase}+ coin oling`,
+        };
+    }
     const opens = new Date(item.registrationOpensAt).getTime();
     const closes = new Date(item.registrationClosesAt).getTime();
     if (item.status !== "REGISTRATION" || now > closes) {
@@ -133,6 +144,10 @@ function tournamentRegistrationState(overview, now = Date.now()) {
         };
     }
     return { enabled: true, label: "Turnirga ariza yuborish" };
+}
+
+function normalizeTournamentSummary(value) {
+    return normalizeTournamentOverview({ tournament: value }).tournament;
 }
 
 function tournamentGroupStandings(participants) {

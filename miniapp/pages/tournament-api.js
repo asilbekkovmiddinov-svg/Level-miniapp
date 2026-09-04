@@ -55,8 +55,20 @@ class TournamentApiClient {
         return payload;
     }
 
-    async overview() {
-        return normalizeTournamentOverview(await this.request("/tournaments/current"));
+    async overview(tournamentId = null) {
+        const path = tournamentId == null
+            ? "/tournaments/current" : `/tournaments/${Number(tournamentId)}`;
+        return normalizeTournamentOverview(await this.request(path));
+    }
+
+    async list({ statuses = [], limit = 100, offset = 0 } = {}) {
+        const query = new URLSearchParams({
+            limit: String(Math.min(100, Math.max(1, Number(limit) || 100))),
+            offset: String(Math.max(0, Number(offset) || 0)),
+        });
+        statuses.forEach((status) => query.append("status", String(status)));
+        const rows = await this.request(`/tournaments?${query}`);
+        return Array.isArray(rows) ? rows.map(normalizeTournamentSummary) : [];
     }
 
     async apply(tournamentId) {
