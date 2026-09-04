@@ -6,12 +6,8 @@ window.addEventListener("load", async () => {
         if (homeName) homeName.textContent = USERNAME ? `@${USERNAME}` : FIRST_NAME;
 
         await registerUser();
+        await requireChannelSubscriptions();
         await updateUserSeen();
-
-        // Subscription enforcement is temporarily disabled. Do not call the
-        // backend subscription endpoint during startup: an unavailable
-        // Telegram membership check must never prevent the MiniApp from
-        // loading wallet/home data.
 
         Navbar.init();
         bindMenuButtons();
@@ -39,9 +35,79 @@ window.addEventListener("load", async () => {
 });
 
 async function requireChannelSubscriptions() {
-    // Kept as a no-op so existing callers remain backward compatible while
-    // mandatory subscriptions are paused.
-    return true;
+    const requestStatus = async () => {
+        const response = await fetch(`${API_URL}/subscription/status`, {
+            headers: { "X-Telegram-Init-Data": telegramInitData() },
+        });
+        let payload = null;
+        try { payload = await response.json(); } catch (_error) {}
+        if (!response.ok) throw new Error(payload?.detail || "Obunani tekshirib bo‘lmadi");
+        return payload;
+    };
+
+    const gate = document.createElement("section");
+    gate.id = "subscriptionGate";
+    gate.className = "subscription-gate";
+    gate.setAttribute("role", "dialog");
+    gate.setAttribute("aria-modal", "true");
+    gate.innerHTML = `
+        <div class="subscription-gate-card">
+            <div class="subscription-gate-lock" aria-hidden="true">🔐</div>
+            <small>LEVEL_GROUP ACCESS</small>
+            <h1>Kanallarga obuna bo‘ling</h1>
+            <p>Bot va MiniApp’dan foydalanish uchun quyidagi kanallarga obuna bo‘lish majburiy.</p>
+            <div class="subscription-gate-channels"></div>
+            <p class="subscription-gate-status" aria-live="polite"></p>
+            <button class="subscription-gate-check" type="button">✅ Obunani tekshirish</button>
+        </div>`;
+    document.body.appendChild(gate);
+    const channelsRoot = gate.querySelector(".subscription-gate-channels");
+    const statusRoot = gate.querySelector(".subscription-gate-status");
+    const checkButton = gate.querySelector(".subscription-gate-check");
+
+    const renderChannels = (channels) => {
+        channelsRoot.replaceChildren();
+        for (const channel of channels || []) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "subscription-gate-channel";
+            button.textContent = `➕ ${channel.title}`;
+            button.addEventListener("click", () => {
+                if (globalThis.Telegram?.WebApp?.openTelegramLink) {
+                    globalThis.Telegram.WebApp.openTelegramLink(channel.url);
+                } else {
+                    window.open(channel.url, "_blank", "noopener");
+                }
+            });
+            channelsRoot.appendChild(button);
+        }
+    };
+
+    try {
+        while (true) {
+            checkButton.disabled = true;
+            checkButton.textContent = "⏳ Tekshirilmoqda...";
+            try {
+                const status = await requestStatus();
+                if (status?.subscribed) return true;
+                renderChannels(status?.missing_channels || []);
+                statusRoot.textContent = "Barcha kanallarga kirib obuna bo‘ling, keyin qayta tekshiring.";
+                statusRoot.classList.remove("is-error");
+            } catch (error) {
+                renderChannels([]);
+                statusRoot.textContent = "Tekshiruv xizmati vaqtincha ishlamayapti. Birozdan keyin qayta urining.";
+                statusRoot.classList.add("is-error");
+                console.error(error);
+            }
+            Loader.hide();
+            checkButton.disabled = false;
+            checkButton.textContent = "✅ Obunani tekshirish";
+            await new Promise((resolve) => checkButton.addEventListener("click", resolve, { once: true }));
+        }
+    } finally {
+        gate.remove();
+        Loader.show();
+    }
 }
 
 let pageReturnTarget = null;
