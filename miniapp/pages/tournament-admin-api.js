@@ -50,6 +50,19 @@ class TournamentAdminClient {
         return this.request("/tournaments/current");
     }
 
+    overview(tournamentId) {
+        return this.request("/tournaments/" + Number(tournamentId));
+    }
+
+    list({ statuses = [], limit = 100, offset = 0 } = {}) {
+        const query = new URLSearchParams({
+            limit: String(Math.min(100, Math.max(1, Number(limit) || 100))),
+            offset: String(Math.max(0, Number(offset) || 0)),
+        });
+        statuses.forEach((status) => query.append("status", String(status)));
+        return this.request("/admin/tournaments?" + query);
+    }
+
     create(input) {
         return this.request("/admin/tournaments", {
             method: "POST", body: input,
@@ -66,10 +79,10 @@ class TournamentAdminClient {
         limit = 50, offset = 0, search = "",
     } = {}) {
         const query = new URLSearchParams({
-            status,
             limit: String(Math.min(100, Math.max(1, Number(limit) || 50))),
             offset: String(Math.max(0, Number(offset) || 0)),
         });
+        if (status) query.set("status", String(status));
         if (String(search).trim()) query.set("search", String(search).trim());
         return this.request(
             "/admin/tournaments/" + Number(tournamentId)

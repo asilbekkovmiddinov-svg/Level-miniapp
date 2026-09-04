@@ -26,6 +26,9 @@ test("user Tournament page covers one-time entry group match and admin result", 
     assert.match(page, /Guruhlar/);
     assert.match(page, /Natija admin tomonidan kiritildi/);
     assert.match(page, /O‘yinlar va natijalar/);
+    assert.match(page, /Tugagan turnirlar/);
+    assert.match(page, /Yakuniy reyting/);
+    assert.match(page, /Bitta xaridda/);
     assert.doesNotMatch(page, /data-tournament-arena/);
 });
 
@@ -42,6 +45,12 @@ test("simple admin UI configures groups schedules matches and writes result", ()
     assert.match(admin, /name="group_mode"/);
     assert.match(admin, /name="group_size"/);
     assert.match(admin, /name="qualifiers_per_group"/);
+    assert.match(admin, /name="duration_days"/);
+    assert.match(admin, /name="entry_mode"/);
+    assert.match(admin, /name="minimum_coin_purchase"/);
+    assert.match(admin, /name="announcement_channel_id"/);
+    assert.match(admin, /data-tournament-create-new/);
+    assert.match(admin, /data-tournament-admin-select/);
     assert.match(admin, /tournamentParticipantSearch/);
     assert.match(admin, /data-tournament-result/);
     assert.match(admin, /data-tournament-finalize/);

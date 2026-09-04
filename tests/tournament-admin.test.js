@@ -109,3 +109,19 @@ test("admin finalizes group qualifiers", async () => {
     assert.equal(request.options.method, "POST");
     assert.equal(result.qualified_players, 16);
 });
+
+test("admin lists multiple tournaments and opens the selected one", async () => {
+    const requests = [];
+    const client = loadClient(async (url, options) => {
+        requests.push({ url, options });
+        return response(url.includes("/admin/tournaments?")
+            ? [{ id: 1 }, { id: 2 }]
+            : { tournament: { id: 2 }, participants: [], matches: [] });
+    });
+    const rows = await client.list();
+    const overview = await client.overview(2);
+    assert.equal(rows.length, 2);
+    assert.match(requests[0].url, /\/admin\/tournaments\?/);
+    assert.equal(requests[1].url, "https://api.example/tournaments/2");
+    assert.equal(overview.tournament.id, 2);
+});

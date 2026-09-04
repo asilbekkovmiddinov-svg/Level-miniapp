@@ -1,5 +1,8 @@
 const tournamentAdminState = {
+    tournaments: [],
     tournament: null,
+    selectedId: null,
+    showCreate: false,
     overview: null,
     participants: [],
     matches: [],
@@ -8,6 +11,20 @@ const tournamentAdminState = {
     search: "",
     busy: false,
 };
+
+function tournamentAdminPicker() {
+    return `<section class="tournament-admin-picker">
+        <header><div><small>TURNIRLAR</small><h3>Barcha turnirlar</h3></div>
+            <button type="button" data-tournament-create-new>+ Yangi turnir</button></header>
+        <div>${tournamentAdminState.tournaments.length
+            ? tournamentAdminState.tournaments.map((item) => `
+                <button type="button" data-tournament-admin-select="${item.id}"
+                    class="${Number(tournamentAdminState.selectedId) === Number(item.id) && !tournamentAdminState.showCreate ? "active" : ""}">
+                    <b>${divisionEscape(item.name)}</b><span>${divisionAdminStatusLabel(item.status)}</span>
+                </button>`).join("")
+            : "<em>Hozircha turnir yo‘q</em>"}</div>
+    </section>`;
+}
 
 function tournamentAdminDate(value) {
     if (!value) return "—";
@@ -32,20 +49,32 @@ function tournamentAdminMenu() {
 function tournamentAdminCreateMarkup() {
     const now = new Date();
     const closes = new Date(now.getTime() + 2 * 86400000);
-    const starts = new Date(now.getTime() + 3 * 86400000);
-    const ends = new Date(now.getTime() + 14 * 86400000);
     return `<div class="division-admin-shell">
         ${tournamentAdminMenu()}
+        ${tournamentAdminPicker()}
         <section class="division-admin-hero"><div>
             <small>LEVEL_GROUP • ADMIN</small><h2>Yangi guruh turniri</h2>
-            <p>Qatnashish ticketi, guruh turi va guruh hajmini belgilang.</p>
+            <p>Qatnashish usuli, davomiyligi va kanalini belgilang.</p>
         </div></section>
         <form id="tournamentCreateForm" class="division-admin-form">
             <label><span>Turnir nomi</span>
                 <input name="name" maxlength="100" required value="LEVEL Cup"></label>
             <label><span>Qatnashish ticketi</span>
                 <input name="ticket_cost" type="number" min="0" max="1000000" value="10" required>
-                <small>Har matchda emas, turnirga kirishda bir marta olinadi.</small></label>
+                <small>Oddiy turnirda kirish uchun, maxsus turnirda Arena matchlari uchun.</small></label>
+            <label><span>Qatnashish usuli</span><select name="entry_mode" required>
+                <option value="COIN_PURCHASE" selected>300+ coin xaridi bilan avtomatik</option>
+                <option value="TICKET">Ticket bilan oddiy ro‘yxat</option>
+            </select></label>
+            <label data-minimum-coin-field><span>Bitta xariddagi eng kam coin</span>
+                <input name="minimum_coin_purchase" type="number" min="300" max="1000000" value="300" required>
+                <small>Kichik xaridlar qo‘shib hisoblanmaydi.</small></label>
+            <label><span>Turnir davomiyligi</span>
+                <input name="duration_days" type="number" min="1" max="365" value="7" required>
+                <small>Turnir boshlangan vaqtdan boshlab kunlarda.</small></label>
+            <label><span>Kunlik reyting kanali</span>
+                <input name="announcement_channel_id" maxlength="128" placeholder="@kanal yoki -100...">
+                <small>Bot kanalda admin bo‘lishi kerak.</small></label>
             <label><span>Ishtirokchilar soni</span>
                 <input name="max_participants" type="number" min="4" max="8192" value="64" required></label>
             <label><span>Guruh turi</span><select name="group_mode" required>
@@ -64,13 +93,7 @@ function tournamentAdminCreateMarkup() {
             <label><span>Ro‘yxat yopiladi</span>
                 <input name="registration_closes_at" type="datetime-local" required
                     value="${tournamentAdminInputDate(closes)}"></label>
-            <label><span>Turnir boshlanadi</span>
-                <input name="starts_at" type="datetime-local" required
-                    value="${tournamentAdminInputDate(starts)}"></label>
-            <label><span>Turnir tugaydi</span>
-                <input name="ends_at" type="datetime-local" required
-                    value="${tournamentAdminInputDate(ends)}"></label>
-            <article><b>Oddiy boshqaruv</b><span>Admin match vaqtini va natijasini kiritadi.</span></article>
+            <article><b>Avtomatik boshqaruv</b><span>Maxsus turnir joylar to‘lganda boshlanadi va muddat tugaganda yakunlanadi.</span></article>
             <button class="division-admin-primary" type="submit">Turnir yaratish</button>
         </form>
     </div>`;
@@ -143,6 +166,7 @@ function tournamentAdminDashboardMarkup() {
     const mode = item.group_mode === "POINTS" ? "Ochkolik" : "Yutqazgan chiqadi";
     return `<div class="division-admin-shell">
         ${tournamentAdminMenu()}
+        ${tournamentAdminPicker()}
         <section class="division-admin-hero"><div>
             <small>LEVEL_GROUP • ADMIN</small><h2>${divisionEscape(item.name)}</h2>
             <p>${mode} · ${item.group_size} kishilik guruhlar.</p>
@@ -151,9 +175,16 @@ function tournamentAdminDashboardMarkup() {
             <article><small>QATNASHUVCHI</small><strong>${Number(overview.participant_count) || 0}/${item.max_participants}</strong></article>
             <article><small>GURUH</small><strong>${item.group_count} × ${item.group_size}</strong></article>
             <article><small>CHIQADI</small><strong>Har guruhdan ${item.qualifiers_per_group}</strong></article>
-            <article><small>TICKET</small><strong>${item.ticket_cost} · bir marta</strong></article>
+            <article><small>DAVOMIYLIGI</small><strong>${item.duration_days || 7} kun</strong></article>
         </section>
-        ${item.status === "REGISTRATION"
+        <section class="division-admin-summary tournament-admin-settings">
+            <article><small>QATNASHISH</small><strong>${item.entry_mode === "COIN_PURCHASE"
+                ? `${item.minimum_coin_purchase || 300}+ coin` : `${item.ticket_cost} ticket`}</strong></article>
+            <article><small>START</small><strong>${item.auto_start_when_full ? "Joylar to‘lganda" : "Admin boshlatadi"}</strong></article>
+            <article><small>KANAL</small><strong>${divisionEscape(item.announcement_channel_id || "Tanlanmagan")}</strong></article>
+            <article><small>YAKUN</small><strong>${tournamentAdminDate(item.ends_at)}</strong></article>
+        </section>
+        ${item.status === "REGISTRATION" && item.entry_mode !== "COIN_PURCHASE"
             ? '<button class="division-admin-primary tournament-start" data-tournament-start>Turnirni boshlash va guruhlarni tuzish</button>' : ""}
         <section class="division-admin-applications"><header><div>
             <small>PARTICIPANTS</small><h3>Qatnashuvchilar</h3></div></header>
@@ -183,7 +214,7 @@ function tournamentAdminDashboardMarkup() {
 
 function tournamentAdminRender() {
     const page = document.getElementById("tournamentAdminPage");
-    page.innerHTML = tournamentAdminState.tournament
+    page.innerHTML = tournamentAdminState.tournament && !tournamentAdminState.showCreate
         ? tournamentAdminDashboardMarkup() : tournamentAdminCreateMarkup();
     bindTournamentAdmin();
 }
@@ -200,7 +231,8 @@ async function tournamentAdminRun(action) {
 async function tournamentAdminLoadParticipants() {
     tournamentAdminState.participants = await tournamentAdminApi.applications(
         tournamentAdminState.tournament.id,
-        "APPROVED",
+        ["FINISHED", "CANCELLED"].includes(tournamentAdminState.tournament.status)
+            ? null : "APPROVED",
         {
             limit: tournamentAdminState.limit,
             offset: tournamentAdminState.offset,
@@ -210,6 +242,26 @@ async function tournamentAdminLoadParticipants() {
 }
 
 function bindTournamentAdmin() {
+    document.querySelector("[data-tournament-create-new]")?.addEventListener("click", () => {
+        tournamentAdminState.showCreate = true;
+        tournamentAdminRender();
+    });
+    document.querySelectorAll("[data-tournament-admin-select]").forEach((button) =>
+        button.addEventListener("click", () => tournamentAdminRun(async () => {
+            tournamentAdminState.selectedId = Number(button.dataset.tournamentAdminSelect);
+            tournamentAdminState.showCreate = false;
+            await tournamentAdminLoadSelected();
+            tournamentAdminRender();
+        })));
+    const entryModeSelect = document.querySelector('[name="entry_mode"]');
+    const minimumCoinField = document.querySelector("[data-minimum-coin-field]");
+    const syncEntryMode = () => {
+        if (minimumCoinField) {
+            minimumCoinField.hidden = entryModeSelect?.value !== "COIN_PURCHASE";
+        }
+    };
+    entryModeSelect?.addEventListener("change", syncEntryMode);
+    syncEntryMode();
     const groupSizeSelect = document.querySelector('[name="group_size"]');
     const qualifierSelect = document.querySelector('[name="qualifiers_per_group"]');
     const syncQualifierOptions = () => {
@@ -244,15 +296,24 @@ function bindTournamentAdmin() {
                 format: "GROUP_PLAYOFF",
                 max_participants: maxParticipants,
                 ticket_cost: Number(data.get("ticket_cost")),
+                entry_mode: String(data.get("entry_mode")),
+                minimum_coin_purchase: Number(data.get("minimum_coin_purchase")) || 300,
+                duration_days: Number(data.get("duration_days")),
+                auto_start_when_full: data.get("entry_mode") === "COIN_PURCHASE",
+                announcement_channel_id: String(
+                    data.get("announcement_channel_id") || "",
+                ).trim() || null,
                 group_count: null,
                 group_size: groupSize,
                 group_mode: String(data.get("group_mode")),
                 qualifiers_per_group: qualifiers,
                 registration_opens_at: new Date().toISOString(),
                 registration_closes_at: new Date(data.get("registration_closes_at")).toISOString(),
-                starts_at: new Date(data.get("starts_at")).toISOString(),
-                ends_at: new Date(data.get("ends_at")).toISOString(),
+                starts_at: null,
+                ends_at: null,
             });
+            tournamentAdminState.selectedId = tournamentAdminState.tournament.id;
+            tournamentAdminState.showCreate = false;
             await loadTournamentAdminPage();
         });
     });
@@ -323,18 +384,36 @@ function bindTournamentAdmin() {
         }));
 }
 
+async function tournamentAdminLoadSelected() {
+    if (!tournamentAdminState.selectedId) {
+        tournamentAdminState.overview = null;
+        tournamentAdminState.tournament = null;
+        tournamentAdminState.matches = [];
+        tournamentAdminState.participants = [];
+        return;
+    }
+    const overview = await tournamentAdminApi.overview(tournamentAdminState.selectedId);
+    tournamentAdminState.overview = overview || null;
+    tournamentAdminState.tournament = overview?.tournament || null;
+    tournamentAdminState.matches = overview?.matches || [];
+    tournamentAdminState.participants = [];
+    if (tournamentAdminState.tournament) await tournamentAdminLoadParticipants();
+}
+
 async function loadTournamentAdminPage() {
     Navbar.setActive("");
     showPage("tournamentAdminPage", "Turnir Admin");
     const page = document.getElementById("tournamentAdminPage");
     page.innerHTML = '<div class="division-admin-loading">Turnir yuklanmoqda…</div>';
     try {
-        const overview = await tournamentAdminApi.current();
-        tournamentAdminState.overview = overview || null;
-        tournamentAdminState.tournament = overview?.tournament || null;
-        tournamentAdminState.matches = overview?.matches || [];
-        tournamentAdminState.participants = [];
-        if (tournamentAdminState.tournament) await tournamentAdminLoadParticipants();
+        tournamentAdminState.tournaments = await tournamentAdminApi.list();
+        if (!tournamentAdminState.tournaments.some(
+            (item) => Number(item.id) === Number(tournamentAdminState.selectedId),
+        )) {
+            tournamentAdminState.selectedId = tournamentAdminState.tournaments[0]?.id || null;
+        }
+        tournamentAdminState.showCreate = !tournamentAdminState.selectedId;
+        await tournamentAdminLoadSelected();
         tournamentAdminRender();
     } catch (error) {
         page.innerHTML = `<div class="division-admin-shell"><section class="division-admin-error">
