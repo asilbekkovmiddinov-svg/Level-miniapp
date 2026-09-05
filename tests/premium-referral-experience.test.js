@@ -29,7 +29,7 @@ test("Referral reward path and resilient states receive premium presentation", (
 test("Referral visual layer does not replace link, reward or API contracts", () => {
     assert.match(source, /normalizeReferralSummary\(await getReferralSummary\(\)\)/);
     assert.match(source, /referralClipboardWrite\(referralData\.referralLink\)/);
-    assert.match(source, /referralShareUrl\(referralData\.referralLink, firstName\)/);
+    assert.match(source, /referralShareUrl\(referralData\.referralLink\)/);
     assert.doesNotMatch(css, /fetch\(|walletRequest|registrationBonusUzs\s*=/);
 });
 
