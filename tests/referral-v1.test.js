@@ -6,7 +6,6 @@ const path = require("node:path");
 const {
     normalizeReferralSummary,
     referralClipboardWrite,
-    referralMoney,
     referralShareMessage,
     referralShareUrl,
 } = require("../miniapp/pages/referral.js");
@@ -21,14 +20,9 @@ test("referral summary normalizes the authenticated backend contract", () => {
     const result = normalizeReferralSummary({ success: true, data: {
         referral_link: telegramLink("abc_DEF-123"),
         total_referrals: 7,
-        coin_shop_buyers: 3,
-        total_earned_uzs: 22000,
-        registration_bonus_uzs: 1000,
-        first_shop_bonus_uzs: 5000,
     } });
     assert.equal(result.totalReferrals, 7);
-    assert.equal(result.coinShopBuyers, 3);
-    assert.equal(referralMoney(result.totalEarnedUzs), "22 000 UZS");
+    assert.equal(result.totalEarnedUzs, undefined);
     assert.throws(() => normalizeReferralSummary({ success: true, data: { referral_link: "javascript:alert(1)" } }));
 });
 
@@ -109,15 +103,16 @@ test("Share and Copy use only the backend referralLink without hardcoded Telegra
     assert.match(source, /referralClipboardWrite\(referralData\.referralLink\)/);
 });
 
-test("referral page includes loading, empty, error, retry and approved metrics", () => {
+test("referral page includes Arena points without UZS bonus copy", () => {
     const source = fs.readFileSync(path.join(__dirname, "../miniapp/pages/referral.js"), "utf8");
     const index = fs.readFileSync(path.join(__dirname, "../miniapp/index.html"), "utf8");
     assert.match(source, /referralSkeleton/);
     assert.match(source, /Hali referalingiz yo‘q/);
     assert.match(source, /renderReferralError/);
     assert.match(source, /Qayta urinish/);
-    assert.match(source, /Coin Shop xarid qilganlar/);
-    assert.match(source, /Jami ishlangan bonus/);
+    assert.match(source, /\+3 Arena ochko/);
+    assert.match(source, /eFootball Coin sovrinlari/);
+    assert.doesNotMatch(source, /UZS bonus oling/);
     assert.match(index, /id="referralPage"/);
     assert.match(index, /pages\/referral\.js/);
 });

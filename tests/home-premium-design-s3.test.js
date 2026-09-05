@@ -40,6 +40,8 @@ test("personal dashboard uses only existing API reads", () => {
     assert.equal(home.homeS3Metric({}, ["wins"]), "—");
     assert.equal(home.homeS3Metric(null, ["wins"]), "—");
     assert.doesNotMatch(source, /Math\.random/);
+    assert.match(source, /\+3 \/ referral/);
+    assert.doesNotMatch(source, /total_earned_uzs/);
 });
 
 test("news and events classify real promotion dates and use existing countdown", () => {
@@ -66,5 +68,5 @@ test("Sprint 3 stays responsive, token-aligned and reduced-motion safe", () => {
     assert.match(styles, /@media\(max-width:350px\)/);
     assert.match(styles, /@media\(min-width:600px\)/);
     assert.match(styles, /@media\(prefers-reduced-motion:reduce\)/);
-    assert.match(index, /home-premium-s3\.js\?v=1\.0\.0/);
+    assert.match(index, /home-premium-s3\.js\?v=1\.1\.0/);
 });

@@ -30,7 +30,8 @@ test("Referral visual layer does not replace link, reward or API contracts", () 
     assert.match(source, /normalizeReferralSummary\(await getReferralSummary\(\)\)/);
     assert.match(source, /referralClipboardWrite\(referralData\.referralLink\)/);
     assert.match(source, /referralShareUrl\(referralData\.referralLink\)/);
-    assert.doesNotMatch(css, /fetch\(|walletRequest|registrationBonusUzs\s*=/);
+    assert.doesNotMatch(source, /totalEarnedUzs|registrationBonusUzs|firstShopBonusUzs/);
+    assert.doesNotMatch(css, /fetch\(|walletRequest/);
 });
 
 test("Referral remains accessible, low-end aware and haptic", () => {

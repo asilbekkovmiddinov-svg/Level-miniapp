@@ -111,8 +111,8 @@ function renderHomeS3Dashboard(results) {
             icon: "✦", title: "Referral Summary", page: "referral",
             rows: [
                 ["Referrals", homeS3Metric(referral, ["total_referrals"])],
-                ["Buyers", homeS3Metric(referral, ["coin_shop_buyers"])],
-                ["Earned", homeS3Metric(referral, ["total_earned_uzs"], " UZS")],
+                ["Arena point", "+3 / referral"],
+                ["Reward", "eFootball Coin"],
             ],
         },
         {
