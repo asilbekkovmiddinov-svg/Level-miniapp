@@ -1,0 +1,113 @@
+.arena-v5-season-tabs {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    margin: 0 0 10px;
+    padding: 2px;
+    scrollbar-width: none;
+}
+
+.arena-v5-season-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.arena-v5-season-tabs button {
+    flex: 0 0 auto;
+    border: 1px solid #efdadd;
+    border-radius: 999px;
+    padding: 9px 12px;
+    background: #fff;
+    color: #707887;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.arena-v5-season-tabs button.active {
+    border-color: #bd1327;
+    background: #fff0f1;
+    color: #a20b1b;
+}
+
+.arena-v5-history-seasons {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.arena-v5-history-seasons > button {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    border: 1px solid #f0e2e3;
+    border-radius: 20px;
+    padding: 14px;
+    background: #fff;
+    color: #172033;
+    text-align: left;
+    box-shadow: 0 8px 24px rgba(35, 22, 24, .06);
+}
+
+.arena-v5-history-seasons > button.active {
+    border-color: #d2253a;
+    background: #fff7f8;
+    box-shadow: 0 10px 25px rgba(181, 12, 32, .12);
+}
+
+.arena-v5-history-seasons > button > span,
+.arena-v5-history-seasons > button > p {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+}
+
+.arena-v5-history-seasons > button > span small {
+    color: #7b8492;
+    font-size: 9px;
+}
+
+.arena-v5-history-seasons > button > div {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.arena-v5-history-seasons > button > div span {
+    display: grid;
+    gap: 3px;
+    border-radius: 11px;
+    padding: 8px 5px;
+    background: #faf4f5;
+    text-align: center;
+}
+
+.arena-v5-history-seasons > button > div small {
+    color: #7b8492;
+    font-size: 8px;
+}
+
+.arena-v5-history-seasons > button > p {
+    border-top: 1px solid #f0e2e3;
+    padding-top: 10px;
+    color: #626b79;
+    font-size: 10px;
+}
+
+.arena-v5-history-seasons > button > p strong {
+    color: #a20b1b;
+    font-size: 17px;
+}
+
+.arena-v5-ranking-list article > strong small {
+    display: block;
+    color: #8b929e;
+    font-size: 7px;
+    font-weight: 700;
+}
+
+@media (max-width: 370px) {
+    .arena-v5-history-seasons > button > div {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

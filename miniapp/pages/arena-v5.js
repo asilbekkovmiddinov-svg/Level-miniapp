@@ -54,8 +54,16 @@ class ArenaV5Client {
     config() { return this.request("/arena/v5/config"); }
     state() { return this.request("/arena/v5/state"); }
     profile() { return this.request("/arena/v5/profile"); }
-    ranking() { return this.request("/arena/v5/ranking?limit=100&offset=0"); }
-    history(offset = 0) { return this.request(`/arena/v5/history?limit=20&offset=${offset}`); }
+    ranking(seasonId = null) {
+        const season = seasonId ? `&season_id=${encodeURIComponent(seasonId)}` : "";
+        return this.request(`/arena/v5/ranking?limit=100&offset=0${season}`);
+    }
+    seasons() { return this.request("/arena/v5/seasons?limit=20"); }
+    history(offset = 0, seasonId = null) {
+        const season = seasonId ? `&season_id=${encodeURIComponent(seasonId)}` : "";
+        return this.request(`/arena/v5/history?limit=20&offset=${offset}${season}`);
+    }
+    historySeasons() { return this.request("/arena/v5/history/seasons?limit=50"); }
     claimPromocode(code) {
         return this.request("/arena/v5/promocode/claim", {
             method: "POST",
@@ -110,7 +118,10 @@ const arenaV5State = {
     matchmaking: null,
     profile: null,
     ranking: null,
+    seasons: null,
     history: null,
+    historySeasons: null,
+    historySeasonId: null,
     loading: false,
     action: false,
     error: null,
@@ -133,15 +144,16 @@ function arenaV5Nav() {
 
 function arenaV5Header() {
     const config = arenaV5State.config;
+    const active = config?.season_status === "ACTIVE";
     return `<section class="arena-v5-hero">
         <div><span class="arena-v5-kicker">LEVEL_GROUP ARENA</span><h2>eFootball 1v1</h2></div>
         <div class="arena-v5-ticket"><span>🎟</span><b>${config?.ticket_balance ?? "—"}</b><small>Ticket</small></div>
         <div class="arena-v5-season">
-            <span><small>Joriy mavsum</small><b>${arenaV5Escape(config?.season_name || "Arena")}</b></span>
-            <span><small>Tugashiga</small><b>${config ? arenaV5SeasonRemaining(config.season_end_at) : "—"}</b></span>
+            <span><small>Joriy mavsum</small><b>${arenaV5Escape(active ? config.season_name : "Arena yopiq")}</b></span>
+            <span><small>${active ? "Tugashiga" : "Holati"}</small><b>${active ? arenaV5SeasonRemaining(config.season_end_at) : "Yangi mavsum kutilmoqda"}</b></span>
         </div>
         <p class="arena-v5-prize">🏆 ${arenaV5Escape(config?.prize_text || "Mavsum sovrinlari tez orada e’lon qilinadi")}</p>
-        <p class="arena-v5-rule">1 match = 1 Ticket • G‘alaba +3 • Durang +1 • Mag‘lubiyat +0</p>
+        <p class="arena-v5-rule">1 match = 1 Ticket • G‘alaba +3 • Durang +1 • Mag‘lubiyat +0 • Har bir yangi referal +3</p>
     </section>`;
 }
 
@@ -175,6 +187,14 @@ function arenaV5FindView() {
             <button type="button" class="arena-v5-danger" data-arena-v5-cancel ${arenaV5State.action ? "disabled" : ""}>❌ Bekor qilish</button>
         </section>`;
     }
+    if (arenaV5State.config?.season_status !== "ACTIVE") {
+        return `<section class="arena-v5-find">
+            <div class="arena-v5-ball">⏳</div>
+            <h3>Yangi Arena mavsumi kutilmoqda</h3>
+            <p>Admin yangi mavsum va uning davomiyligini belgilagach raqib qidirish ochiladi.</p>
+            <button type="button" class="arena-v5-primary" disabled>ARENA HOZIR YOPIQ</button>
+        </section>`;
+    }
     return `<section class="arena-v5-find">
         <div class="arena-v5-ball">⚽</div>
         <h3>eFootball raqibingizni toping</h3>
@@ -197,10 +217,11 @@ function arenaV5ProfileView() {
     const profile = arenaV5State.profile;
     if (!profile) return `<div class="arena-v5-loading">Profil yuklanmoqda…</div>`;
     const stats = [
-        ["O‘yin", profile.games_played], ["Yutuq", profile.wins],
+        ["O‘ynalgan", profile.games_played], ["Yutilgan", profile.wins],
         ["Durang", profile.draws], ["Mag‘lubiyat", profile.losses],
-        ["Urilgan gol", profile.goals_for], ["O‘tkazilgan", profile.goals_against],
-        ["Gollar farqi", profile.goal_difference], ["Ochko", profile.points],
+        ["Gollar", profile.goals_for], ["O‘tkazilgan", profile.goals_against],
+        ["Gollar farqi", profile.goal_difference], ["Match ochko", profile.match_points],
+        ["Referal", `${profile.referral_count} ta / +${profile.referral_points}`], ["Jami ochko", profile.points],
     ];
     return `<section class="arena-v5-profile">
         <div class="arena-v5-profile-name"><span>Telegram</span><b>${profile.telegram_username ? `@${arenaV5Escape(profile.telegram_username)}` : "username yo‘q"}</b></div>
@@ -217,28 +238,48 @@ function arenaV5ProfileView() {
 function arenaV5RankingView() {
     const ranking = arenaV5State.ranking;
     if (!ranking) return `<div class="arena-v5-loading">Reyting yuklanmoqda…</div>`;
-    if (!ranking.players.length) return `<div class="arena-v5-empty">Hozircha yakunlangan match yo‘q.</div>`;
-    return `<section class="arena-v5-table-wrap">
+    const seasons = arenaV5State.seasons || [];
+    const selector = seasons.length > 1 ? `<div class="arena-v5-season-tabs">${seasons.map((season) => `
+        <button type="button" data-arena-v5-season="${season.id}" class="${season.id === ranking.season_id ? "active" : ""}">
+            ${arenaV5Escape(season.name)}${season.status === "ACTIVE" ? " • Faol" : ""}
+        </button>`).join("")}</div>` : "";
+    if (!ranking.players.length) return `${selector}<div class="arena-v5-empty">Bu mavsumda hozircha ochko yo‘q.</div>`;
+    return `${selector}<section class="arena-v5-table-wrap">
         <div class="arena-v5-table-head"><b>${arenaV5Escape(ranking.season_name)}</b><small>${arenaV5Date(ranking.season_end_at)} gacha</small></div>
         <div class="arena-v5-ranking-list">${ranking.players.map((player) => `<article>
             <span class="arena-v5-rank">${player.rank === 1 ? "🥇" : player.rank === 2 ? "🥈" : player.rank === 3 ? "🥉" : `#${player.rank}`}</span>
-            <div><b>${arenaV5Escape(player.efootball_username)}</b><small>${player.games_played} o‘yin • ${player.wins}Y ${player.draws}D ${player.losses}M • ${player.goals_for}:${player.goals_against}</small></div>
-            <strong>${player.points}</strong>
+            <div><b>${arenaV5Escape(player.efootball_username)}</b><small>O‘yin ${player.games_played} • Yutilgan ${player.wins} • Gollar ${player.goals_for}:${player.goals_against} • Referal ${player.referral_count}</small><small>Match ${player.match_points} + Referal ${player.referral_points} = Jami ${player.points}</small></div>
+            <strong>${player.points}<small>jami</small></strong>
         </article>`).join("")}</div>
     </section>`;
 }
 
 function arenaV5HistoryView() {
     const history = arenaV5State.history;
-    if (!history) return `<div class="arena-v5-loading">Tarix yuklanmoqda…</div>`;
-    if (!history.length) return `<div class="arena-v5-empty">Sizda yakunlangan Arena matchi yo‘q.</div>`;
-    return `<section class="arena-v5-history">${history.map((match) => {
+    const seasons = arenaV5State.historySeasons;
+    if (!history || !seasons) return `<div class="arena-v5-loading">Tarix yuklanmoqda…</div>`;
+    if (!seasons.length && !history.length) return `<div class="arena-v5-empty">Sizda Arena mavsumi natijasi yo‘q.</div>`;
+    const seasonCards = seasons.length ? `<section class="arena-v5-history-seasons">${seasons.map((season) => `
+        <button type="button" data-arena-v5-history-season="${season.season_id}" class="${season.season_id === arenaV5State.historySeasonId ? "active" : ""}">
+            <span><b>${arenaV5Escape(season.season_name)}</b><small>${season.season_status === "ACTIVE" ? "🟢 Faol mavsum" : "✅ Tugagan mavsum"}</small></span>
+            <div>
+                <span><small>O‘ynalgan</small><b>${season.games_played}</b></span>
+                <span><small>Yutilgan</small><b>${season.wins}</b></span>
+                <span><small>Gollar</small><b>${season.goals_for}:${season.goals_against}</b></span>
+                <span><small>Referallar</small><b>${season.referral_count}</b></span>
+            </div>
+            <p>Match <b>${season.match_points}</b> + Referal <b>${season.referral_points}</b> = Umumiy natija <strong>${season.points}</strong></p>
+        </button>`).join("")}</section>` : "";
+    const matchList = !history.length
+        ? `<div class="arena-v5-empty">Bu mavsumda yakunlangan match yo‘q.</div>`
+        : `<section class="arena-v5-history">${history.map((match) => {
         const meta = match.result === "WIN" ? ["🏆 Yutuq", "win"] : match.result === "DRAW" ? ["🤝 Durang", "draw"] : ["❌ Mag‘lubiyat", "loss"];
         return `<article class="${meta[1]}">
             <div><small>№${match.match_id} • ${arenaV5Date(match.finished_at)}</small><b>vs ${arenaV5Escape(match.opponent_efootball_username)}</b><span>${meta[0]}</span></div>
             <strong>${match.own_score}:${match.opponent_score}<small>+${match.points} ochko</small></strong>
         </article>`;
     }).join("")}</section>`;
+    return `${seasonCards}${matchList}`;
 }
 
 function arenaV5Render() {
@@ -274,8 +315,23 @@ async function arenaV5LoadTab(tab) {
     arenaV5Render();
     try {
         if (tab === "profile") arenaV5State.profile = await arenaV5Client.profile();
-        if (tab === "ranking") arenaV5State.ranking = await arenaV5Client.ranking();
-        if (tab === "history") arenaV5State.history = await arenaV5Client.history();
+        if (tab === "ranking") {
+            [arenaV5State.seasons, arenaV5State.ranking] = await Promise.all([
+                arenaV5Client.seasons(), arenaV5Client.ranking(),
+            ]);
+        }
+        if (tab === "history") {
+            arenaV5State.historySeasons = await arenaV5Client.historySeasons();
+            const selectedExists = arenaV5State.historySeasons.some(
+                (season) => season.season_id === arenaV5State.historySeasonId
+            );
+            if (!selectedExists) {
+                arenaV5State.historySeasonId = arenaV5State.historySeasons[0]?.season_id || null;
+            }
+            arenaV5State.history = await arenaV5Client.history(
+                0, arenaV5State.historySeasonId
+            );
+        }
     } catch (error) { arenaV5State.error = error.message; }
     arenaV5Render();
 }
@@ -288,6 +344,13 @@ function arenaV5OpenBot(url) {
 
 function arenaV5Bind(page) {
     page.querySelectorAll("[data-arena-v5-tab]").forEach((button) => button.addEventListener("click", () => arenaV5LoadTab(button.dataset.arenaV5Tab)));
+    page.querySelectorAll("[data-arena-v5-season]").forEach((button) => button.addEventListener("click", () => arenaV5Action(async () => {
+        arenaV5State.ranking = await arenaV5Client.ranking(Number(button.dataset.arenaV5Season));
+    })));
+    page.querySelectorAll("[data-arena-v5-history-season]").forEach((button) => button.addEventListener("click", () => arenaV5Action(async () => {
+        arenaV5State.historySeasonId = Number(button.dataset.arenaV5HistorySeason);
+        arenaV5State.history = await arenaV5Client.history(0, arenaV5State.historySeasonId);
+    })));
     page.querySelector("[data-arena-v5-find]")?.addEventListener("click", () => arenaV5Action(async () => {
         arenaV5State.matchmaking = await arenaV5Client.joinQueue();
         arenaV5State.config = await arenaV5Client.config();

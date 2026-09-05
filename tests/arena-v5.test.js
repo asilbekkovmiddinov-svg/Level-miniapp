@@ -88,3 +88,52 @@ test("Arena V5 source uses bounded search polling", () => {
     assert.match(source, /}, 5000\);/);
     assert.doesNotMatch(source, /setInterval\([^,]+,\s*1000/);
 });
+
+
+test("Arena V5 exposes admin seasons, archived rankings and referral points", async () => {
+    const calls = [];
+    const client = new ArenaV5Client({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        fetchImpl: async (url) => {
+            calls.push(url);
+            return response({ players: [] });
+        },
+    });
+
+    await client.seasons();
+    await client.ranking(12);
+
+    assert.equal(new URL(calls[0]).pathname, "/arena/v5/seasons");
+    assert.equal(new URL(calls[1]).searchParams.get("season_id"), "12");
+    const source = require("node:fs").readFileSync("miniapp/pages/arena-v5.js", "utf8");
+    assert.match(source, /Har bir yangi referal \+3/);
+    assert.match(source, /Match \$\{player\.match_points\} \+ Referal \$\{player\.referral_points\}/);
+    assert.match(source, /Yangi Arena mavsumi kutilmoqda/);
+});
+
+
+test("Arena V5 history separates every player season and total score", async () => {
+    const calls = [];
+    const client = new ArenaV5Client({
+        baseUrl: "https://backend.example",
+        initDataProvider: () => "verified-init-data",
+        fetchImpl: async (url) => {
+            calls.push(url);
+            return response([]);
+        },
+    });
+
+    await client.historySeasons();
+    await client.history(0, 7);
+
+    assert.equal(new URL(calls[0]).pathname, "/arena/v5/history/seasons");
+    assert.equal(new URL(calls[1]).searchParams.get("season_id"), "7");
+    const source = require("node:fs").readFileSync("miniapp/pages/arena-v5.js", "utf8");
+    assert.match(source, /O‘ynalgan/);
+    assert.match(source, /Yutilgan/);
+    assert.match(source, /Gollar/);
+    assert.match(source, /Referallar/);
+    assert.match(source, /Umumiy natija/);
+    assert.match(source, /data-arena-v5-history-season/);
+});
