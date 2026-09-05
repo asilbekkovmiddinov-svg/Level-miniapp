@@ -35,15 +35,7 @@ function normalizeReferralSummary(payload) {
         enabled: true,
         referralLink: link,
         totalReferrals: referralNumber(data.total_referrals),
-        coinShopBuyers: referralNumber(data.coin_shop_buyers),
-        totalEarnedUzs: referralNumber(data.total_earned_uzs),
-        registrationBonusUzs: referralNumber(data.registration_bonus_uzs),
-        firstShopBonusUzs: referralNumber(data.first_shop_bonus_uzs),
     };
-}
-
-function referralMoney(value) {
-    return `${referralNumber(value).toLocaleString("uz-UZ")} UZS`;
 }
 
 function referralShareMessage(referralLink) {
@@ -146,9 +138,9 @@ function renderReferralPage(data) {
         : "";
     page.innerHTML = `<div class="referral-v1">
         <header class="referral-hero">
-            <small>LEVEL REWARDS</small>
-            <h2>Do‘stingiz bilan birga yuting</h2>
-            <p>Har bir yangi referral va uning birinchi Coin Shop xaridi uchun UZS bonus oling.</p>
+            <small>ARENA REFERAL REYTINGI</small>
+            <h2>Referal yig‘ing, Coin yuting</h2>
+            <p>Har bir yangi referal faol Arena mavsumida +3 ochko beradi.</p>
         </header>
         <section class="referral-link-card">
             <span>SHAXSIY REFERRAL HAVOLANGIZ</span>
@@ -161,14 +153,13 @@ function renderReferralPage(data) {
         </section>
         <section class="referral-stats">
             <article><span aria-hidden="true">👥</span><small>Jami referallar</small><strong class="referral-counter">${data.totalReferrals}</strong></article>
-            <article><span aria-hidden="true">🛒</span><small>Coin Shop xarid qilganlar</small><strong class="referral-counter">${data.coinShopBuyers}</strong></article>
-            <article class="wide"><span aria-hidden="true">◆</span><small>Jami ishlangan bonus</small><strong class="referral-counter">${referralMoney(data.totalEarnedUzs)}</strong></article>
+            <article><span aria-hidden="true">＋</span><small>Har bir yangi referal</small><strong class="referral-counter">+3 ochko</strong></article>
         </section>
         ${empty}
         <section class="referral-bonuses">
-            <h3>Bonuslar</h3>
-            <article><span>＋</span><div><b>${referralMoney(data.registrationBonusUzs)}</b><p>Har bir yangi referral ro‘yxatdan o‘tganda</p></div></article>
-            <article><span>★</span><div><b>${referralMoney(data.firstShopBonusUzs)}</b><p>Referralning birinchi muvaffaqiyatli Coin Shop xarididan keyin</p></div></article>
+            <h3>Referal orqali yutuq</h3>
+            <article><span>＋</span><div><b>+3 Arena ochko</b><p>Har bir yangi referal faol mavsumda ro‘yxatdan o‘tganda</p></div></article>
+            <article><span>★</span><div><b>eFootball Coin sovrinlari</b><p>Referal va o‘yin ochkolari umumiy Arena reytingida hisoblanadi</p></div></article>
         </section>
         <section class="referral-rules">
             <h3>Referral qoidalari</h3>
@@ -176,8 +167,8 @@ function renderReferralPage(data) {
                 <li>Bir foydalanuvchi faqat bitta referalga bog‘lanadi.</li>
                 <li>O‘z-o‘zini referral qilish taqiqlanadi.</li>
                 <li>Har bir yangi foydalanuvchi faqat bir marta hisoblanadi.</li>
-                <li>Coin Shop bonusi faqat birinchi muvaffaqiyatli yakunlangan xarid uchun beriladi.</li>
-                <li>Bekor qilingan yoki rad etilgan buyurtmalar bonus bermaydi.</li>
+                <li>+3 ochko faqat faol Arena mavsumidagi yangi referal uchun beriladi.</li>
+                <li>Referallar uchun UZS bonus berilmaydi.</li>
                 <li>Qoidabuzarlik aniqlansa bonus bekor qilinishi va akkaunt cheklanishi mumkin.</li>
             </ol>
         </section>
@@ -214,7 +205,6 @@ if (typeof module !== "undefined") {
     module.exports = {
         normalizeReferralSummary,
         referralClipboardWrite,
-        referralMoney,
         referralShareMessage,
         referralShareUrl,
     };

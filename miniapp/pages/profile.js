@@ -69,7 +69,7 @@ function renderProfile() {
                 <span>🎁</span>
                 <span>
                     <strong>Referral dasturi</strong>
-                    <small>Do‘stlarni taklif qiling va UZS bonus oling</small>
+                    <small>Do‘stlarni taklif qiling va Arena ochko oling</small>
                 </span>
                 <b>›</b>
             </button>
