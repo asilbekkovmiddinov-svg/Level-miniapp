@@ -46,28 +46,18 @@ function referralMoney(value) {
     return `${referralNumber(value).toLocaleString("uz-UZ")} UZS`;
 }
 
-function referralShareMessage(referralLink, firstName) {
-    const name = typeof firstName === "string" ? firstName.trim() : "";
-    const invitation = name
-        ? `🔥 ${name} sizni LEVEL_GROUP'ga taklif qildi!`
-        : "🔥 Sizni LEVEL_GROUP'ga taklif qilishmoqda!";
-    return `${invitation}
-
-🎮 Arena'da raqobatlashing.
-🎡 Wheel'da sovg'alar yuting.
-🛒 Coin Shop orqali xarid qiling.
-🤝 P2P savdo qiling.
-💳 Wallet orqali mablag'ingizni boshqaring.
-
-✨ Hammasi bitta Telegram MiniApp ichida.
-
-🚀 Hoziroq qo'shiling:
+function referralShareMessage(referralLink) {
+    return `REFERAL QO‘SHING — eFOOTBALL COIN YUTING! 🪙⚽️
+🔥 Ulgurib qoling!
+Do‘stlaringizni referal orqali taklif qiling va eFootball uchun COIN yutib oling! 🏆
+👥 Qancha ko‘p referal — shuncha yuqori imkoniyat!
+🚀 Hoziroq referal yig‘ishni boshlang!
 
 ${referralLink}`;
 }
 
-function referralShareUrl(referralLink, firstName) {
-    const message = referralShareMessage(referralLink, firstName);
+function referralShareUrl(referralLink) {
+    const message = referralShareMessage(referralLink);
     const text = message.slice(0, -(referralLink.length + 2));
     const shareUrl = new URL("/share/url", new URL(referralLink).origin);
     shareUrl.searchParams.set("url", referralLink);
@@ -80,8 +70,7 @@ function shareReferralLink() {
         Modal.error("Referral havolasi hali tayyor emas.");
         return;
     }
-    const firstName = globalThis.Telegram?.WebApp?.initDataUnsafe?.user?.first_name;
-    const shareUrl = referralShareUrl(referralData.referralLink, firstName);
+    const shareUrl = referralShareUrl(referralData.referralLink);
     if (globalThis.Telegram?.WebApp?.openTelegramLink) {
         globalThis.Telegram.WebApp.openTelegramLink(shareUrl);
         return;
